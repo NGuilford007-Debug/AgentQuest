@@ -706,5 +706,90 @@ export interface MonetizationState {
   developerBypassActive: boolean; // When true, your current workspace session has unlimited free AI & storage
 }
 
+// =========================================================================
+// STRIPE INTEGRATION: RECEIVABLES (INCOMING REVENUE) & PAYABLES (OUTGOING BILLS)
+// =========================================================================
+
+export interface StripeReceivableInvoice {
+  id: string;
+  invoiceNumber: string; // e.g. "INV-2026-0801"
+  tenantId: string;
+  tenantName: string;
+  customerEmail: string;
+  stripeCustomerId?: string;
+  stripePaymentIntentId?: string;
+  stripeInvoiceId?: string;
+  stripeCheckoutSessionUrl?: string;
+  amount: number; // total amount in USD
+  subtotal: number;
+  tax: number;
+  currency: string; // e.g. "usd"
+  status: "draft" | "open" | "paid" | "uncollectible" | "void" | "refunded";
+  issuedDate: string;
+  dueDate: string;
+  paidAt?: string;
+  paymentMethodType?: "card" | "us_bank_account" | "sepa_debit" | "apple_pay" | "google_pay";
+  receiptUrl?: string;
+  lineItems: {
+    id: string;
+    description: string;
+    category: "subscription_base" | "metered_ai_tokens" | "metered_storage" | "image_generation" | "custom_service";
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+  }[];
+  autoCharge: boolean;
+}
+
+export interface StripePayableBill {
+  id: string;
+  billNumber: string; // e.g. "BILL-2026-042"
+  vendorName: string;
+  vendorCategory: "Google Cloud Infra" | "Contractor & Prompt Engineer" | "AI Model API Vendor" | "Affiliate & Partner Payout" | "Software License";
+  vendorEmail: string;
+  stripeRecipientAccountId?: string; // Stripe Connect / Custom Account id
+  stripeTransferId?: string;
+  stripePayoutId?: string;
+  amount: number; // amount in USD
+  currency: string;
+  status: "pending_approval" | "scheduled" | "processing" | "paid" | "failed" | "cancelled";
+  dueDate: string;
+  paidAt?: string;
+  payoutMethod: "stripe_connect_transfer" | "instant_card_payout" | "ach_direct_deposit" | "wire_transfer";
+  description: string;
+  invoiceFileReference?: string;
+  approvedBy?: string;
+  notes?: string;
+}
+
+export interface StripeAccountStatus {
+  hasSecretKey: boolean;
+  isLiveMode: boolean;
+  publishableKey?: string;
+  accountId?: string;
+  accountEmail?: string;
+  businessName?: string;
+  defaultCurrency: string;
+  availableBalance: number;
+  pendingBalance: number;
+  payoutsEnabled: boolean;
+  chargesEnabled: boolean;
+  webhookConfigured: boolean;
+  liveTransactionsCount: number;
+}
+
+export interface WebAppDeploymentConfig {
+  appName: string;
+  shortName: string;
+  appDescription: string;
+  displayMode: "standalone" | "fullscreen" | "minimal-ui" | "browser";
+  themeColor: string;
+  backgroundColor: string;
+  startUrl: string;
+  iconUrl: string;
+  customDomain?: string;
+  isPwaInstalled: boolean;
+}
+
 
 

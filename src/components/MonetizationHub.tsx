@@ -38,6 +38,9 @@ import {
   FinancialMetricSnapshot,
   TenantProfile
 } from "../types";
+import { ProjectedRevenueDashboard } from "./ProjectedRevenueDashboard";
+import { StripeFinancialsHub } from "./StripeFinancialsHub";
+import { WebAppDeploymentModal } from "./WebAppDeploymentModal";
 
 interface MonetizationHubProps {
   developerProfile: DeveloperCompanyProfile;
@@ -60,7 +63,8 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
   onUpdateTenantsBilling,
   tenants,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<"overview" | "ratecard" | "tenants" | "simulator" | "developer_shield">("overview");
+  const [activeSubTab, setActiveSubTab] = useState<"overview" | "stripe_financials" | "projections" | "ratecard" | "tenants" | "simulator" | "developer_shield">("overview");
+  const [isWebAppModalOpen, setIsWebAppModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
@@ -229,8 +233,16 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
           </div>
         </div>
 
-        {/* Founder Developer Free Shield Quick Badge */}
+        {/* Founder Developer Free Shield Quick Badge & Web App Action */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsWebAppModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-purple-500/20 transition-all"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>How to Make into Web App?</span>
+          </button>
+
           <div className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-900/10 via-indigo-900/10 to-purple-900/10 dark:from-blue-950/40 dark:via-indigo-950/40 dark:to-purple-950/40 border border-blue-200 dark:border-blue-800/80 flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white">
               <ShieldCheck className="w-4 h-4" />
@@ -260,6 +272,36 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
         >
           <PieChart className="w-3.5 h-3.5" />
           <span>Financial Overview & KPIs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab("stripe_financials")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === "stripe_financials"
+              ? "bg-purple-600 text-white shadow-sm shadow-purple-500/20"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5">
+            <span>Stripe Payables & Receivables</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-[10px] font-extrabold">STRIPE</span>
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab("projections")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === "projections"
+              ? "bg-emerald-600 text-white shadow-sm shadow-emerald-500/20"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5">
+            <span>Projected Revenue (Recharts)</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold">NEW</span>
+          </span>
         </button>
 
         <button
@@ -393,6 +435,35 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Projected Revenue Recharts Teaser Callout */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-500/30 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-white">
+                    12-Month Projected Revenue & Growth Models
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">
+                    Active Rate Card Synced
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Explore multi-scenario Recharts growth curves, tenant usage expansion curves, and ARR forecasts for {developerProfile.companyName}.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveSubTab("projections")}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all shrink-0 self-start md:self-auto"
+            >
+              <span>Open Recharts Forecast Dashboard</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Revenue vs Cost Historical Telemetry Chart */}
@@ -617,6 +688,29 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1.2: STRIPE PAYABLES & RECEIVABLES FINANCIALS HUB */}
+      {/* ========================================================================= */}
+      {activeSubTab === "stripe_financials" && (
+        <StripeFinancialsHub
+          tenantsBilling={tenantsBilling}
+          developerProfile={developerProfile}
+          rateCard={rateCard}
+          onOpenWebAppGuide={() => setIsWebAppModalOpen(true)}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1.5: PROJECTED REVENUE DASHBOARD (RECHARTS) */}
+      {/* ========================================================================= */}
+      {activeSubTab === "projections" && (
+        <ProjectedRevenueDashboard
+          rateCard={rateCard}
+          tenantsBilling={tenantsBilling}
+          developerProfile={developerProfile}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -1406,6 +1500,13 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* Web App Deployment Guide Modal */}
+      <WebAppDeploymentModal
+        isOpen={isWebAppModalOpen}
+        onClose={() => setIsWebAppModalOpen(false)}
+        appName={developerProfile.companyName || "AgentFlow Enterprise"}
+      />
 
       {/* Copy notification toast */}
       {copiedNotification && (
