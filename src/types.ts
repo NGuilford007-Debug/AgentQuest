@@ -791,5 +791,21 @@ export interface WebAppDeploymentConfig {
   isPwaInstalled: boolean;
 }
 
+// ----------------------------------------------------
+// Master Developer vs. Client Access Gate
+// ----------------------------------------------------
+
+export type AccessLevel = "master_developer" | "client_tenant";
+
+export interface MasterAccessSettings {
+  currentAccessLevel: AccessLevel;
+  founderEmail: string;
+  developerCompanyName: string;
+  founderPin: string; // e.g. "founder2026"
+  isSimulatingClientView: boolean;
+  clientLockEnforced: boolean; // When true, client accounts cannot remix or see white-label
+  detectedEnvironment: "google_ai_studio" | "standalone_web_app" | "client_custom_domain";
+}
+
 
 

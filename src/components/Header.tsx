@@ -18,7 +18,10 @@ import {
   RefreshCw,
   Palette,
   EyeOff,
-  DollarSign
+  DollarSign,
+  Lock,
+  Unlock,
+  Shield
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -38,6 +41,8 @@ interface HeaderProps {
   lastSavedTime?: string;
   whiteLabelConfig?: WhiteLabelConfig;
   onToggleClientPreview?: () => void;
+  isMasterDeveloper?: boolean;
+  onOpenMasterAccessGate?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,6 +60,8 @@ export const Header: React.FC<HeaderProps> = ({
   lastSavedTime,
   whiteLabelConfig,
   onToggleClientPreview,
+  isMasterDeveloper = true,
+  onOpenMasterAccessGate,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -228,8 +235,34 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* White-Label Quick Studio Button */}
-          {onOpenWhiteLabel && (
+          {/* Master Access & Governance Switch Button */}
+          {onOpenMasterAccessGate && (
+            <button
+              id="btn-header-access-gate"
+              onClick={onOpenMasterAccessGate}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                isMasterDeveloper
+                  ? "bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100"
+                  : "bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
+              }`}
+              title="Access & Governance Gate (Master Developer vs Client Tenant)"
+            >
+              {isMasterDeveloper ? (
+                <>
+                  <Shield className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span className="hidden sm:inline">👑 Master Admin</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="hidden sm:inline">🏢 Client Portal</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* White-Label Quick Studio Button (Master Developer Only) */}
+          {isMasterDeveloper && onOpenWhiteLabel && (
             <button
               id="btn-header-whitelabel"
               onClick={onOpenWhiteLabel}
@@ -241,8 +274,8 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Developer Monetization Quick Button */}
-          {onOpenMonetization && (
+          {/* Developer Monetization Quick Button (Master Developer Only) */}
+          {isMasterDeveloper && onOpenMonetization && (
             <button
               id="btn-header-monetization"
               onClick={onOpenMonetization}
@@ -364,16 +397,23 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Task Agent</span>
           </button>
 
-          {/* Create Agent CTA */}
-          <button
-            id="btn-create-agent"
-            onClick={onCreateAgent}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold shadow-sm transition-all active:scale-95 hover:opacity-95"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Build Agent</span>
-          </button>
+          {/* Create Agent CTA (Master Developer Only) or Client Fleet Mode Badge */}
+          {isMasterDeveloper ? (
+            <button
+              id="btn-create-agent"
+              onClick={onCreateAgent}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold shadow-sm transition-all active:scale-95 hover:opacity-95"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Build Agent</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
+              <Bot className="w-3.5 h-3.5 text-blue-600" />
+              <span>{activeAgentsCount} Agents Active</span>
+            </div>
+          )}
         </div>
       </header>
     </div>

@@ -60,9 +60,42 @@ import { DigitalWorkspaces } from "./components/DigitalWorkspaces";
 import { ExportModal } from "./components/ExportModal";
 import { AgentHealthMonitor } from "./components/AgentHealthMonitor";
 import { AgentTemplateModal } from "./components/AgentTemplateModal";
+import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
+import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 
 export default function App() {
+  // Master Developer vs Client Access Gate State
+  const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>(() => {
+    const saved = localStorage.getItem("agentflow_master_access");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    const isGoogleEnvironment = 
+      typeof window !== "undefined" && 
+      (window.location.hostname.includes("google") || 
+       window.location.hostname.includes("aistudio") || 
+       window.location.hostname.includes("corp.google.com") ||
+       window.location.hostname.includes("localhost") ||
+       window.location.hostname.includes("127.0.0.1"));
+       
+    return {
+      currentLevel: isGoogleEnvironment ? "master_developer" : "client_tenant",
+      isGoogleStudioAuthenticated: isGoogleEnvironment,
+      adminPin: "8844",
+      lastUnlockedAt: isGoogleEnvironment ? new Date().toISOString() : undefined,
+    };
+  });
+  const [isAccessGateOpen, setIsAccessGateOpen] = useState<boolean>(false);
+
+  const isMasterDeveloper = masterAccess.currentLevel === "master_developer";
+
+  useEffect(() => {
+    localStorage.setItem("agentflow_master_access", JSON.stringify(masterAccess));
+  }, [masterAccess]);
+
   // Local state initialized with fallback to localStorage
   const [agents, setAgents] = useState<Agent[]>(() => {
     const saved = localStorage.getItem("agentflow_agents");
@@ -867,6 +900,8 @@ export default function App() {
         isAutoSaving={isAutoSaving}
         lastSavedTime={lastSavedTime}
         whiteLabelConfig={whiteLabelConfig}
+        isMasterDeveloper={isMasterDeveloper}
+        onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
         onToggleClientPreview={() =>
           setWhiteLabelConfig((prev) => ({
             ...prev,
@@ -880,12 +915,20 @@ export default function App() {
         {/* Navigation Sidebar */}
         <Sidebar
           currentTab={currentTab}
-          onSelectTab={(tab) => setCurrentTab(tab)}
+          onSelectTab={(tab) => {
+            if (!isMasterDeveloper && (tab === "whitelabel" || tab === "monetization")) {
+              setIsAccessGateOpen(true);
+              return;
+            }
+            setCurrentTab(tab);
+          }}
           pendingReviewsCount={pendingReviewsCount}
           claimableQuestsCount={claimableQuestsCount}
           unhealthyAgentsCount={agents.filter((a) => (a.stats.successRate ?? 95) < 90).length}
           totalAssetsCount={assets.length}
           whiteLabelConfig={whiteLabelConfig}
+          isMasterDeveloper={isMasterDeveloper}
+          onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
         />
 
         {/* Dynamic Tab Body */}
@@ -909,6 +952,9 @@ export default function App() {
             onOpenModelManager={handleOpenModelManager}
             onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
             onInstantiateTemplate={handleInstantiateTemplate}
+            isMasterDeveloper={isMasterDeveloper}
+            developerCompanyName={developerProfile.companyName}
+            onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
           />
         )}
 
@@ -952,6 +998,8 @@ export default function App() {
             onDeleteWorkflow={handleDeleteWorkflow}
             onRunTestWorkflow={handleRunTestWorkflow}
             onRewardNodeAdded={() => addXpAndCheckLevel(50)}
+            isMasterDeveloper={isMasterDeveloper}
+            developerCompanyName={developerProfile.companyName}
           />
         )}
 
@@ -1110,13 +1158,42 @@ export default function App() {
       <AgentTemplateModal
         isOpen={isTemplateModalOpen}
         onClose={() => setIsTemplateModalOpen(false)}
-        onUseTemplate={(template) => {
-          handleInstantiateTemplate(template);
+        onSelectTemplate={(template, autoDeploy) => {
+          if (autoDeploy) {
+            handleInstantiateTemplate(template);
+          } else {
+            setIsTemplateModalOpen(false);
+            setEditingAgent(null);
+            setIsAgentBuilderOpen(true);
+          }
         }}
-        onCustomizeInBuilder={(template) => {
-          setIsTemplateModalOpen(false);
-          setEditingAgent(null);
-          setIsAgentBuilderOpen(true);
+        isMasterDeveloper={isMasterDeveloper}
+      />
+
+      {/* Modal: Master Developer Access Gate */}
+      <MasterAccessGateModal
+        isOpen={isAccessGateOpen}
+        onClose={() => setIsAccessGateOpen(false)}
+        settings={masterAccess}
+        developerCompanyName={developerProfile.companyName}
+        onSaveSettings={(newSettings) => {
+          setMasterAccess(newSettings);
+        }}
+        onSwitchToClientMode={() => {
+          setMasterAccess((prev) => ({
+            ...prev,
+            currentLevel: "client_tenant",
+          }));
+          if (currentTab === "whitelabel" || currentTab === "monetization") {
+            setCurrentTab("agents");
+          }
+        }}
+        onUnlockMasterMode={() => {
+          setMasterAccess((prev) => ({
+            ...prev,
+            currentLevel: "master_developer",
+            lastUnlockedAt: new Date().toISOString(),
+          }));
         }}
       />
     </div>

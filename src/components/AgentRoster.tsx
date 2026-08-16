@@ -20,7 +20,10 @@ import {
   AlertTriangle,
   Wand2,
   Cpu,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  Eye,
+  Info
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -37,6 +40,9 @@ interface AgentRosterProps {
   onOpenModelManager?: (agentId?: string) => void;
   onOpenTemplateModal?: () => void;
   onInstantiateTemplate?: (template: AgentTemplate) => void;
+  isMasterDeveloper?: boolean;
+  developerCompanyName?: string;
+  onOpenMasterAccessGate?: () => void;
 }
 
 export const AgentRoster: React.FC<AgentRosterProps> = ({
@@ -52,10 +58,14 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
   onOpenModelManager,
   onOpenTemplateModal,
   onInstantiateTemplate,
+  isMasterDeveloper = true,
+  developerCompanyName = "AgentFlow Enterprise",
+  onOpenMasterAccessGate,
 }) => {
   const [selectedDept, setSelectedDept] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showTemplatesSpotlight, setShowTemplatesSpotlight] = useState<boolean>(true);
+  const [clientBlueprintModalAgent, setClientBlueprintModalAgent] = useState<Agent | null>(null);
 
   const featuredTemplates = AGENT_TEMPLATES.slice(0, 4);
   const unhealthyAgents = agents.filter((a) => (a.stats.successRate ?? 95) < 90);
@@ -78,12 +88,22 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Bot className="w-5 h-5 text-blue-600" />
-            <span>Autonomous Enterprise AI Agents ({agents.length})</span>
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Bot className="w-5 h-5 text-blue-600" />
+              <span>Autonomous Enterprise AI Agents ({agents.length})</span>
+            </h1>
+            {!isMasterDeveloper && (
+              <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 border border-slate-300 dark:border-slate-700">
+                <Lock className="w-3 h-3 text-amber-500" />
+                <span>Protected Fleet</span>
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Configured with specific domain scopes, autonomy levels, and team assignments.
+            {isMasterDeveloper 
+              ? "Full developer administrative mode. You can remix system prompts, change AI models, and build new agents."
+              : `Production-ready agent fleet managed and secured by ${developerCompanyName}. Execution & tasking enabled.`}
           </p>
         </div>
 
@@ -94,18 +114,18 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-all"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Agent Templates</span>
+              <span>{isMasterDeveloper ? "Agent Templates" : "Explore Blueprints"}</span>
               <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-white text-[10px] font-bold">
                 {AGENT_TEMPLATES.length}
               </span>
             </button>
           )}
 
-          {onOpenModelManager && (
+          {isMasterDeveloper && onOpenModelManager && (
             <button
               onClick={() => onOpenModelManager()}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-xs transition-all"
-              title="Enterprise AI Models Registry"
+              title="Enterprise AI Models Registry (Wholesale Models & Routing)"
             >
               <Cpu className="w-4 h-4 text-blue-600" />
               <span>Model Hub</span>
@@ -132,13 +152,26 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
             </button>
           )}
 
-          <button
-            onClick={onCreateAgent}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold shadow-xs active:scale-95 transition-all self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4 text-blue-600" />
-            <span>Custom Agent</span>
-          </button>
+          {isMasterDeveloper ? (
+            <button
+              onClick={onCreateAgent}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold shadow-xs active:scale-95 transition-all self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4 text-blue-600" />
+              <span>Custom Agent</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                alert(`To commission a custom AI agent blueprint or request prompt customization, please contact ${developerCompanyName}.`);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold shadow-xs hover:bg-slate-200 transition-all self-start sm:self-auto"
+              title={`Managed by ${developerCompanyName}`}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-500" />
+              <span>Request Custom Agent</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -445,13 +478,23 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
                     </button>
                   )}
 
-                  <button
-                    onClick={() => onEditAgent(agent)}
-                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    title="Configure Agent & Permissions"
-                  >
-                    <Sliders className="w-3.5 h-3.5" />
-                  </button>
+                  {isMasterDeveloper ? (
+                    <button
+                      onClick={() => onEditAgent(agent)}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="Configure Agent, System Prompts & Wholesale Models (Master Admin)"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setClientBlueprintModalAgent(agent)}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="View Authorized Scopes & Blueprint Specs (Read-Only)"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-blue-500" />
+                    </button>
+                  )}
 
                   <button
                     onClick={() => onOpenWorkflow(agent.id)}
@@ -474,6 +517,106 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
           );
         })}
       </div>
+
+      {/* READ-ONLY CLIENT BLUEPRINT MODAL */}
+      {clientBlueprintModalAgent && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full flex flex-col overflow-hidden animate-in zoom-in-95">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <img
+                  src={clientBlueprintModalAgent.avatar}
+                  alt={clientBlueprintModalAgent.name}
+                  className="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
+                />
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {clientBlueprintModalAgent.name}
+                  </h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                    {clientBlueprintModalAgent.role} • {clientBlueprintModalAgent.department}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setClientBlueprintModalAgent(null)}
+                className="w-8 h-8 rounded-full bg-slate-200/60 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs text-slate-600 dark:text-slate-300 overflow-y-auto max-h-[60vh]">
+              {/* Agency lock banner */}
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Protected Production Agent</span>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                    Core system prompts and wholesale AI routing are managed by {developerCompanyName}. To request custom modifications or prompt tweaking, please contact your agency administrator.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="font-bold text-slate-900 dark:text-white mb-1">Operational Scope:</div>
+                <p className="text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                  {clientBlueprintModalAgent.description}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Autonomy Mode</div>
+                  <div className="font-bold text-slate-900 dark:text-white mt-0.5 uppercase">
+                    {clientBlueprintModalAgent.autonomyLevel}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">AI Engine</div>
+                  <div className="font-bold text-slate-900 dark:text-white mt-0.5">
+                    {clientBlueprintModalAgent.model}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="font-bold text-slate-900 dark:text-white mb-1.5 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Authorized App & API Tools ({clientBlueprintModalAgent.permissions.length}):</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {clientBlueprintModalAgent.permissions.map((perm, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-mono"
+                    >
+                      {perm}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">
+                Assigned Team: {clientBlueprintModalAgent.assignedTo.team}
+              </span>
+              <button
+                onClick={() => {
+                  const id = clientBlueprintModalAgent.id;
+                  setClientBlueprintModalAgent(null);
+                  onTaskAgent(id);
+                }}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Task This Agent</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

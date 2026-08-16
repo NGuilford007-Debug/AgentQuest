@@ -74,6 +74,8 @@ interface WorkflowCanvasProps {
   onDeleteWorkflow?: (id: string) => void;
   onRunTestWorkflow: (workflow: Workflow) => void;
   onRewardNodeAdded?: () => void;
+  isMasterDeveloper?: boolean;
+  developerCompanyName?: string;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
@@ -88,6 +90,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onDeleteWorkflow,
   onRunTestWorkflow,
   onRewardNodeAdded,
+  isMasterDeveloper = true,
+  developerCompanyName = "AgentFlow Enterprise",
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>(workflow.nodes || []);
   const [connections, setConnections] = useState<WorkflowConnection[]>(workflow.connections || []);
@@ -772,15 +776,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
         {/* Toolbar Action Buttons */}
         <div className="flex items-center gap-2">
+          {!isMasterDeveloper && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-bold">
+              <Lock className="w-3.5 h-3.5 text-amber-600" />
+              <span>Production Pipeline Protected</span>
+            </div>
+          )}
+
           {/* Multi-Select Status Pill */}
-          {selectedNodeIds.length > 1 && (
+          {isMasterDeveloper && selectedNodeIds.length > 1 && (
             <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800 animate-pulse">
               <span>{selectedNodeIds.length} Nodes Multi-Selected</span>
             </span>
           )}
 
-          {/* Create Blank Workflow */}
-          {onCreateNewWorkflow && (
+          {/* Create Blank Workflow (Master Developer Only) */}
+          {isMasterDeveloper && onCreateNewWorkflow && (
             <button
               id="btn-create-blank-workflow"
               onClick={onCreateNewWorkflow}
@@ -792,16 +803,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </button>
           )}
 
-          {/* AI Generator CTA */}
-          <button
-            id="btn-open-ai-workflow-modal"
-            onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="hidden md:inline">AI Architect</span>
-            <span className="md:hidden">AI</span>
-          </button>
+          {/* AI Generator CTA (Master Developer Only) */}
+          {isMasterDeveloper && (
+            <button
+              id="btn-open-ai-workflow-modal"
+              onClick={() => setShowAiModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden md:inline">AI Architect</span>
+              <span className="md:hidden">AI</span>
+            </button>
+          )}
 
           {/* Auto Layout */}
           <button
@@ -830,21 +843,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </button>
           </div>
 
-          {/* Save Workflow */}
-          <button
-            id="btn-save-workflow-graph"
-            onClick={handleSave}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              saveSuccess
-                ? "bg-emerald-600 text-white"
-                : "bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white"
-            }`}
-          >
-            {saveSuccess ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            <span>{saveSuccess ? "Saved!" : "Save"}</span>
-          </button>
+          {/* Save Workflow (Master Developer Only) */}
+          {isMasterDeveloper && (
+            <button
+              id="btn-save-workflow-graph"
+              onClick={handleSave}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                saveSuccess
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white"
+              }`}
+            >
+              {saveSuccess ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{saveSuccess ? "Saved!" : "Save"}</span>
+            </button>
+          )}
 
-          {/* Live In-Canvas Test Runner */}
+          {/* Live In-Canvas Test Runner (Available for both Master and Client) */}
           <button
             id="btn-run-live-canvas-test"
             onClick={runLiveCanvasSimulation}
@@ -867,13 +882,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         <div className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex flex-col shrink-0 z-10">
           <div className="p-3 border-b border-slate-100 dark:border-slate-800">
             <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
-              <span>Component Palette</span>
-              <span className="text-[10px] text-slate-400 font-normal">Drag or click +</span>
+              <span>{isMasterDeveloper ? "Component Palette" : "Pipeline Components"}</span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                {isMasterDeveloper ? "Drag or click +" : "Read-Only"}
+              </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Triggers, AI reasoning, conditional branching & assets.
+              {isMasterDeveloper 
+                ? "Triggers, AI reasoning, conditional branching & assets."
+                : `Secured pipeline components provisioned by ${developerCompanyName}.`}
             </p>
           </div>
+
+          {!isMasterDeveloper && (
+            <div className="mx-3 mt-3 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200 mb-0.5">
+                <Lock className="w-3 h-3 text-amber-500" />
+                <span>Protected Pipeline</span>
+              </div>
+              Node editing is disabled in client mode. You can trigger live test simulations and observe real-time telemetry.
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
             {["Triggers", "Data Connectors", "AI Processing", "Logic & Routing", "Governance", "Output Actions"].map(
@@ -893,10 +922,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                       return (
                         <div
                           key={idx}
-                          draggable
-                          onDragStart={() => setDraggedTemplate(item)}
-                          onClick={() => addNodeFromTemplate(item)}
-                          className="group p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/70 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-grab active:cursor-grabbing hover:shadow-xs transition-all flex items-start justify-between gap-2"
+                          draggable={isMasterDeveloper}
+                          onDragStart={() => {
+                            if (isMasterDeveloper) setDraggedTemplate(item);
+                          }}
+                          onClick={() => {
+                            if (isMasterDeveloper) addNodeFromTemplate(item);
+                          }}
+                          className={`group p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/70 transition-all flex items-start justify-between gap-2 ${
+                            isMasterDeveloper
+                              ? "hover:border-indigo-400 dark:hover:border-indigo-500 cursor-grab active:cursor-grabbing hover:shadow-xs"
+                              : "cursor-default opacity-80"
+                          }`}
                         >
                           <div className="flex items-start gap-2 min-w-0">
                             <div className={`p-1.5 rounded-lg shrink-0 ${colorStyle.iconBg}`}>

@@ -26,12 +26,14 @@ interface AgentTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectTemplate: (template: AgentTemplate, autoDeploy?: boolean) => void;
+  isMasterDeveloper?: boolean;
 }
 
 export const AgentTemplateModal: React.FC<AgentTemplateModalProps> = ({
   isOpen,
   onClose,
   onSelectTemplate,
+  isMasterDeveloper = true,
 }) => {
   const [selectedDept, setSelectedDept] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -258,17 +260,19 @@ export const AgentTemplateModal: React.FC<AgentTemplateModalProps> = ({
                     </button>
 
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelectTemplate(template, false);
-                          onClose();
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 transition-colors"
-                        title="Open in Agent Builder to customize"
-                      >
-                        Customize
-                      </button>
+                      {isMasterDeveloper && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectTemplate(template, false);
+                            onClose();
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 transition-colors"
+                          title="Open in Agent Builder to customize prompt & tools"
+                        >
+                          Customize
+                        </button>
+                      )}
 
                       <button
                         type="button"

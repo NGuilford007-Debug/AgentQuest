@@ -40,6 +40,8 @@ interface SidebarProps {
   unhealthyAgentsCount?: number;
   totalAssetsCount?: number;
   whiteLabelConfig?: WhiteLabelConfig;
+  isMasterDeveloper?: boolean;
+  onOpenMasterAccessGate?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,6 +52,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unhealthyAgentsCount = 0,
   totalAssetsCount = 0,
   whiteLabelConfig,
+  isMasterDeveloper = true,
+  onOpenMasterAccessGate,
 }) => {
   const toggles = whiteLabelConfig?.featureToggles;
 
@@ -86,9 +90,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "studio" as NavTab,
       label: "Workflow Studio",
       icon: WorkflowIcon,
-      badge: "If/Else",
+      badge: isMasterDeveloper ? "If/Else" : "Active",
       badgeColor: "bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300",
-      description: "Visual drag-and-drop & logic branches",
+      description: isMasterDeveloper ? "Visual drag-and-drop & logic branches" : "Pipeline inspection & test execution",
       enabled: true,
     },
     {
@@ -150,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: "Commercial",
       badgeColor: "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold",
       description: "Rebrand, custom domain, SaaS packaging",
-      enabled: true,
+      enabled: isMasterDeveloper, // HIDDEN for clients - only for company owner
     },
     {
       id: "monetization" as NavTab,
@@ -159,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: "Stripe + Projections",
       badgeColor: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold",
       description: "Stripe Payables & Receivables, margins & forecasts",
-      enabled: true,
+      enabled: isMasterDeveloper, // HIDDEN for clients - internal company profit engine
     },
   ];
 
@@ -209,28 +213,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Gamified Mini Tip Banner or White-Label Footer */}
-      {toggles?.enableGamification !== false ? (
-        <div className="p-3 m-3 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-100 dark:border-blue-900/40 text-xs">
-          <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-200 mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-            <span>Productivity Multiplier</span>
+      {/* Access Mode Footer */}
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        <button
+          onClick={onOpenMasterAccessGate}
+          className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+            isMasterDeveloper
+              ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 hover:bg-purple-100"
+              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
+          }`}
+          title="Manage Master Developer vs. Client Access Gate"
+        >
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isMasterDeveloper ? "bg-purple-500 animate-pulse" : "bg-amber-500"}`} />
+            <div>
+              <div className="text-[11px] font-bold leading-tight">
+                {isMasterDeveloper ? "Master Owner Mode" : "Client Portal Mode"}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                {isMasterDeveloper ? "Full Admin & Remixing" : "Execution Only"}
+              </div>
+            </div>
           </div>
-          <p className="text-[11px] text-blue-700 dark:text-blue-300/80 leading-relaxed">
-            Automate 3 workflows today to maintain your <strong>1.35x XP streak boost</strong>!
-          </p>
-        </div>
-      ) : (
-        <div className="p-3 m-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
-          <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 mb-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>{whiteLabelConfig?.brandName || "Enterprise Workspace"}</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+            {isMasterDeveloper ? "OWNER" : "CLIENT"}
+          </span>
+        </button>
+
+        {/* Gamified Mini Tip Banner or White-Label Footer */}
+        {toggles?.enableGamification !== false ? (
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-100 dark:border-blue-900/40 text-xs">
+            <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-200 mb-0.5">
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              <span className="text-[11px]">Productivity Boost</span>
+            </div>
+            <p className="text-[10px] text-blue-700 dark:text-blue-300/80 leading-snug">
+              Automate 3 workflows today to maintain your <strong>1.35x XP boost</strong>!
+            </p>
           </div>
-          <p className="text-[10px] text-slate-500 truncate">
-            {whiteLabelConfig?.customDomain || "Single-Tenant Deployment"}
-          </p>
-        </div>
-      )}
+        ) : (
+          <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
+            <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              <span className="text-[11px]">{whiteLabelConfig?.brandName || "Enterprise Workspace"}</span>
+            </div>
+            <p className="text-[10px] text-slate-500 truncate">
+              {whiteLabelConfig?.customDomain || "Single-Tenant Deployment"}
+            </p>
+          </div>
+        )}
+      </div>
     </aside>
   );
 };
