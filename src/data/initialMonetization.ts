@@ -1,0 +1,193 @@
+import { 
+  DeveloperCompanyProfile, 
+  RateCardConfig, 
+  TenantBillingRecord, 
+  FinancialMetricSnapshot 
+} from "../types";
+
+export const DEFAULT_DEVELOPER_PROFILE: DeveloperCompanyProfile = {
+  companyName: "Apex AI Studio (Founder Dev Org)",
+  developerEmail: "toppgunn321@gmail.com",
+  founderAccessGranted: true,
+  developerInternalTenantId: "tenant-apex-developer",
+  payoutAccount: {
+    isStripeConnected: true,
+    accountHolder: "Developer Studio Operations LLC",
+    payoutCadence: "Weekly",
+    currency: "USD",
+    lastPayoutAmount: 4890.50,
+    lastPayoutDate: "Aug 14, 2026",
+  },
+};
+
+export const DEFAULT_RATE_CARD: RateCardConfig = {
+  // Raw Cost (What Google Cloud & Gemini AI infrastructure actually charges you)
+  storageBaseCostPerGbMonth: 0.020,  // $0.02 / GB/mo
+  aiTokenCostPerMillionIn: 0.075,     // $0.075 / 1M prompt tokens (Gemini 1.5/2.0 Flash)
+  aiTokenCostPerMillionOut: 0.300,    // $0.30 / 1M output tokens
+  imageGenCostPerUnit: 0.040,         // $0.04 / image gen
+
+  // Markup Multipliers (How you turn a 75%-85% profit margin)
+  storageMarkupMultiplier: 5.0,       // Client charged $0.100 / GB/mo (+400% profit)
+  aiTokenMarkupMultiplier: 4.5,       // Client charged $0.337 / 1M in, $1.350 / 1M out (+350% profit)
+  imageGenMarkupMultiplier: 5.0,      // Client charged $0.200 / image (+400% profit)
+
+  // Monthly Base Seat / Platform Tier pricing
+  starterTierMonthlyFee: 149,
+  growthTierMonthlyFee: 499,
+  enterpriseTierMonthlyFee: 1499,
+};
+
+export const INITIAL_TENANT_BILLING_RECORDS: TenantBillingRecord[] = [
+  {
+    tenantId: "tenant-apex-developer",
+    tenantName: "Apex AI Studio (My Company - Founder)",
+    plan: "Developer Free Tier",
+    isInternalDeveloper: true, // 100% Free Lifetime VIP Compute & Storage
+    contactEmail: "toppgunn321@gmail.com",
+    billingStatus: "free_developer_pass",
+    basePlanFee: 0,
+    storageUsedGb: 124.8,
+    storageQuotaGb: 99999,
+    rawStorageCost: 2.50,
+    billedStorageFee: 0, // Bypassed / $0.00
+    promptTokensUsed: 14200000,
+    completionTokensUsed: 8900000,
+    imagesGeneratedCount: 420,
+    rawAiInfraCost: 20.53,
+    billedAiUsageFee: 0, // Bypassed / $0.00
+    totalRawInfraCost: 23.03,
+    totalBilledRevenue: 0,
+    netProfit: 0,
+    profitMarginPercent: 100, // VIP internal
+    walletCreditBalance: 0,
+    autoRechargeEnabled: false,
+    autoRechargeThreshold: 0,
+    autoRechargeAmount: 0,
+    lastInvoiceDate: "Aug 01, 2026",
+    invoiceHistoryCount: 12,
+  },
+  {
+    tenantId: "preset-nexus",
+    tenantName: "Nexus Global Enterprise",
+    plan: "Enterprise White-Label",
+    isInternalDeveloper: false,
+    contactEmail: "billing@nexusglobal.io",
+    billingStatus: "paid",
+    basePlanFee: 1499,
+    storageUsedGb: 284.5,
+    storageQuotaGb: 500,
+    rawStorageCost: 5.69,
+    billedStorageFee: 28.45,
+    promptTokensUsed: 38500000,
+    completionTokensUsed: 18200000,
+    imagesGeneratedCount: 840,
+    rawAiInfraCost: 41.95,
+    billedAiUsageFee: 188.75,
+    totalRawInfraCost: 47.64,
+    totalBilledRevenue: 1716.20,
+    netProfit: 1668.56,
+    profitMarginPercent: 97.2,
+    walletCreditBalance: 850.00,
+    autoRechargeEnabled: true,
+    autoRechargeThreshold: 200,
+    autoRechargeAmount: 500,
+    lastInvoiceDate: "Aug 01, 2026",
+    invoiceHistoryCount: 6,
+  },
+  {
+    tenantId: "preset-cyberwear",
+    tenantName: "CyberWear Streetwear Studio",
+    plan: "Growth SaaS",
+    isInternalDeveloper: false,
+    contactEmail: "ops@cyberwear.fashion",
+    billingStatus: "paid",
+    basePlanFee: 499,
+    storageUsedGb: 195.2,
+    storageQuotaGb: 250,
+    rawStorageCost: 3.90,
+    billedStorageFee: 19.52,
+    promptTokensUsed: 22400000,
+    completionTokensUsed: 11100000,
+    imagesGeneratedCount: 1250,
+    rawAiInfraCost: 55.01,
+    billedAiUsageFee: 250.00,
+    totalRawInfraCost: 58.91,
+    totalBilledRevenue: 768.52,
+    netProfit: 709.61,
+    profitMarginPercent: 92.3,
+    walletCreditBalance: 320.00,
+    autoRechargeEnabled: true,
+    autoRechargeThreshold: 100,
+    autoRechargeAmount: 300,
+    lastInvoiceDate: "Aug 01, 2026",
+    invoiceHistoryCount: 4,
+  },
+  {
+    tenantId: "preset-velocesec",
+    tenantName: "VeloceSec Incident Response",
+    plan: "Enterprise White-Label",
+    isInternalDeveloper: false,
+    contactEmail: "finance@velocesec.ai",
+    billingStatus: "auto_recharged",
+    basePlanFee: 1499,
+    storageUsedGb: 310.0,
+    storageQuotaGb: 500,
+    rawStorageCost: 6.20,
+    billedStorageFee: 31.00,
+    promptTokensUsed: 52000000,
+    completionTokensUsed: 26000000,
+    imagesGeneratedCount: 310,
+    rawAiInfraCost: 24.10,
+    billedAiUsageFee: 108.45,
+    totalRawInfraCost: 30.30,
+    totalBilledRevenue: 1638.45,
+    netProfit: 1608.15,
+    profitMarginPercent: 98.1,
+    walletCreditBalance: 1250.00,
+    autoRechargeEnabled: true,
+    autoRechargeThreshold: 300,
+    autoRechargeAmount: 1000,
+    lastInvoiceDate: "Aug 01, 2026",
+    invoiceHistoryCount: 8,
+  },
+  {
+    tenantId: "preset-aurabio",
+    tenantName: "Aura BioHealth Intelligence",
+    plan: "Starter Agency",
+    isInternalDeveloper: false,
+    contactEmail: "accounts@aurabio.med",
+    billingStatus: "paid",
+    basePlanFee: 149,
+    storageUsedGb: 64.0,
+    storageQuotaGb: 100,
+    rawStorageCost: 1.28,
+    billedStorageFee: 6.40,
+    promptTokensUsed: 8900000,
+    completionTokensUsed: 4100000,
+    imagesGeneratedCount: 95,
+    rawAiInfraCost: 5.70,
+    billedAiUsageFee: 25.65,
+    totalRawInfraCost: 6.98,
+    totalBilledRevenue: 181.05,
+    netProfit: 174.07,
+    profitMarginPercent: 96.1,
+    walletCreditBalance: 185.00,
+    autoRechargeEnabled: true,
+    autoRechargeThreshold: 50,
+    autoRechargeAmount: 150,
+    lastInvoiceDate: "Aug 01, 2026",
+    invoiceHistoryCount: 3,
+  },
+];
+
+export const HISTORICAL_FINANCIAL_SNAPSHOTS: FinancialMetricSnapshot[] = [
+  { period: "Jan", grossRevenue: 2850, rawInfraCost: 240, netProfit: 2610, marginPercent: 91.5, activePaidTenants: 2 },
+  { period: "Feb", grossRevenue: 3420, rawInfraCost: 295, netProfit: 3125, marginPercent: 91.3, activePaidTenants: 2 },
+  { period: "Mar", grossRevenue: 4890, rawInfraCost: 380, netProfit: 4510, marginPercent: 92.2, activePaidTenants: 3 },
+  { period: "Apr", grossRevenue: 5120, rawInfraCost: 410, netProfit: 4710, marginPercent: 91.9, activePaidTenants: 3 },
+  { period: "May", grossRevenue: 6480, rawInfraCost: 510, netProfit: 5970, marginPercent: 92.1, activePaidTenants: 4 },
+  { period: "Jun", grossRevenue: 7150, rawInfraCost: 590, netProfit: 6560, marginPercent: 91.7, activePaidTenants: 4 },
+  { period: "Jul", grossRevenue: 8920, rawInfraCost: 680, netProfit: 8240, marginPercent: 92.3, activePaidTenants: 5 },
+  { period: "Aug (Current)", grossRevenue: 9804, rawInfraCost: 742, netProfit: 9062, marginPercent: 92.4, activePaidTenants: 5 },
+];

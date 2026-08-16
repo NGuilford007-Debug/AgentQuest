@@ -1,0 +1,6 @@
+{
+  "name": "AgentFlow Enterprise - AI Agent Builder & Gamified Productivity",
+  "description": "Build, configure, and white-label autonomous AI agent workspaces with developer monetization & profit markups, storage and Gemini AI metered billing, founder VIP free-access pass, multi-tenant branding, fine-grained access permissions, dynamic model registry, health diagnostics, and gamified enterprise automation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
