@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { EmployeeProfile, Department, Agent } from "../types";
 import { 
   User, 
@@ -153,7 +153,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClearExecutionHistory,
   onResetAgentsToDefault,
 }) => {
-  const [activeTab, setActiveTab] = useState<"settings" | "benchmarks" | "behavior" | "cleanslate">("settings");
+  const [activeTab, setActiveTab] = useState<"settings" | "benchmarks" | "behavior" | "cleanslate">(() => {
+    return (localStorage.getItem("agentflow_settings_active_tab") as any) || "settings";
+  });
   const [name, setName] = useState(userProfile.name);
   const [role, setRole] = useState(userProfile.role);
   const [department, setDepartment] = useState<Department>(userProfile.department);
@@ -167,12 +169,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [portalMode, setPortalMode] = useState<string>(() => {
     return localStorage.getItem("agentflow_portal_mode") || "generalist";
   });
-  const [globalTemperature, setGlobalTemperature] = useState<number>(0.35);
-  const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string>("balanced-fleet");
+  const [globalTemperature, setGlobalTemperature] = useState<number>(() => {
+    const savedTemp = localStorage.getItem("agentflow_global_temp");
+    return savedTemp ? parseFloat(savedTemp) : 0.35;
+  });
+  const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string>(() => {
+    return localStorage.getItem("agentflow_selected_benchmark") || "balanced-fleet";
+  });
   
   const [confirmCleanSlate, setConfirmCleanSlate] = useState(false);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Synchronize state from userProfile and localStorage when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setName(userProfile.name);
+      setRole(userProfile.role);
+      setDepartment(userProfile.department);
+      setAvatar(userProfile.avatar);
+      setCompanyName(localStorage.getItem("agentflow_workspace_name") || "Acme Enterprise Corp");
+      setPreferredTone(localStorage.getItem("agentflow_pref_tone") || "executive");
+      setPortalMode(localStorage.getItem("agentflow_portal_mode") || "generalist");
+      const savedTemp = localStorage.getItem("agentflow_global_temp");
+      if (savedTemp) setGlobalTemperature(parseFloat(savedTemp));
+      const savedBenchmark = localStorage.getItem("agentflow_selected_benchmark");
+      if (savedBenchmark) setSelectedBenchmarkId(savedBenchmark);
+    }
+  }, [isOpen, userProfile]);
 
   if (!isOpen) return null;
 
@@ -181,22 +205,49 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setTimeout(() => setNotification(null), 3000);
   };
 
+  const handleTabChange = (tab: "settings" | "benchmarks" | "behavior" | "cleanslate") => {
+    setActiveTab(tab);
+    localStorage.setItem("agentflow_settings_active_tab", tab);
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanName = name.trim() || "Alex Mercer";
+    const cleanRole = role.trim() || "Automation Architect";
+    const cleanAvatar = avatar.trim() || PRESET_AVATARS[0].url;
+    const cleanCompany = companyName.trim() || "Acme Enterprise Corp";
+
     onUpdateProfile({
-      name: name.trim() || "Alex Mercer",
-      role: role.trim() || "Automation Architect",
+      name: cleanName,
+      role: cleanRole,
       department,
-      avatar: avatar.trim() || PRESET_AVATARS[0].url,
+      avatar: cleanAvatar,
     });
-    localStorage.setItem("agentflow_workspace_name", companyName.trim() || "Acme Enterprise Corp");
+    localStorage.setItem("agentflow_workspace_name", cleanCompany);
     localStorage.setItem("agentflow_pref_tone", preferredTone);
-    showToast("Profile identity and personalization saved!");
+    localStorage.setItem("agentflow_avatar_url", cleanAvatar);
+    showToast("Profile identity & personalization preferences saved across sessions!");
+  };
+
+  const handleToneChange = (toneId: string) => {
+    setPreferredTone(toneId);
+    localStorage.setItem("agentflow_pref_tone", toneId);
+    showToast(`Work product delivery tone set to "${toneId}".`);
+  };
+
+  const handleAvatarSelect = (avatarUrl: string) => {
+    setAvatar(avatarUrl);
+    localStorage.setItem("agentflow_avatar_url", avatarUrl);
   };
 
   const handleApplyBenchmarkPreset = (preset: BenchmarkPreset) => {
     setSelectedBenchmarkId(preset.id);
     setGlobalTemperature(preset.temperature);
+    
+    // Persist benchmark preset selections to localStorage
+    localStorage.setItem("agentflow_selected_benchmark", preset.id);
+    localStorage.setItem("agentflow_global_temp", preset.temperature.toString());
+    localStorage.setItem("agentflow_benchmark_model", preset.model);
     
     if (onUpdateAgents && agents.length > 0) {
       const updatedAgents = agents.map((agent) => ({
@@ -205,20 +256,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         temperature: preset.temperature,
       }));
       onUpdateAgents(updatedAgents);
-      showToast(`Applied "${preset.name}" across all ${agents.length} fleet agents!`);
+      localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
+      showToast(`Applied & persisted "${preset.name}" across all ${agents.length} fleet agents!`);
     } else {
-      showToast(`Selected "${preset.name}" benchmark preset!`);
+      showToast(`Selected & persisted "${preset.name}" benchmark preset!`);
     }
   };
 
   const handleApplyCustomFleetSettings = () => {
+    localStorage.setItem("agentflow_global_temp", globalTemperature.toString());
     if (onUpdateAgents && agents.length > 0) {
       const updatedAgents = agents.map((agent) => ({
         ...agent,
         temperature: globalTemperature,
       }));
       onUpdateAgents(updatedAgents);
-      showToast(`Updated temperature to ${globalTemperature} across all agents!`);
+      localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
+      showToast(`Persisted global fleet temperature (${globalTemperature}) across all agents!`);
+    } else {
+      showToast(`Persisted temperature setting: ${globalTemperature}`);
     }
   };
 
@@ -299,8 +355,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-950/40 px-5 pt-2 gap-1 overflow-x-auto">
           <button
             id="tab-profile-settings"
-            onClick={() => setActiveTab("settings")}
-            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            onClick={() => handleTabChange("settings")}
+            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === "settings"
                 ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
@@ -312,8 +368,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
           <button
             id="tab-profile-benchmarks"
-            onClick={() => setActiveTab("benchmarks")}
-            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            onClick={() => handleTabChange("benchmarks")}
+            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === "benchmarks"
                 ? "border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
@@ -325,8 +381,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
           <button
             id="tab-profile-behavior"
-            onClick={() => setActiveTab("behavior")}
-            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            onClick={() => handleTabChange("behavior")}
+            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === "behavior"
                 ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
@@ -338,8 +394,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
           <button
             id="tab-profile-cleanslate"
-            onClick={() => setActiveTab("cleanslate")}
-            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            onClick={() => handleTabChange("cleanslate")}
+            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === "cleanslate"
                 ? "border-amber-500 text-amber-600 dark:text-amber-400 dark:border-amber-400"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
@@ -379,8 +435,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                         <button
                           key={preset.label}
                           type="button"
-                          onClick={() => setAvatar(preset.url)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all border ${
+                          onClick={() => handleAvatarSelect(preset.url)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all border cursor-pointer ${
                             avatar === preset.url
                               ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-semibold"
                               : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
@@ -481,10 +537,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     <button
                       key={tone.id}
                       type="button"
-                      onClick={() => setPreferredTone(tone.id)}
-                      className={`p-2.5 rounded-xl text-left border transition-all ${
+                      onClick={() => handleToneChange(tone.id)}
+                      className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
                         preferredTone === tone.id
-                          ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-semibold"
+                          ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-semibold ring-2 ring-blue-500/20"
                           : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
                       }`}
                     >
