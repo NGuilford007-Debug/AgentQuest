@@ -20,7 +20,9 @@ import {
   Crown,
   Layers,
   ArrowRight,
-  PartyPopper
+  PartyPopper,
+  User,
+  RotateCcw
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { fireCelebration, fireLevelUp } from "../utils/confetti";
@@ -29,11 +31,13 @@ interface GamificationDashboardProps {
   userProfile: EmployeeProfile;
   onClaimQuest: (questId: string) => void;
   onRefreshQuests?: () => void;
+  onOpenProfileModal?: () => void;
 }
 
 export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
   userProfile,
   onClaimQuest,
+  onOpenProfileModal,
 }) => {
   const [activeBadgeTab, setActiveBadgeTab] = useState<string>("all");
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
@@ -124,13 +128,24 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight">
                   {userProfile.name}
                 </h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-semibold backdrop-blur-xs">
                   {userProfile.levelTitle}
                 </span>
+                {onOpenProfileModal && (
+                  <button
+                    id="btn-gamification-open-profile"
+                    onClick={onOpenProfileModal}
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[11px] font-semibold transition-all border border-white/30 backdrop-blur-xs cursor-pointer shadow-xs"
+                    title="Edit profile identity or start with a clean slate"
+                  >
+                    <RotateCcw className="w-3 h-3 text-amber-300" />
+                    <span>Profile & Clean Slate</span>
+                  </button>
+                )}
               </div>
               <p className="text-xs text-white/80 mt-1">
                 {userProfile.role} • {userProfile.department}

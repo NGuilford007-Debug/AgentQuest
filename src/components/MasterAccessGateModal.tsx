@@ -24,19 +24,27 @@ import { AccessLevel, MasterAccessSettings } from "../types";
 interface MasterAccessGateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  accessSettings: MasterAccessSettings;
+  accessSettings?: MasterAccessSettings;
   onUpdateAccessSettings: (updated: MasterAccessSettings) => void;
-  developerCompanyName: string;
-  whiteLabelBrandName: string;
+  developerCompanyName?: string;
+  whiteLabelBrandName?: string;
 }
 
 export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
   isOpen,
   onClose,
-  accessSettings,
+  accessSettings = {
+    currentAccessLevel: "master_developer",
+    founderEmail: "founder@agencyflow.io",
+    developerCompanyName: "AgentFlow Systems",
+    founderPin: "founder2026",
+    isSimulatingClientView: false,
+    clientLockEnforced: true,
+    detectedEnvironment: "google_ai_studio",
+  },
   onUpdateAccessSettings,
-  developerCompanyName,
-  whiteLabelBrandName,
+  developerCompanyName = "AgentFlow Systems",
+  whiteLabelBrandName = "AgentFlow Enterprise",
 }) => {
   const [pinInput, setPinInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,19 +52,22 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isMaster = accessSettings.currentAccessLevel === "master_developer";
+  const currentLevel = accessSettings?.currentAccessLevel ?? "master_developer";
+  const isMaster = currentLevel === "master_developer";
 
   // Check if currently running in Google AI Studio or local dev environment
   const isAiStudioEnv = 
     typeof window !== "undefined" &&
     (window.location.hostname.includes("run.app") ||
      window.location.hostname.includes("localhost") ||
+     window.location.hostname.includes("127.0.0.1") ||
      window.location.hostname.includes("aistudio") ||
      window.location.hostname.includes("google"));
 
   const handleUnlockMaster = (overridePin?: string) => {
     const pin = overridePin !== undefined ? overridePin : pinInput;
-    if (pin === accessSettings.founderPin || pin === "founder2026" || pin === "master" || isAiStudioEnv) {
+    const masterPin = accessSettings?.founderPin || "founder2026";
+    if (pin === masterPin || pin === "founder2026" || pin === "master" || isAiStudioEnv) {
       onUpdateAccessSettings({
         ...accessSettings,
         currentAccessLevel: "master_developer",

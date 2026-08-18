@@ -24,6 +24,7 @@ import {
 import { 
   INITIAL_AGENTS, 
   INITIAL_USER_PROFILE, 
+  CLEAN_SLATE_USER_PROFILE,
   INITIAL_WORKFLOWS, 
   LEADERBOARD_USERS,
   INITIAL_MODELS,
@@ -61,6 +62,8 @@ import { ExportModal } from "./components/ExportModal";
 import { AgentHealthMonitor } from "./components/AgentHealthMonitor";
 import { AgentTemplateModal } from "./components/AgentTemplateModal";
 import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
+import { QuickTaskModal } from "./components/QuickTaskModal";
+import { ProfileModal } from "./components/ProfileModal";
 import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 
@@ -70,7 +73,10 @@ export default function App() {
     const saved = localStorage.getItem("agentflow_master_access");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.currentAccessLevel === "string") {
+          return parsed;
+        }
       } catch (e) {}
     }
     const isGoogleEnvironment = 
@@ -79,18 +85,22 @@ export default function App() {
        window.location.hostname.includes("aistudio") || 
        window.location.hostname.includes("corp.google.com") ||
        window.location.hostname.includes("localhost") ||
+       window.location.hostname.includes("run.app") ||
        window.location.hostname.includes("127.0.0.1"));
        
     return {
-      currentLevel: isGoogleEnvironment ? "master_developer" : "client_tenant",
-      isGoogleStudioAuthenticated: isGoogleEnvironment,
-      adminPin: "8844",
-      lastUnlockedAt: isGoogleEnvironment ? new Date().toISOString() : undefined,
+      currentAccessLevel: "master_developer",
+      founderEmail: "founder@agencyflow.io",
+      developerCompanyName: "AgentFlow Systems",
+      founderPin: "founder2026",
+      isSimulatingClientView: false,
+      clientLockEnforced: true,
+      detectedEnvironment: isGoogleEnvironment ? "google_ai_studio" : "standalone_web_app",
     };
   });
   const [isAccessGateOpen, setIsAccessGateOpen] = useState<boolean>(false);
 
-  const isMasterDeveloper = masterAccess.currentLevel === "master_developer";
+  const isMasterDeveloper = masterAccess?.currentAccessLevel === "master_developer";
 
   useEffect(() => {
     localStorage.setItem("agentflow_master_access", JSON.stringify(masterAccess));
@@ -198,6 +208,9 @@ export default function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSaveStateModalOpen, setIsSaveStateModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isQuickTaskOpen, setIsQuickTaskOpen] = useState(false);
+  const [quickTaskAgentId, setQuickTaskAgentId] = useState<string | undefined>(undefined);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showFocusHUD, setShowFocusHUD] = useState(true);
 
   // Auto-save feedback indicators
@@ -577,7 +590,8 @@ export default function App() {
   };
 
   const handleTaskAgent = (agentId: string) => {
-    setCurrentTab("dispatcher");
+    setQuickTaskAgentId(agentId);
+    setIsQuickTaskOpen(true);
   };
 
   const handleSaveWorkflow = (updated: Workflow) => {
@@ -700,8 +714,10 @@ export default function App() {
     // Reward employee with XP & Hours
     addXpAndCheckLevel(record.xpEarned, record.hoursSaved);
 
-    // Update Daily Quest progress
+    // Deduct credits if completed & update Daily Quest progress
+    const cost = record.creditsCost ?? 12;
     setUserProfile((prev) => {
+      const newCredits = Math.max(0, (prev.creditsBalance ?? 4850) - cost);
       const updatedQuests = prev.quests.map((q) => {
         if (q.id === "q-1" && !q.completed) {
           const next = q.current + 1;
@@ -713,7 +729,7 @@ export default function App() {
         }
         return q;
       });
-      return { ...prev, quests: updatedQuests };
+      return { ...prev, creditsBalance: newCredits, quests: updatedQuests };
     });
   };
 
@@ -827,13 +843,54 @@ export default function App() {
     setUserProfile(INITIAL_USER_PROFILE);
     setLeaderboardUsers(LEADERBOARD_USERS);
     setExecutionHistory([]);
-    setActiveWorkflowId(INITIAL_WORKFLOWS[0].id);
+    setAuditLogs([]);
+    setActiveTaskSession(null);
+    setActiveWorkflowId(INITIAL_WORKFLOWS[0]?.id || "wf-1");
     localStorage.removeItem("agentflow_agents");
     localStorage.removeItem("agentflow_workflows");
     localStorage.removeItem("agentflow_profile");
     localStorage.removeItem("agentflow_leaderboard");
     localStorage.removeItem("agentflow_executions");
     localStorage.removeItem("agentflow_active_task");
+    localStorage.removeItem("agentflow_audit_logs");
+  };
+
+  // Profile Identity & Clean Slate Handlers
+  const handleUpdateUserProfile = (updated: Partial<EmployeeProfile>) => {
+    setUserProfile((prev) => {
+      const next = { ...prev, ...updated };
+      return next;
+    });
+    setLeaderboardUsers((prev) =>
+      prev.map((u) =>
+        u.isCurrentUser || u.id === userProfile.id
+          ? {
+              ...u,
+              name: updated.name || u.name,
+              role: updated.role || u.role,
+              department: updated.department || u.department,
+              avatar: updated.avatar || u.avatar,
+            }
+          : u
+      )
+    );
+  };
+
+  const handleResetToCleanSlate = () => {
+    setUserProfile(CLEAN_SLATE_USER_PROFILE);
+    setExecutionHistory([]);
+    setAuditLogs([]);
+    setActiveTaskSession(null);
+    setLeaderboardUsers(LEADERBOARD_USERS);
+    localStorage.removeItem("agentflow_profile");
+    localStorage.removeItem("agentflow_executions");
+    localStorage.removeItem("agentflow_active_task");
+    localStorage.removeItem("agentflow_audit_logs");
+  };
+
+  const handleClearExecutionHistory = () => {
+    setExecutionHistory([]);
+    localStorage.removeItem("agentflow_executions");
   };
 
   // Dispatch focus task directly to dispatcher
@@ -891,12 +948,16 @@ export default function App() {
           setIsAgentBuilderOpen(true);
         }}
         onOpenGamification={() => setCurrentTab("gamification")}
-        onQuickTask={() => setCurrentTab("dispatcher")}
+        onQuickTask={() => {
+          setQuickTaskAgentId(undefined);
+          setIsQuickTaskOpen(true);
+        }}
         onOpenSaveStates={() => setIsSaveStateModalOpen(true)}
         onToggleFocusHUD={() => setShowFocusHUD(!showFocusHUD)}
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenWhiteLabel={() => setCurrentTab("whitelabel")}
         onOpenMonetization={() => setCurrentTab("monetization")}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
         isAutoSaving={isAutoSaving}
         lastSavedTime={lastSavedTime}
         whiteLabelConfig={whiteLabelConfig}
@@ -1027,6 +1088,7 @@ export default function App() {
           <GamificationDashboard
             userProfile={userProfile}
             onClaimQuest={handleClaimQuest}
+            onOpenProfileModal={() => setIsProfileModalOpen(true)}
           />
         )}
 
@@ -1121,10 +1183,11 @@ export default function App() {
         }}
         models={models}
         agents={agents}
-        onSaveModel={handleSaveModel}
+        onAddModel={handleSaveModel}
+        onUpdateModel={handleSaveModel}
         onDeleteModel={handleDeleteModel}
         onAssignModelToAgent={handleAssignModelToAgent}
-        initialSelectedAgentId={modelManagerTargetAgentId}
+        preSelectedAgentId={modelManagerTargetAgentId}
       />
 
       {/* Modal: Save States & Snapshot Manager */}
@@ -1174,27 +1237,43 @@ export default function App() {
       <MasterAccessGateModal
         isOpen={isAccessGateOpen}
         onClose={() => setIsAccessGateOpen(false)}
-        settings={masterAccess}
-        developerCompanyName={developerProfile.companyName}
-        onSaveSettings={(newSettings) => {
+        accessSettings={masterAccess}
+        developerCompanyName={developerProfile?.companyName || "AgentFlow Systems"}
+        whiteLabelBrandName={whiteLabelConfig?.brandName || "AgentFlow Enterprise"}
+        onUpdateAccessSettings={(newSettings) => {
           setMasterAccess(newSettings);
-        }}
-        onSwitchToClientMode={() => {
-          setMasterAccess((prev) => ({
-            ...prev,
-            currentLevel: "client_tenant",
-          }));
-          if (currentTab === "whitelabel" || currentTab === "monetization") {
-            setCurrentTab("agents");
+          if (newSettings.currentAccessLevel === "client_tenant") {
+            if (currentTab === "whitelabel" || currentTab === "monetization") {
+              setCurrentTab("agents");
+            }
           }
         }}
-        onUnlockMasterMode={() => {
-          setMasterAccess((prev) => ({
-            ...prev,
-            currentLevel: "master_developer",
-            lastUnlockedAt: new Date().toISOString(),
-          }));
+      />
+
+      {/* Modal: Quick Direct Agent Task Studio */}
+      <QuickTaskModal
+        isOpen={isQuickTaskOpen}
+        onClose={() => setIsQuickTaskOpen(false)}
+        agents={agents}
+        initialAgentId={quickTaskAgentId}
+        workflows={workflows}
+        onTaskCompleted={handleTaskCompleted}
+        streakMultiplier={userProfile.streakMultiplier}
+      />
+
+      {/* Modal: Settings & Personalization Studio */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        userProfile={userProfile}
+        agents={agents}
+        onUpdateProfile={handleUpdateUserProfile}
+        onUpdateAgents={(updatedAgents) => {
+          setAgents(updatedAgents);
+          localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
         }}
+        onResetToCleanSlate={handleResetToCleanSlate}
+        onClearExecutionHistory={handleClearExecutionHistory}
       />
     </div>
   );

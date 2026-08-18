@@ -9,19 +9,23 @@ import {
   Bot, 
   CheckCircle2, 
   Zap, 
-  Award,
-  ShieldCheck,
-  FolderArchive,
-  Target,
-  Download,
-  Check,
-  RefreshCw,
-  Palette,
-  EyeOff,
-  DollarSign,
-  Lock,
-  Unlock,
-  Shield
+  Award, 
+  ShieldCheck, 
+  FolderArchive, 
+  Target, 
+  Download, 
+  Check, 
+  RefreshCw, 
+  Palette, 
+  EyeOff, 
+  DollarSign, 
+  Lock, 
+  Unlock, 
+  Shield, 
+  Coins,
+  User,
+  RotateCcw,
+  Settings
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -37,6 +41,7 @@ interface HeaderProps {
   onOpenExport?: () => void;
   onOpenWhiteLabel?: () => void;
   onOpenMonetization?: () => void;
+  onOpenProfileModal?: () => void;
   isAutoSaving?: boolean;
   lastSavedTime?: string;
   whiteLabelConfig?: WhiteLabelConfig;
@@ -56,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExport,
   onOpenWhiteLabel,
   onOpenMonetization,
+  onOpenProfileModal,
   isAutoSaving = false,
   lastSavedTime,
   whiteLabelConfig,
@@ -190,7 +196,17 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Gamification Bar & User Hub */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Credits Balance Pill */}
+          <div 
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold shadow-xs"
+            title={`${(userProfile.creditsBalance ?? 4850).toLocaleString()} Credits Available (Spent on agent generations, refund on cancellation)`}
+          >
+            <Coins className="w-3.5 h-3.5 text-blue-500" />
+            <span>{(userProfile.creditsBalance ?? 4850).toLocaleString()}</span>
+            <span className="text-[10px] text-blue-500/80 font-normal hidden sm:inline">Credits</span>
+          </div>
+
           {/* Streak Flame Pill (if gamification enabled) */}
           {enableGamification && (
             <div 
@@ -209,8 +225,10 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Level & XP Widget (if gamification enabled) */}
           {enableGamification && (
             <div 
-              onClick={onOpenGamification}
+              id="header-user-profile-pill"
+              onClick={onOpenProfileModal || onOpenGamification}
               className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+              title="Click to view User Profile, Identity Settings, or Clean Slate reset"
             >
               <div className="flex flex-col text-right">
                 <div className="flex items-center gap-1 text-xs font-bold text-slate-800 dark:text-slate-100">
@@ -233,6 +251,19 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-8 h-8 rounded-full border border-blue-500/30 object-cover"
               />
             </div>
+          )}
+
+          {/* Dedicated Settings, Benchmark Presets & Clean Slate Button */}
+          {onOpenProfileModal && (
+            <button
+              id="btn-header-profile-cleanslate"
+              onClick={onOpenProfileModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
+              title="Settings, Benchmark Presets & Clean Slate"
+            >
+              <Settings className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden xl:inline">Settings & Presets</span>
+            </button>
           )}
 
           {/* Master Access & Governance Switch Button */}
@@ -387,14 +418,15 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Quick Task Agent button */}
+          {/* Quick Task Agent button - Direct prompt-to-generation UX */}
           <button
             id="btn-quick-task"
             onClick={onQuickTask}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold border border-amber-500/30 transition-all shadow-sm active:scale-95"
+            title="Type a natural language prompt and get an instant generation from any agent"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            <span>Task Agent</span>
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <span>Prompt Agent</span>
           </button>
 
           {/* Create Agent CTA (Master Developer Only) or Client Fleet Mode Badge */}

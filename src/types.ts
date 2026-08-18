@@ -291,6 +291,8 @@ export interface EmployeeProfile {
   tasksAutomatedTotal: number;
   costSavedUsd: number;
   accuracyScore: number;
+  creditsBalance?: number;
+  creditsTotal?: number;
   badges: Badge[];
   quests: Quest[];
 }
@@ -331,14 +333,19 @@ export interface TaskExecutionRecord {
   title: string;
   department: Department;
   inputPayload: string;
-  status: "running" | "completed" | "needs_review" | "failed" | "approved";
+  status: "running" | "completed" | "needs_review" | "failed" | "approved" | "cancelled";
   summary: string;
+  generatedOutput?: string;
+  prompt?: string;
   stepsOutput: StepExecutionResult[];
   auditLogs: string[];
   keyEntitiesExtracted?: Record<string, any>;
   suggestedHumanAction?: string | null;
   hoursSaved: number;
   xpEarned: number;
+  creditsCost?: number;
+  tokensConsumed?: number;
+  cancelledReason?: string;
   timestamp: string;
   isSimulated?: boolean;
 }
