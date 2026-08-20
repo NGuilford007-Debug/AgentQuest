@@ -1064,6 +1064,23 @@ export const ModelManagerModal: React.FC<ModelManagerModalProps> = ({
 
         </div>
 
+        {/* Modal Footer */}
+        <div className="px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            <span>Enterprise Registry • Changes persist in local workspace</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Confirm & Close</span>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -1090,7 +1090,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
   avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
   xp: 0,
   level: 1,
-  levelTitle: "Automation Initiate",
+  levelTitle: "Automation Architect",
   currentLevelXp: 0,
   nextLevelXp: 2500,
   streakDays: 1,
@@ -1101,138 +1101,155 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
   accuracyScore: 100,
   creditsBalance: 5000,
   creditsTotal: 5000,
+  approvedAutomationsCount: 1,
+  autonomousRunRatio: 72,
+  companyMilestonesCompleted: 2,
   badges: [
     {
       id: "b-1",
-      title: "Pioneer of Automation",
-      description: "Deploy your first 3 autonomous enterprise AI agents",
-      iconName: "Rocket",
+      title: "First Approved Playbook",
+      description: "Approve and store a verified multi-step automation into the company vault",
+      iconName: "BookmarkCheck",
       category: "automation",
       rarity: "rare",
-      xpReward: 1500,
-      progress: 0,
+      progress: 100,
+      unlockedAt: "2026-08-01",
+      businessImpact: "$2,400/yr saved per standardized procedure",
+      achievementType: "approved_automation",
+      targetMetric: "1 Playbook in Vault",
+      associatedPlaybook: "P0 Alert Incident Triage",
     },
     {
       id: "b-2",
-      title: "Centurion Time Saver",
-      description: "Save over 250+ enterprise hours of repetitive manual toil",
+      title: "Centurion Time Liberator",
+      description: "Liberate over 250+ enterprise hours of repetitive manual toil",
       iconName: "Clock",
       category: "speed",
       rarity: "epic",
-      xpReward: 3000,
-      progress: 0,
+      progress: 45,
+      businessImpact: "$21,250 in manual engineering labor saved",
+      achievementType: "operational_scale",
+      targetMetric: "250+ Hours Saved",
     },
     {
       id: "b-3",
-      title: "Zero-Vulnerability Sentinel",
-      description: "Pass 100 consecutive governance and PII permission gates",
+      title: "Zero-Leak Governance Sentinel",
+      description: "Pass 100 consecutive PII masking and security authorization checks",
       iconName: "ShieldCheck",
       category: "governance",
       rarity: "epic",
-      xpReward: 2500,
-      progress: 0,
+      progress: 32,
+      businessImpact: "100% SOC2 & GDPR data privacy compliance",
+      achievementType: "governance",
+      targetMetric: "100 Verified Gates",
     },
     {
       id: "b-4",
-      title: "Human-in-the-Loop Master",
-      description: "Review 50 critical agent decisions with 99%+ accuracy",
-      iconName: "UserCheck",
-      category: "collaboration",
+      title: "Autonomous Fleet Orchestrator",
+      description: "Deploy 5 active agents across at least 3 company departments",
+      iconName: "Bot",
+      category: "automation",
       rarity: "rare",
-      xpReward: 2000,
-      progress: 0,
+      progress: 80,
+      businessImpact: "Cross-functional operations coverage 24/7",
+      achievementType: "company_milestone",
+      targetMetric: "5 Active Agents",
     },
     {
       id: "b-5",
-      title: "Hyper-Efficiency Streak (14 Days)",
-      description: "Maintain a 14-day consecutive automation execution streak",
-      iconName: "Flame",
+      title: "OpEx Cost Killer ($50k Milestone)",
+      description: "Achieve $50,000+ in verified corporate operating expenditure savings",
+      iconName: "TrendingUp",
       category: "mastery",
       rarity: "legendary",
-      xpReward: 5000,
-      progress: 0,
+      progress: 25,
+      businessImpact: "$50,000 direct bottom-line EBITDA improvement",
+      achievementType: "company_milestone",
+      targetMetric: "$50,000 OpEx Saved",
     },
     {
       id: "b-6",
-      title: "Enterprise Synergy (All 7 Departments)",
-      description: "Deploy active workflows spanning all 7 enterprise departments",
-      iconName: "Layers",
+      title: "Self-Running Business in a Box",
+      description: "Reach 85%+ autonomous execution ratio across 500+ production runs",
+      iconName: "Crown",
       category: "mastery",
       rarity: "legendary",
-      xpReward: 6000,
-      progress: 0,
+      progress: 68,
+      businessImpact: "Hands-off continuous business execution with 99.4% uptime",
+      achievementType: "company_milestone",
+      targetMetric: "85% Autonomy & 500 Runs",
     },
   ],
   quests: [
     {
       id: "q-1",
-      title: "Morning Triage Sprint",
-      description: "Execute 3 tasks using SentryOps or TicketHero agent",
+      title: "Approve SRE Incident Playbook",
+      description: "Execute and verify a diagnostic run using SentryOps Sentinel agent",
       category: "daily",
       current: 0,
-      target: 3,
-      unit: "tasks",
-      xpReward: 450,
+      target: 1,
+      unit: "playbook",
       completed: false,
       claimed: false,
-      expiresIn: "24h",
+      expiresIn: "Today",
       iconName: "Zap",
+      businessGoal: "Rapid incident mitigation SLA",
     },
     {
       id: "q-2",
-      title: "Zero Delay HITL Verification",
-      description: "Confirm or review 2 pending Human-in-the-Loop agent steps",
+      title: "Complete Human-in-the-Loop Review",
+      description: "Review and approve 2 pending compliance or financial gates",
       category: "daily",
       current: 0,
       target: 2,
       unit: "reviews",
-      xpReward: 600,
       completed: false,
       claimed: false,
-      expiresIn: "24h",
+      expiresIn: "Today",
       iconName: "CheckCircle2",
+      businessGoal: "Zero-defect enterprise governance",
     },
     {
       id: "q-3",
-      title: "Workflow Builder Challenge",
-      description: "Add or configure a new custom drag-and-drop workflow node",
+      title: "Expand Production Automation Vault",
+      description: "Save a new reusable customer outreach or SQL playbook to the vault",
       category: "daily",
       current: 0,
       target: 1,
-      unit: "nodes",
-      xpReward: 500,
+      unit: "vault item",
       completed: false,
       claimed: false,
-      expiresIn: "24h",
-      iconName: "PlusCircle",
+      expiresIn: "Today",
+      iconName: "BookmarkCheck",
+      businessGoal: "Institutional knowledge retention",
     },
     {
       id: "q-4",
-      title: "Weekly 20-Hour Time Liberation",
+      title: "Weekly 20-Hour Labor Replacement",
       description: "Save a cumulative 20 hours through autonomous agent runs this week",
       category: "weekly",
       current: 0,
       target: 20,
       unit: "hours",
-      xpReward: 2500,
       completed: false,
       claimed: false,
-      expiresIn: "7 days",
+      expiresIn: "This Week",
       iconName: "Hourglass",
+      businessGoal: "Direct team capacity multiplication",
     },
     {
       id: "q-5",
-      title: "Department Collaboration Bounty",
-      description: "Assign an agent to a colleague outside your primary department",
+      title: "Multi-Department Automation Deployment",
+      description: "Connect workflows across 2 or more distinct company departments",
       category: "weekly",
       current: 0,
-      target: 1,
-      unit: "assign",
-      xpReward: 1800,
+      target: 2,
+      unit: "departments",
       completed: false,
       claimed: false,
-      expiresIn: "7 days",
-      iconName: "Users",
+      expiresIn: "This Week",
+      iconName: "Layers",
+      businessGoal: "End-to-end departmental synergy",
     },
   ],
 };
@@ -1253,6 +1270,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     automationsRun: 1120,
     activeAgents: 6,
     streak: 21,
+    opexSavedUsd: 32500,
+    autonomyRate: 91,
+    approvedPlaybooksCount: 8,
   },
   {
     id: "usr-top3",
@@ -1267,6 +1287,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     automationsRun: 850,
     activeAgents: 3,
     streak: 12,
+    opexSavedUsd: 20825,
+    autonomyRate: 88,
+    approvedPlaybooksCount: 5,
   },
   {
     id: "usr-top4",
@@ -1281,6 +1304,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     automationsRun: 420,
     activeAgents: 3,
     streak: 5,
+    opexSavedUsd: 16590,
+    autonomyRate: 84,
+    approvedPlaybooksCount: 4,
   },
   {
     id: "usr-top5",
@@ -1295,6 +1321,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     automationsRun: 280,
     activeAgents: 2,
     streak: 9,
+    opexSavedUsd: 13838,
+    autonomyRate: 79,
+    approvedPlaybooksCount: 3,
   },
   {
     id: "usr-top6",
@@ -1309,6 +1338,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     automationsRun: 195,
     activeAgents: 2,
     streak: 4,
+    opexSavedUsd: 11084,
+    autonomyRate: 82,
+    approvedPlaybooksCount: 2,
   },
   {
     id: "usr-1",
@@ -1324,6 +1356,9 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     activeAgents: 4,
     isCurrentUser: true,
     streak: 1,
+    opexSavedUsd: 0,
+    autonomyRate: 72,
+    approvedPlaybooksCount: 1,
   },
 ];
 
@@ -1410,8 +1445,8 @@ export const INITIAL_MODELS: AiModel[] = [
     },
   },
   {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
+    id: "gemini-3.1-pro-preview",
+    name: "Gemini 3.1 Pro Preview",
     provider: "Google Gemini",
     description: "State-of-the-art multimodal reasoning model. Excels at complex codebase refactoring, multi-page financial audits, and legal contract compliance.",
     contextWindow: "2,000,000 Tokens (2M)",
@@ -1428,10 +1463,10 @@ export const INITIAL_MODELS: AiModel[] = [
     },
   },
   {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
+    id: "gemini-3.6-flash",
+    name: "Gemini 3.6 Flash",
     provider: "Google Gemini",
-    description: "Proven workhorse for high-frequency multimodal tasks, document OCR parsing, and cross-departmental communications.",
+    description: "High-efficiency model for high-frequency multimodal tasks, document OCR parsing, and cross-departmental communications.",
     contextWindow: "1,000,000 Tokens (1M)",
     latencyTier: "Balanced (~1-2s)",
     costTier: "$",
@@ -1513,4 +1548,153 @@ export const INITIAL_MODELS: AiModel[] = [
     },
   },
 ];
+
+// ==========================================
+// APPROVED AUTOMATIONS & SUGGESTIONS SEED DATA
+// ==========================================
+
+import { ApprovedAutomation } from "../types";
+
+export const INITIAL_APPROVED_AUTOMATIONS: ApprovedAutomation[] = [
+  {
+    id: "auto-redis-remediation-01",
+    title: "Redis Connection Pool Spike Auto-Remediation Playbook",
+    description: "Automated webhook trigger that monitors Redis connection pool exhaustion, triggers replica scale-out, and notifies Slack war-room.",
+    agentId: "agent-1",
+    agentName: "SentryOps (SRE)",
+    agentAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    department: "DevOps & SecOps",
+    modelUsed: "gemini-3.7-flash",
+    sourcePrompt: "Analyze this Redis connection pool timeout error and generate root cause analysis with mitigation steps.",
+    generatedContent: `### Redis Connection Pool Auto-Remediation Playbook
+
+#### 1. Root Cause Diagnosis
+- **Trigger:** Connection pool saturation under P99 traffic spike.
+- **Impact:** HTTP 504 Gateway Timeouts across checkout microservices.
+- **Recommended Threshold:** Alert at >80% connection capacity for >30s.
+
+#### 2. Automated Action Steps
+\`\`\`yaml
+# Kubernetes HPA trigger configuration
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: redis-proxy-scaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: redis-sentinel
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+\`\`\`
+
+#### 3. Enterprise Dispatch Policy
+- Trigger PagerDuty Tier-1 on-call rotation.
+- Post real-time health telemetry to \`#incident-war-room\`.
+- Schedule automated post-mortem summary delivery.`,
+    suggestedActions: [
+      "Deploy Kubernetes HPA trigger configuration to staging",
+      "Configure Slack webhook routing to #incident-war-room",
+      "Enable automated Sentinel failover health checks"
+    ],
+    category: "automation",
+    approvedAt: "2026-08-19T10:15:00.000Z",
+    status: "active",
+    workflowId: "wf-1",
+    estimatedHoursSaved: 1.8,
+    tags: ["DevOps", "Kubernetes", "Redis", "Auto-Remediation", "SRE"],
+    isBookmarked: true,
+  },
+  {
+    id: "auto-saml-sso-response-02",
+    title: "Enterprise SAML 403 SSO Triage & Escalation Playbook",
+    description: "Multi-step customer support workflow that verifies IdP certificate validity, matches user email domain, and sends empathetic resolution steps.",
+    agentId: "agent-3",
+    agentName: "SupportPilot",
+    agentAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
+    department: "Customer Support",
+    modelUsed: "gemini-3.6-flash",
+    sourcePrompt: "Draft an empathetic response to an enterprise customer experiencing SSO SAML 403 login errors.",
+    generatedContent: `### Enterprise SAML SSO Resolution Playbook
+
+#### Customer Delivery Template
+> **Subject:** Update regarding your Enterprise Single Sign-On (SAML) Access [Ticket #4921]
+>
+> Dear **{{customer_name}}**,
+>
+> Thank you for bringing this to our attention. Our identity gateway detected a transient X.509 certificate renewal mismatch between your Identity Provider (Okta/Azure AD) and our service provider metadata.
+>
+> **Immediate Steps Taken:**
+> 1. We have refreshed the ACS assertion consumer endpoint cache.
+> 2. Existing active sessions remain secure and unaffected.
+>
+> **Recommended Admin Verification:**
+> Please have your IT Identity Administrator confirm that the new signing certificate metadata URL is synced. We are standing by on priority SLA to verify your login test.
+
+#### Quality Verification
+- **Tone:** Empathetic, crisp, technically accurate.
+- **Audit Verification:** Passed GDPR compliance check.`,
+    suggestedActions: [
+      "Save response as Zendesk / Jira Service Desk dynamic macro",
+      "Configure automated IdP cert expiration alert 14 days in advance",
+      "Add automated SAML assertion validator webhook"
+    ],
+    category: "playbook",
+    approvedAt: "2026-08-19T11:42:00.000Z",
+    status: "active",
+    estimatedHoursSaved: 1.2,
+    tags: ["Customer Support", "SAML", "SSO", "Enterprise SLA", "Okta"],
+    isBookmarked: true,
+  },
+  {
+    id: "auto-fintech-outreach-03",
+    title: "Fintech CTO Cold Outreach & Value Proposition Playbook",
+    description: "High-conversion sales outreach sequence targeting Fintech CTOs and VP Engineers highlighting SOC2 Type II compliance and 40% cost reduction.",
+    agentId: "agent-2",
+    agentName: "ProspectAI",
+    agentAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    department: "Sales & CRM",
+    modelUsed: "gemini-3.7-flash",
+    sourcePrompt: "Draft a personalized cold outreach email for the VP of Engineering at Acme Fintech ($50M ARR).",
+    generatedContent: `### Enterprise Sales Automation Sequence
+
+#### Email 1: The Frictionless Architecture Hook
+**Subject:** Eliminating P0 incident noise for {{company_name}}'s engineering squad
+
+Hi **{{first_name}}**,
+
+Saw that {{company_name}} recently expanded your real-time payments platform — congrats on the milestone!
+
+Most engineering leaders we speak with at high-growth fintechs are losing 8-12 hours per engineer each week manually diagnosing cloud alerts and API webhooks.
+
+We built **AgentFlow Enterprise** to automate tier-1 incident triage and compliance audits directly within Slack & Jira with 99.4% precision.
+
+Would you be open to a 7-minute visual demo this Thursday to see how we saved Brex & Ramp 420+ engineering hours last month?
+
+Best,  
+**{{user_name}}**  
+*Enterprise Automation Architect*`,
+    suggestedActions: [
+      "Sync sequence directly into HubSpot & Salesforce CRM",
+      "Trigger automated Apollo.io lead enrichment on replies",
+      "Log pipeline deal in Monetization Hub projections"
+    ],
+    category: "email_template",
+    approvedAt: "2026-08-19T09:30:00.000Z",
+    status: "deployed",
+    workflowId: "wf-2",
+    estimatedHoursSaved: 2.5,
+    tags: ["Sales", "Outreach", "CRM", "Fintech", "Pipeline"],
+    isBookmarked: false,
+  }
+];
+
 

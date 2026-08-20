@@ -1,16 +1,18 @@
 import React, { useState } from "react";
 import { LeaderboardUser } from "../types";
 import { 
-  Trophy, 
-  Crown, 
-  Flame, 
+  BarChart3, 
   Clock, 
-  Zap, 
   TrendingUp, 
-  Medal, 
   Users, 
   Bot,
-  Filter
+  BookmarkCheck,
+  Zap,
+  DollarSign,
+  CheckCircle2,
+  Building2,
+  Filter,
+  ArrowUpDown
 } from "lucide-react";
 
 interface LeaderboardProps {
@@ -20,43 +22,49 @@ interface LeaderboardProps {
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({ users, currentUserId }) => {
   const [selectedDept, setSelectedDept] = useState<string>("all");
-  const [timeframe, setTimeframe] = useState<"weekly" | "all_time">("all_time");
+  const [sortBy, setSortBy] = useState<"hoursSaved" | "opexSavedUsd" | "automationsRun" | "autonomyRate">("hoursSaved");
 
   const filteredUsers = users.filter((u) => {
     if (selectedDept === "all") return true;
     return u.department === selectedDept;
   });
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => b.xp - a.xp);
-  const top3 = sortedUsers.slice(0, 3);
-  const remaining = sortedUsers.slice(3);
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (sortBy === "hoursSaved") return b.hoursSaved - a.hoursSaved;
+    if (sortBy === "opexSavedUsd") return (b.opexSavedUsd ?? b.hoursSaved * 85) - (a.opexSavedUsd ?? a.hoursSaved * 85);
+    if (sortBy === "automationsRun") return b.automationsRun - a.automationsRun;
+    if (sortBy === "autonomyRate") return (b.autonomyRate ?? 80) - (a.autonomyRate ?? 80);
+    return b.hoursSaved - a.hoursSaved;
+  });
 
-  const currentUser = users.find((u) => u.id === currentUserId);
-  const topUser = sortedUsers[0];
-  const xpToNextRank = topUser && currentUser && currentUser.id !== topUser.id
-    ? topUser.xp - currentUser.xp
-    : 0;
+  const top3 = sortedUsers.slice(0, 3);
+  const currentUser = users.find((u) => u.id === currentUserId || u.isCurrentUser);
+
+  const totalCompanyHours = users.reduce((acc, u) => acc + u.hoursSaved, 0);
+  const totalCompanyOpEx = users.reduce((acc, u) => acc + (u.opexSavedUsd || u.hoursSaved * 85), 0);
+  const totalCompanyRuns = users.reduce((acc, u) => acc + u.automationsRun, 0);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-slate-50 dark:bg-slate-950">
-      {/* Top Header & Filters */}
+      {/* Top Header & Overview */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-500" />
-            <span>Enterprise Productivity Leaderboard</span>
+            <BarChart3 className="w-5 h-5 text-blue-600" />
+            <span>Departmental Operations & Efficiency Benchmarks</span>
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Recognizing top automators, time-savers, and AI orchestration champions.
+            Cross-departmental telemetry on manual toil eliminated, labor OpEx replaced, and autonomous playbooks.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Filters and Sorting */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Department Filter */}
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
+            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-xs"
           >
             <option value="all">All Departments</option>
             <option value="DevOps & SecOps">DevOps & SecOps</option>
@@ -67,166 +75,251 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ users, currentUserId }
             <option value="Human Resources">Human Resources</option>
           </select>
 
-          {/* Timeframe Toggle */}
+          {/* Metric Sort Toggle */}
           <div className="flex items-center bg-slate-200/80 dark:bg-slate-800 rounded-xl p-0.5 text-xs font-semibold">
             <button
-              onClick={() => setTimeframe("weekly")}
+              onClick={() => setSortBy("hoursSaved")}
               className={`px-3 py-1 rounded-lg transition-colors ${
-                timeframe === "weekly"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                sortBy === "hoursSaved"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
                   : "text-slate-600 dark:text-slate-400"
               }`}
             >
-              Weekly Sprint
+              Hours Saved
             </button>
             <button
-              onClick={() => setTimeframe("all_time")}
+              onClick={() => setSortBy("opexSavedUsd")}
               className={`px-3 py-1 rounded-lg transition-colors ${
-                timeframe === "all_time"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                sortBy === "opexSavedUsd"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
                   : "text-slate-600 dark:text-slate-400"
               }`}
             >
-              All-Time Hall of Fame
+              OpEx Replaced ($)
+            </button>
+            <button
+              onClick={() => setSortBy("automationsRun")}
+              className={`px-3 py-1 rounded-lg transition-colors ${
+                sortBy === "automationsRun"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold"
+                  : "text-slate-600 dark:text-slate-400"
+              }`}
+            >
+              Total Runs
             </button>
           </div>
         </div>
       </div>
 
-      {/* TOP 3 PODIUM CARDS */}
+      {/* COMPANY-WIDE AGGREGATE SUMMARY CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+            <Clock className="w-4 h-4 text-blue-500" />
+            <span>Total Company Hours Liberated</span>
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {totalCompanyHours.toFixed(1)} hrs
+          </div>
+          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+            Directly reallocated to strategic high-leverage growth
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+            <DollarSign className="w-4 h-4 text-emerald-500" />
+            <span>Cumulative OpEx Cost Replaced</span>
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+            ${totalCompanyOpEx.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            Measured against standard human compensation benchmarks
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+            <Zap className="w-4 h-4 text-purple-500" />
+            <span>Autonomous Tasks Dispatched</span>
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono">
+            {totalCompanyRuns.toLocaleString()} runs
+          </div>
+          <div className="text-[11px] text-slate-400">
+            Across CRM, SRE alerts, support triage, and finance
+          </div>
+        </div>
+      </div>
+
+      {/* TOP 3 DEPARTMENT EFFICIENCY LEADERS */}
       {top3.length >= 3 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          {/* Rank 2 */}
-          <div className="order-2 md:order-1 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3 relative shadow-sm">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] border border-white dark:border-slate-800 shadow-xs">
-              🥈 Rank #2
-            </div>
-            <img
-              src={top3[1].avatar}
-              alt={top3[1].name}
-              className="w-16 h-16 rounded-full mx-auto border-2 border-slate-300 dark:border-slate-600 object-cover mt-2"
-            />
-            <div>
-              <div className="font-bold text-sm text-slate-900 dark:text-white">
-                {top3[1].name}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {/* Top 2 */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  #2 Department Efficiency Leader
+                </span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                  ${(top3[1].opexSavedUsd ?? top3[1].hoursSaved * 85).toLocaleString()} OpEx
+                </span>
               </div>
-              <div className="text-xs text-slate-400">{top3[1].department}</div>
+
+              <div className="flex items-center gap-3">
+                <img
+                  src={top3[1].avatar}
+                  alt={top3[1].name}
+                  className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                />
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {top3[1].department}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Lead: {top3[1].name} ({top3[1].role})
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-center gap-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
               <div>
-                <span className="text-slate-400 block text-[10px]">XP</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
-                  {top3[1].xp.toLocaleString()}
+                <span className="text-[10px] text-slate-400 block">Hours Saved</span>
+                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 font-mono">
+                  {top3[1].hoursSaved}h
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px]">Saved</span>
-                <span className="font-bold text-emerald-600 font-mono">
-                  {top3[1].hoursSaved}h
+                <span className="text-[10px] text-slate-400 block">Autonomy</span>
+                <span className="font-bold text-xs text-emerald-600 font-mono">
+                  {top3[1].autonomyRate ?? 88}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Playbooks</span>
+                <span className="font-bold text-xs text-blue-600 font-mono">
+                  {top3[1].approvedPlaybooksCount ?? 5} Vault
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Rank 1 (Center Hero) */}
-          <div className="order-1 md:order-2 p-6 rounded-3xl bg-gradient-to-b from-amber-500/10 via-white to-white dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-2 border-amber-400/80 dark:border-amber-500/80 text-center space-y-3 relative shadow-md scale-105">
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-extrabold text-xs shadow-md flex items-center gap-1">
-              <Crown className="w-3.5 h-3.5 fill-slate-950" />
-              <span>Rank #1 Champion</span>
-            </div>
-            <img
-              src={top3[0].avatar}
-              alt={top3[0].name}
-              className="w-20 h-20 rounded-full mx-auto border-3 border-amber-400 object-cover mt-2 shadow-sm"
-            />
-            <div>
-              <div className="font-extrabold text-base text-slate-900 dark:text-white">
-                {top3[0].name}
-              </div>
-              <div className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
-                {top3[0].role} • {top3[0].department}
-              </div>
-            </div>
-            <div className="flex items-center justify-center gap-4 text-xs pt-3 border-t border-amber-200/50 dark:border-amber-900/50">
-              <div>
-                <span className="text-slate-400 block text-[10px]">Total XP</span>
-                <span className="font-extrabold text-amber-600 dark:text-amber-400 text-sm font-mono">
-                  {top3[0].xp.toLocaleString()}
+          {/* Top 1 (Primary Highlight) */}
+          <div className="p-5 rounded-2xl bg-gradient-to-b from-blue-50/80 to-white dark:from-blue-950/30 dark:to-slate-900 border-2 border-blue-500/60 shadow-md space-y-3 flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-600 text-white">
+                  #1 Operational Benchmark Leader
+                </span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                  ${(top3[0].opexSavedUsd ?? top3[0].hoursSaved * 85).toLocaleString()} OpEx
                 </span>
               </div>
+
+              <div className="flex items-center gap-3">
+                <img
+                  src={top3[0].avatar}
+                  alt={top3[0].name}
+                  className="w-14 h-14 rounded-xl object-cover border-2 border-blue-500 shadow-xs"
+                />
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                    {top3[0].department}
+                  </h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                    Lead: {top3[0].name} ({top3[0].role})
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-blue-200/50 dark:border-blue-900/50 text-center">
               <div>
-                <span className="text-slate-400 block text-[10px]">Hours Liberated</span>
-                <span className="font-extrabold text-emerald-600 text-sm font-mono">
+                <span className="text-[10px] text-slate-400 block">Hours Liberated</span>
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white font-mono">
                   {top3[0].hoursSaved}h
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px]">Streak</span>
-                <span className="font-extrabold text-amber-500 flex items-center gap-0.5 justify-center">
-                  <Flame className="w-3.5 h-3.5 fill-amber-500" />
-                  {top3[0].streak}d
+                <span className="text-[10px] text-slate-400 block">Autonomy Ratio</span>
+                <span className="font-extrabold text-sm text-emerald-600 font-mono">
+                  {top3[0].autonomyRate ?? 91}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Vault Playbooks</span>
+                <span className="font-extrabold text-sm text-blue-600 font-mono">
+                  {top3[0].approvedPlaybooksCount ?? 8} Approved
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Rank 3 */}
-          <div className="order-3 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3 relative shadow-sm">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-amber-700 text-white font-bold text-[11px] shadow-xs">
-              🥉 Rank #3
-            </div>
-            <img
-              src={top3[2].avatar}
-              alt={top3[2].name}
-              className="w-16 h-16 rounded-full mx-auto border-2 border-amber-700/60 object-cover mt-2"
-            />
-            <div>
-              <div className="font-bold text-sm text-slate-900 dark:text-white">
-                {top3[2].name}
-              </div>
-              <div className="text-xs text-slate-400">{top3[2].department}</div>
-            </div>
-            <div className="flex items-center justify-center gap-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="text-slate-400 block text-[10px]">XP</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
-                  {top3[2].xp.toLocaleString()}
+          {/* Top 3 */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  #3 Department Efficiency Leader
+                </span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                  ${(top3[2].opexSavedUsd ?? top3[2].hoursSaved * 85).toLocaleString()} OpEx
                 </span>
               </div>
+
+              <div className="flex items-center gap-3">
+                <img
+                  src={top3[2].avatar}
+                  alt={top3[2].name}
+                  className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                />
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {top3[2].department}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Lead: {top3[2].name} ({top3[2].role})
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
               <div>
-                <span className="text-slate-400 block text-[10px]">Saved</span>
-                <span className="font-bold text-emerald-600 font-mono">
+                <span className="text-[10px] text-slate-400 block">Hours Saved</span>
+                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 font-mono">
                   {top3[2].hoursSaved}h
                 </span>
               </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Autonomy</span>
+                <span className="font-bold text-xs text-emerald-600 font-mono">
+                  {top3[2].autonomyRate ?? 84}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Playbooks</span>
+                <span className="font-bold text-xs text-blue-600 font-mono">
+                  {top3[2].approvedPlaybooksCount ?? 4} Vault
+                </span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* CURRENT USER POSITION CALLOUT */}
-      {currentUser && xpToNextRank > 0 && (
-        <div className="p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between text-xs text-blue-900 dark:text-blue-200">
-          <div className="flex items-center gap-2.5">
-            <Zap className="w-5 h-5 text-blue-600" />
-            <div>
-              <strong>Rank #{currentUser.rank} Standing:</strong> You are only{" "}
-              <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
-                {xpToNextRank.toLocaleString()} XP
-              </span>{" "}
-              away from claiming the <strong>#1 Champion Rank</strong>!
-            </div>
-          </div>
-          <span className="font-bold text-[11px] bg-blue-600 text-white px-3 py-1 rounded-lg">
-            Deploy Workflows to Close Gap
-          </span>
-        </div>
-      )}
-
-      {/* FULL LEADERBOARD TABLE */}
+      {/* FULL BENCHMARK MATRIX TABLE */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200">
-          Complete Enterprise Ranking Matrix
+        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+            Operational Department Benchmark Matrix
+          </span>
+          <span className="text-[11px] text-slate-400">
+            Labor value calculated at standard $85/hr corporate rate
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -234,41 +327,32 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ users, currentUserId }
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-400 font-bold uppercase text-[10px]">
               <tr>
                 <th className="px-5 py-3">Rank</th>
-                <th className="px-5 py-3">Employee & Role</th>
-                <th className="px-5 py-3">Department</th>
-                <th className="px-5 py-3">Level</th>
-                <th className="px-5 py-3">Time Saved</th>
-                <th className="px-5 py-3">Automations</th>
-                <th className="px-5 py-3 text-right">Total XP</th>
+                <th className="px-5 py-3">Department & Lead Operator</th>
+                <th className="px-5 py-3">Fleet Size</th>
+                <th className="px-5 py-3">Vault Playbooks</th>
+                <th className="px-5 py-3">Autonomy Rate</th>
+                <th className="px-5 py-3">Hours Liberated</th>
+                <th className="px-5 py-3 text-right">OpEx Cost Replaced</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {sortedUsers.map((user, idx) => {
                 const rankNum = idx + 1;
-                const isCurrent = user.id === currentUserId;
+                const isCurrent = user.id === currentUserId || user.isCurrentUser;
+                const opexValue = user.opexSavedUsd ?? user.hoursSaved * 85;
 
                 return (
                   <tr
                     key={user.id}
                     className={`transition-colors ${
                       isCurrent
-                        ? "bg-blue-50/50 dark:bg-blue-950/30 font-semibold"
+                        ? "bg-blue-50/60 dark:bg-blue-950/40 font-semibold"
                         : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
                     }`}
                   >
                     <td className="px-5 py-3.5">
-                      <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
-                          rankNum === 1
-                            ? "bg-amber-400 text-slate-950"
-                            : rankNum === 2
-                            ? "bg-slate-300 dark:bg-slate-700 text-slate-900 dark:text-white"
-                            : rankNum === 3
-                            ? "bg-amber-700 text-white"
-                            : "text-slate-500 font-mono"
-                        }`}
-                      >
-                        {rankNum}
+                      <span className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300 font-mono">
+                        #{rankNum}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -276,37 +360,41 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ users, currentUserId }
                         <img
                           src={user.avatar}
                           alt={user.name}
-                          className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
                         />
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span>{user.name}</span>
+                            <span>{user.department}</span>
                             {isCurrent && (
                               <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600 text-white font-bold">
-                                YOU
+                                YOUR TEAM
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400">{user.role}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {user.name} • {user.role}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
-                      {user.department}
-                    </td>
                     <td className="px-5 py-3.5">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-[11px]">
-                        Lv. {user.level}
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-semibold text-[11px]">
+                        {user.activeAgents} Agents
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                      {user.hoursSaved}h
+                    <td className="px-5 py-3.5 text-blue-600 dark:text-blue-400 font-semibold font-mono">
+                      {user.approvedPlaybooksCount ?? 3} Approved
                     </td>
-                    <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300 font-mono">
-                      {user.automationsRun}
+                    <td className="px-5 py-3.5">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                        {user.autonomyRate ?? 80}%
+                      </span>
                     </td>
-                    <td className="px-5 py-3.5 text-right font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {user.xp.toLocaleString()} XP
+                    <td className="px-5 py-3.5 font-mono text-slate-900 dark:text-white font-bold">
+                      {user.hoursSaved} hrs
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      ${opexValue.toLocaleString()}
                     </td>
                   </tr>
                 );

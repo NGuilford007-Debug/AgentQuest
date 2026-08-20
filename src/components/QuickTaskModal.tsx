@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Markdown from "react-markdown";
-import { Agent, TaskExecutionRecord, Workflow } from "../types";
+import { Agent, TaskExecutionRecord, Workflow, ApprovedAutomation } from "../types";
 import { 
   Sparkles, 
   Play, 
@@ -26,6 +26,7 @@ import {
   CornerDownLeft,
   SlidersHorizontal,
   BookmarkPlus,
+  BookmarkCheck,
   XCircle,
   Coins,
   Ban,
@@ -40,6 +41,7 @@ interface QuickTaskModalProps {
   initialAgentId?: string;
   workflows?: Workflow[];
   onTaskCompleted: (record: TaskExecutionRecord) => void;
+  onSaveApprovedAutomation?: (automation: ApprovedAutomation) => void;
   streakMultiplier?: number;
 }
 
@@ -90,6 +92,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
   initialAgentId,
   workflows = [],
   onTaskCompleted,
+  onSaveApprovedAutomation,
   streakMultiplier = 1.0,
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<string>(
@@ -357,6 +360,54 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleApproveAndSaveAutomation = () => {
+    if (!generatedOutput || !currentAgent) {
+      onClose();
+      return;
+    }
+
+    const titleCandidate = prompt.length > 55 ? `${prompt.slice(0, 52)}...` : prompt;
+    const newAutomation: ApprovedAutomation = {
+      id: `auto-saved-${Date.now()}`,
+      title: titleCandidate || `Approved Automation by ${currentAgent.name}`,
+      description: executionSummary || `Approved automation from ${currentAgent.name} (${currentAgent.department})`,
+      agentId: currentAgent.id,
+      agentName: currentAgent.name,
+      agentAvatar: currentAgent.avatar,
+      department: currentAgent.department,
+      modelUsed: executionTelemetry?.modelUsed || currentAgent.model || "gemini-3.7-flash",
+      sourcePrompt: prompt,
+      generatedContent: generatedOutput,
+      suggestedActions: [
+        `Deploy ${titleCandidate} into continuous pipeline`,
+        `Configure notification routing for ${currentAgent.department}`,
+        `Review telemetry & optimization performance`
+      ],
+      category: "automation",
+      approvedAt: new Date().toISOString(),
+      status: "active",
+      estimatedHoursSaved: executionTelemetry?.hoursSaved || 0.8,
+      tags: [currentAgent.department, "Approved", "Prompt Agent"],
+      isBookmarked: true,
+    };
+
+    if (onSaveApprovedAutomation) {
+      onSaveApprovedAutomation(newAutomation);
+    } else {
+      try {
+        const stored = localStorage.getItem("agentflow_approved_automations");
+        const list = stored ? JSON.parse(stored) : [];
+        list.unshift(newAutomation);
+        localStorage.setItem("agentflow_approved_automations", JSON.stringify(list));
+      } catch (e) {
+        console.error("Failed saving approved automation:", e);
+      }
+    }
+
+    fireCelebration();
+    onClose();
   };
 
   return (
@@ -762,18 +813,38 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between text-xs text-slate-500 gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Bot className="w-4 h-4 text-blue-500" />
-            <span>Ready for autonomous execution</span>
+            <span className="hidden sm:inline">
+              {generatedOutput ? "Deliverable generated & ready for deployment" : "Ready for autonomous execution"}
+            </span>
           </div>
 
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold transition-colors"
-          >
-            Done
-          </button>
+          <div className="flex items-center gap-2">
+            {generatedOutput && (
+              <button
+                id="btn-quicktask-approve-save-automation"
+                type="button"
+                onClick={handleApproveAndSaveAutomation}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
+                title="Approve generation, save playbook to Automations Vault, and close modal"
+              >
+                <BookmarkCheck className="w-4 h-4" />
+                <span>Approve & Save to Automations Vault</span>
+              </button>
+            )}
+
+            <button
+              id="btn-quicktask-confirm-close"
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-semibold transition-colors flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5 text-slate-500" />
+              <span>{generatedOutput ? "Confirm & Close" : "Close"}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

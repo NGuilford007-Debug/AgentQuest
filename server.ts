@@ -26,7 +26,53 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
-// Resilient Gemini Execution Helper with automatic model fallback for 503/429/spikes
+// Helper to normalize any incoming model names to current valid Gemini models
+function normalizeGeminiModel(model?: string): string {
+  if (!model) return "gemini-3.7-flash";
+  const m = model.toLowerCase().trim();
+  if (m.includes("3.1-pro") || m.includes("2.5-pro") || m.includes("pro") || m.includes("deep-reasoning")) {
+    return "gemini-3.1-pro-preview";
+  }
+  if (m.includes("3.1-flash-lite") || m.includes("lite")) {
+    return "gemini-3.1-flash-lite";
+  }
+  return "gemini-3.7-flash";
+}
+
+// Robust JSON extraction from model outputs
+function safeJsonParse<T = any>(rawText: string | undefined | null, fallback: any = {}): any {
+  if (!rawText || typeof rawText !== "string") return fallback;
+  const trimmed = rawText.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Strip markdown code fences if present (```json ... ``` or ``` ...)
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (fenceMatch && fenceMatch[1]) {
+      try {
+        return JSON.parse(fenceMatch[1].trim());
+      } catch {}
+    }
+    // Try finding the first '{' or '[' and matching to the last '}' or ']'
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      } catch {}
+    }
+    const firstBracket = trimmed.indexOf("[");
+    const lastBracket = trimmed.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+      } catch {}
+    }
+    return fallback;
+  }
+}
+
+// Resilient Gemini Execution Helper with automatic model fallback for 503/429/spikes and transient retry
 async function callGeminiWithFallback(
   ai: GoogleGenAI,
   preferredModel: string,
@@ -35,13 +81,13 @@ async function callGeminiWithFallback(
     config?: any;
   }
 ): Promise<{ response: any; modelUsed: string }> {
-  // Use strictly valid modern Gemini SDK models
+  const normalizedPreferred = normalizeGeminiModel(preferredModel);
+  // Tiered candidate models prioritizing lowest latency and highest availability
   const candidateModels = [
-    preferredModel || "gemini-2.5-flash",
-    "gemini-2.5-flash",
+    normalizedPreferred,
     "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
-    "gemini-2.5-pro",
+    "gemini-3.1-pro-preview",
   ].filter((m, idx, arr) => Boolean(m) && arr.indexOf(m) === idx);
 
   let lastError: any = null;
@@ -54,9 +100,10 @@ async function callGeminiWithFallback(
       });
       return { response, modelUsed: model };
     } catch (err: any) {
-      console.warn(`[Gemini API] Call to model '${model}' failed:`, err?.message || err);
       lastError = err;
-      // Continue to try other models if 503 (high demand), 429, 404, or 500
+      const msg = err?.message || String(err);
+      // If 503 or 429, quickly try the next candidate model in the tier
+      console.log(`[Gemini API Info] Failover from '${model}' to next tier (${msg.slice(0, 120)}...)`);
     }
   }
   throw lastError || new Error("All Gemini API candidate models were unavailable");
@@ -292,13 +339,13 @@ app.get("/api/health", (_req, res) => {
 });
 
 // API: Direct Agent Prompt & Generation (Simple Instant Tasking for Every Agent)
-app.post("/api/gemini/prompt-agent", async (req, res) => {
+const handlePromptAgent = async (req: express.Request, res: express.Response) => {
   const { agent, prompt, context, temperature } = req.body;
   const agentName = agent?.name || "Specialist Agent";
   const agentRole = agent?.role || "Enterprise AI Assistant";
   const agentDept = agent?.department || "Operations";
   const sysPrompt = agent?.systemPrompt || `You are ${agentName}, a specialist in ${agentRole} for ${agentDept}.`;
-  const targetModel = agent?.model?.startsWith("gemini") ? agent.model : "gemini-2.5-flash";
+  const targetModel = agent?.model?.startsWith("gemini") ? agent.model : "gemini-3.7-flash";
 
   try {
     const ai = getGeminiClient();
@@ -391,13 +438,16 @@ CORE OPERATING GUIDELINES:
       modelUsed: `${targetModel} (Sandbox Fallback)`,
     });
   }
-});
+};
+
+app.post("/api/gemini/prompt-agent", handlePromptAgent);
+app.post("/api/gemini/execute-prompt", handlePromptAgent);
 
 // API: Execute an agent workflow with specific inputs and permissions
 app.post("/api/gemini/execute-agent", async (req, res) => {
   const { agent, taskInput, nodes, permissions } = req.body;
   const agentName = agent?.name || "Specialist Agent";
-  const targetModel = (agent?.model?.startsWith("gemini") ? agent.model : "gemini-2.5-flash");
+  const targetModel = (agent?.model?.startsWith("gemini") ? agent.model : "gemini-3.7-flash");
 
   const buildSimulatedExecution = () => {
     const simOutput = `### 📋 Workflow Execution Summary: ${agentName}
@@ -486,20 +536,14 @@ Also provide:
       },
     });
 
-    const rawText = response.text || "{}";
-    let parsedResult: any = {};
-    try {
-      parsedResult = JSON.parse(rawText);
-    } catch {
-      parsedResult = {
-        summary: rawText,
-        generatedOutput: rawText,
-        stepsOutput: [],
-        auditLogs: ["Execution completed with raw output"],
-        estimatedHoursSaved: 0.5,
-        xpEarned: 100,
-      };
-    }
+    const parsedResult = safeJsonParse(response.text, {
+      summary: response.text || "Execution finished.",
+      generatedOutput: response.text || "Task completed.",
+      stepsOutput: [],
+      auditLogs: ["Execution completed with structured output"],
+      estimatedHoursSaved: 0.5,
+      xpEarned: 100,
+    });
 
     const generatedMarkdown = parsedResult.generatedOutput || 
       `### Result from ${agentName}\n\n**Summary:** ${parsedResult.summary || "Task completed."}\n\n${(parsedResult.stepsOutput || []).map((s: any) => `#### ${s.name}\n${s.output}`).join("\n\n")}`;
@@ -522,6 +566,196 @@ Also provide:
   } catch (error: any) {
     console.warn("Error executing agent with live model, using graceful simulation:", error?.message || error);
     res.json(buildSimulatedExecution());
+  }
+});
+
+// API: Generate Formal Executive Business Report & Document
+app.post("/api/gemini/generate-report", async (req, res) => {
+  const { 
+    title, 
+    topic, 
+    category = "Executive Briefing", 
+    classification = "Executive Board", 
+    department = "Operations", 
+    agent, 
+    metricsContext,
+    customInstructions 
+  } = req.body;
+
+  const agentName = agent?.name || "LedgerIQ";
+  const targetModel = agent?.model?.startsWith("gemini") ? agent.model : "gemini-3.7-flash";
+
+  const now = new Date();
+  const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const reportId = `rep-${Date.now().toString(36)}`;
+
+  try {
+    const ai = getGeminiClient();
+
+    if (!ai) {
+      const simulatedSummary = `Executive analysis synthesized for "${title || topic}". Details operational ROI, labor savings, and strategic recommendations for ${department}.`;
+      const simulatedContent = `# ${title || "Executive Operations & ROI Report"}
+
+## 1. Executive Briefing
+This formal document was compiled by **${agentName}** (${department}) to provide an audit of operational performance, labor hours liberated, and strategic ROI opportunities.
+
+### Key Performance Summary
+* **Labor OpEx Replaced:** **$24,500.00**
+* **Hours Liberated:** **288.0 Hours**
+* **Departmental Efficiency Gain:** **+42.5%**
+* **Governance Standard:** ISO27001 / SOC2 Compliant
+
+---
+
+## 2. Strategic Insights & Findings
+1. **Autonomous Workload Optimization:** High-frequency recurring tasks were completed with 99.4% precision and zero unhandled exceptions.
+2. **Resource Reallocation:** Liberated engineering and operations bandwidth has been successfully redirected to strategic initiatives.
+3. **Institutional Vault Adoption:** Standardized playbooks have been archived into the production automations vault for single-click replay.
+
+---
+
+## 3. Forward Recommendations
+* Expand automated pipeline triggers across connected SaaS applications.
+* Deploy human-in-the-loop gates for high-dollar financial transactions.
+* Continue periodic audit schedules to monitor autonomous fleet efficiency.`;
+
+      return res.json({
+        success: true,
+        isSimulated: true,
+        report: {
+          id: reportId,
+          title: title || "Executive Operations & ROI Report",
+          category,
+          classification,
+          department,
+          agentId: agent?.id || "agent-fin-1",
+          agentName,
+          agentAvatar: agent?.avatar || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=150&auto=format&fit=crop&q=80",
+          modelUsed: `${targetModel} (Simulated)`,
+          createdAt: timestampStr,
+          sourcePrompt: topic || title || "Executive Report Request",
+          content: simulatedContent,
+          summary: simulatedSummary,
+          businessImpactUsd: 24500,
+          hoursSavedEstimated: 288.0,
+          wordCount: 380,
+          tags: [category.split(" ")[0], department.split(" ")[0], "Executive", "Report", "ROI"],
+          isPinned: false,
+          status: "final",
+          keyTakeaways: [
+            "Autonomous workload optimization achieved +42.5% efficiency gain.",
+            "Replaced $24,500 in human labor toil across 288 hours.",
+            "Zero compliance or security violations recorded."
+          ],
+          metricsHighlights: [
+            { label: "Labor Saved", value: "$24,500", trend: "+42.5%" },
+            { label: "Hours Liberated", value: "288.0 hrs", trend: "Optimized" },
+            { label: "Quality Pass", value: "99.4%", trend: "Zero Defects" }
+          ]
+        }
+      });
+    }
+
+    const systemInstruction = `You are ${agentName}, an elite executive AI analyst and report writer specializing in ${department}.
+Your task is to generate a comprehensive, publication-grade executive business report or strategic document.
+Format the output as a valid JSON object matching the requested schema.`;
+
+    const promptText = `Generate a detailed, formal executive business report on the following topic:
+Title: ${title || topic || "Executive Operations & Strategic ROI Report"}
+Topic / Core Objective: ${topic || title}
+Category: ${category}
+Classification: ${classification}
+Department: ${department}
+Live Metrics Context: ${JSON.stringify(metricsContext || { totalRoi: "$48,920", hoursLiberated: "575.5 hrs", autonomyRatio: "86.2%", activeAgents: 16 })}
+${customInstructions ? `Special Instructions: ${customInstructions}` : ""}
+
+Return a JSON object with:
+{
+  "title": string (crisp executive title),
+  "summary": string (2-3 sentence executive synopsis with quantified outcomes),
+  "content": string (comprehensive, structured markdown document with sections, headers, tables, bullet points, and concrete actionable takeaways),
+  "businessImpactUsd": number (estimated dollar value created/saved, e.g. 15000 to 50000),
+  "hoursSavedEstimated": number (estimated labor hours liberated, e.g. 40 to 300),
+  "keyTakeaways": array of 3-5 strings (bullet points summarizing core findings),
+  "metricsHighlights": array of 3-4 objects with { "label": string, "value": string, "trend": string },
+  "tags": array of 4-6 strings
+}`;
+
+    const { response, modelUsed } = await callGeminiWithFallback(ai, targetModel, {
+      contents: promptText,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+      }
+    });
+
+    const parsed = safeJsonParse(response.text, {});
+    const markdownContent = parsed.content || response.text || `# ${title}\n\nGenerated by ${agentName}.`;
+    const wordCount = markdownContent.split(/\s+/).filter(Boolean).length;
+
+    res.json({
+      success: true,
+      isSimulated: false,
+      report: {
+        id: reportId,
+        title: parsed.title || title || "Executive Business Report",
+        category,
+        classification,
+        department,
+        agentId: agent?.id || "agent-exec-1",
+        agentName,
+        agentAvatar: agent?.avatar,
+        modelUsed,
+        createdAt: timestampStr,
+        sourcePrompt: topic || title,
+        content: markdownContent,
+        summary: parsed.summary || `Executive briefing on ${title || topic} delivered by ${agentName}.`,
+        businessImpactUsd: typeof parsed.businessImpactUsd === "number" ? parsed.businessImpactUsd : 32000,
+        hoursSavedEstimated: typeof parsed.hoursSavedEstimated === "number" ? parsed.hoursSavedEstimated : 120,
+        wordCount,
+        tags: Array.isArray(parsed.tags) ? parsed.tags : ["Executive", "Report", department, "ROI"],
+        isPinned: false,
+        status: "final",
+        keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [
+          "Operational metrics meet target benchmarks.",
+          "Substantial labor hours liberated with zero critical defects.",
+          "Clear strategic roadmap defined for immediate implementation."
+        ],
+        metricsHighlights: Array.isArray(parsed.metricsHighlights) ? parsed.metricsHighlights : [
+          { label: "Business Impact", value: `$${(parsed.businessImpactUsd || 32000).toLocaleString()}`, trend: "Positive" },
+          { label: "Hours Saved", value: `${parsed.hoursSavedEstimated || 120} hrs`, trend: "Liberated" }
+        ]
+      }
+    });
+  } catch (error: any) {
+    console.warn("Error generating report with Gemini, using fallback:", error?.message || error);
+    res.json({
+      success: true,
+      isSimulated: true,
+      report: {
+        id: reportId,
+        title: title || "Executive Operations Audit",
+        category,
+        classification,
+        department,
+        agentId: agent?.id || "agent-exec-1",
+        agentName,
+        agentAvatar: agent?.avatar,
+        modelUsed: `${targetModel} (Fallback)`,
+        createdAt: timestampStr,
+        sourcePrompt: topic || title,
+        content: `# ${title || "Executive Operations Audit"}\n\n## Executive Summary\nCompiled by **${agentName}** for **${department}**.\n\n### Key Achievements\n- High-velocity autonomous task execution.\n- Total labor cost reduction documented.`,
+        summary: `Strategic briefing for ${title || topic} synthesized by ${agentName}.`,
+        businessImpactUsd: 18500,
+        hoursSavedEstimated: 64,
+        wordCount: 220,
+        tags: ["Executive", "Audit", department],
+        isPinned: false,
+        status: "final",
+        keyTakeaways: ["Automated task throughput increased.", "High fidelity results maintained."],
+        metricsHighlights: [{ label: "Impact", value: "$18,500", trend: "+28%" }]
+      }
+    });
   }
 });
 
@@ -559,14 +793,20 @@ Return JSON with:
 3. "status": "completed" | "needs_review" | "error"
 4. "logs": Array of 2-3 step execution log strings`;
 
-    const { response } = await callGeminiWithFallback(ai, "gemini-2.5-flash", {
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.7-flash", {
       contents: nodePrompt,
       config: {
         responseMimeType: "application/json",
       },
     });
 
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = safeJsonParse(response.text, {
+      output: response.text || "Processed node.",
+      confidence: 0.95,
+      status: "completed",
+      logs: [`Executed node ${node?.name}`],
+    });
+
     res.json({
       success: true,
       isSimulated: false,
@@ -587,6 +827,181 @@ Return JSON with:
       durationMs: 250,
       logs: [`Executed node in sandbox mode`, `Schema verified`],
     });
+  }
+});
+
+// API: Root-Cause Analysis & AI Prompt Troubleshooting for Discrepancies
+app.post("/api/gemini/troubleshoot-task", async (req, res) => {
+  const {
+    taskTitle,
+    originalPrompt,
+    contextPayload,
+    generatedOutput,
+    discrepancyFeedback,
+    discrepancyType,
+    agent,
+  } = req.body;
+
+  const agentName = agent?.name || "Specialist Agent";
+  const agentRole = agent?.role || "Automation Specialist";
+  const agentDept = agent?.department || "Operations";
+  const cleanFeedback = discrepancyFeedback?.trim() || "Output did not match the expected specifications or format.";
+  const cleanPrompt = originalPrompt?.trim() || taskTitle || "Execute enterprise task";
+
+  const buildSimulatedTroubleshoot = () => {
+    let catTitle = "Prompt Constraint Omission";
+    let fixTips = [
+      "Add explicit structural delimiters (e.g. Markdown headers, strict JSON or table format).",
+      "Include negative constraints (e.g. 'Do not include conversational filler; output only the final deliverable').",
+      "Specify exact entity keys, calculation methods, or required data schemas in the prompt body."
+    ];
+    let recTemp = 0.15;
+    let recModel = "gemini-3.7-flash";
+
+    if (discrepancyType === "wrong_format") {
+      catTitle = "Structural & Format Omission";
+      fixTips = [
+        "Explicitly demand the output format (e.g. 'Return as a 3-column Markdown table with columns [Date, Metric, Delta]').",
+        "Instruct the model to avoid narrative explanations when tabular or bulleted data is required.",
+        "Use few-shot inline examples showing the exact desired syntax."
+      ];
+      recTemp = 0.10;
+    } else if (discrepancyType === "hallucination_drift") {
+      catTitle = "Context Boundary & Grounding Drift";
+      fixTips = [
+        "Reduce model temperature to 0.10 to eliminate stochastic hallucination.",
+        "Provide explicit reference data in the context payload and instruct: 'Rely strictly on provided data; do not extrapolate.'",
+        "Enable strict schema validation gates before production dispatch."
+      ];
+      recTemp = 0.10;
+      recModel = "gemini-3.1-pro-preview";
+    } else if (discrepancyType === "too_shallow") {
+      catTitle = "Depth & Technical Granularity Deficit";
+      fixTips = [
+        "Instruct the agent to provide step-by-step implementation code, architectural diagrams, and rollback scripts.",
+        "Switch model tier to Gemini 3.1 Pro Preview for multi-step reasoning depth.",
+        "Request comprehensive edge-case analysis and SLA risk assessments."
+      ];
+      recTemp = 0.25;
+      recModel = "gemini-3.1-pro-preview";
+    } else if (discrepancyType === "persona_mismatch") {
+      catTitle = "Tone & Role Alignment Variance";
+      fixTips = [
+        "Clarify target audience (e.g. 'Executive Board Briefing' vs 'Staff SRE Post-Mortem').",
+        "Specify required reading level, conciseness, and actionability.",
+        "Prefix prompt with explicit persona role constraints."
+      ];
+      recTemp = 0.30;
+    }
+
+    const enhancedPrompt = `[DIRECTIVE SPECIFICATION - ZERO DRIFT]
+Role: ${agentRole} (${agentDept})
+Goal: ${cleanPrompt}
+
+USER QUALITY FEEDBACK / CORRECTION DIRECTIVE:
+"${cleanFeedback}"
+
+MANDATORY OUTPUT CONSTRAINTS:
+1. Exact Deliverable: Fulfill all requirements without omitting technical details, code blocks, or structured schemas.
+2. Structure: Use clear hierarchical Markdown headers, concise bullet points, and high-density data tables.
+3. No Fluff: Avoid generic conversational pleasantries. Provide the final, production-ready work product immediately.
+4. Specificity: Address edge cases, verified parameters, and actionable next steps.`;
+
+    return {
+      success: true,
+      isSimulated: true,
+      diagnosis: `The model encountered a discrepancy during execution because the original prompt lacked strict negative constraints and format locks. Specifically, regarding your feedback ("${cleanFeedback}"), the model defaulted to standard conversational synthesis rather than enforcing the exact deliverable boundaries you needed.`,
+      rootCauseCategory: catTitle,
+      missingElements: [
+        "Explicit output format specification (tables/code/schema)",
+        "Negative constraints prohibiting generic filler prose",
+        "Granular validation steps for edge-case handling"
+      ],
+      optimizedPrompt: enhancedPrompt,
+      recommendedTemperature: recTemp,
+      recommendedModel: recModel,
+      keyFixTips: fixTips,
+      timestamp: new Date().toISOString(),
+    };
+  };
+
+  try {
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.json(buildSimulatedTroubleshoot());
+    }
+
+    const troubleshootInstruction = `You are an expert AI prompt engineer and enterprise LLM root-cause diagnostic auditor.
+A user executed an AI agent task and flagged: "This is NOT what I asked for / Not Approved".
+Your job is to thoroughly diagnose why the agent failed to deliver the intended output, identify the exact breakdown, and construct an optimized, bullet-proof prompt rewrite that fixes the problem completely.
+
+Return a strictly valid JSON response with the following keys:
+{
+  "diagnosis": "A clear, empathetic, 2-3 sentence technical diagnosis explaining why the output failed the user's intent based on their feedback.",
+  "rootCauseCategory": "e.g. Prompt Ambiguity, Format Constraint Omission, Temperature Drift, Depth Deficit, or Persona Mismatch",
+  "missingElements": ["Array of 2-4 specific elements/sections that were missing or incorrect"],
+  "optimizedPrompt": "A pristine, production-ready, rewritten prompt incorporating explicit constraints, format locks, and user feedback.",
+  "recommendedTemperature": 0.15,
+  "recommendedModel": "gemini-3.1-pro-preview or gemini-3.7-flash",
+  "keyFixTips": ["Array of 3 actionable prompt engineering tips to prevent this issue in the future"]
+}`;
+
+    const diagnosticPayload = `TASK INFORMATION:
+- Task Title: ${taskTitle || "Enterprise Task"}
+- Agent Name: ${agentName} (${agentRole}, ${agentDept})
+- Agent Model: ${agent?.model || "gemini-3.7-flash"}
+- Agent Temperature: ${agent?.temperature ?? 0.35}
+
+ORIGINAL PROMPT GIVEN:
+"""
+${cleanPrompt}
+"""
+
+ADDITIONAL CONTEXT / PAYLOAD:
+"""
+${contextPayload ? String(contextPayload).slice(0, 1000) : "None"}
+"""
+
+ACTUAL GENERATED OUTPUT RECEIVED:
+"""
+${generatedOutput ? String(generatedOutput).slice(0, 1200) : "No output recorded"}
+"""
+
+USER'S DISCREPANCY REASON & FEEDBACK (WHY THIS WAS NOT APPROVED):
+- Discrepancy Type: ${discrepancyType || "general_discrepancy"}
+- User Feedback: "${cleanFeedback}"
+
+Perform root cause analysis and output the required JSON diagnostic report.`;
+
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.1-pro-preview", {
+      contents: diagnosticPayload,
+      config: {
+        systemInstruction: troubleshootInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.2,
+      },
+    });
+
+    const parsed = safeJsonParse(response.text, {});
+    res.json({
+      success: true,
+      isSimulated: false,
+      diagnosis: parsed.diagnosis || "Prompt constraint breakdown diagnosed.",
+      rootCauseCategory: parsed.rootCauseCategory || "Prompt Constraint Omission",
+      missingElements: parsed.missingElements || ["Specific formatting locks", "Negative constraints"],
+      optimizedPrompt: parsed.optimizedPrompt || cleanPrompt,
+      recommendedTemperature: parsed.recommendedTemperature ?? 0.15,
+      recommendedModel: parsed.recommendedModel || "gemini-3.7-flash",
+      keyFixTips: parsed.keyFixTips || [
+        "Include negative constraints to eliminate unwanted prose",
+        "Define output schema explicitly in the prompt",
+        "Lower temperature for deterministic consistency"
+      ],
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.warn("[Troubleshoot API] Error analyzing discrepancy with live Gemini model:", err?.message || err);
+    res.json(buildSimulatedTroubleshoot());
   }
 });
 
@@ -630,7 +1045,7 @@ app.post("/api/gemini/generate-workflow", async (req, res) => {
 Make sure positions layout nicely from left to right (e.g. x: 50, 300, 560, 820 with y around 150-250).
 Return valid JSON.`;
 
-    const { response } = await callGeminiWithFallback(ai, "gemini-2.5-flash", {
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.7-flash", {
       contents: `Design an enterprise automated workflow for: "${prompt}". Department: ${department || "General Operations"}.`,
       config: {
         systemInstruction: systemPrompt,
@@ -638,7 +1053,7 @@ Return valid JSON.`;
       },
     });
 
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, isSimulated: false, ...parsed });
   } catch (error: any) {
     console.warn("Generate workflow fallback:", error?.message || error);
@@ -749,7 +1164,7 @@ DOMAIN SPECIALIZATION:
           temperatureReasoning: `Low temperature (${recTemp}) guarantees reproducible, deterministic reasoning for ${agent?.department}.`,
           recommendedAutonomyLevel: recAutonomy,
           autonomyReasoning: successRate < 80 ? "Switching to Human-in-the-Loop prevents unverified mutations until accuracy stabilizes." : "Agent is ready for autonomous execution once prompt guards are active.",
-          recommendedModel: "gemini-2.5-flash",
+          recommendedModel: "gemini-3.7-flash",
           suggestedPrompt: optimizedPrompt,
           promptImprovements: [
             "Added explicit 4-tier operational constraints and error recovery boundaries",
@@ -801,7 +1216,7 @@ Evaluate:
 4. Recommendation object with summary, rootCauses, recommendedTemperature, suggestedPrompt, promptImprovements, predictedSuccessRateBoost, predictedHoursSavedBoost
 5. costPerTaskUsd and valuePerTaskUsd`;
 
-    const { response } = await callGeminiWithFallback(ai, "gemini-2.5-flash", {
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.7-flash", {
       contents: prompt,
       config: {
         systemInstruction,
@@ -809,7 +1224,7 @@ Evaluate:
       },
     });
 
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = safeJsonParse(response.text, {});
 
     res.json({
       success: true,
@@ -878,14 +1293,14 @@ Return JSON with:
 - status ('passed')
 - verificationLogs (array of 3 strings)`;
 
-    const { response } = await callGeminiWithFallback(ai, "gemini-2.5-flash", {
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.7-flash", {
       contents: testScenario,
       config: {
         responseMimeType: "application/json",
       },
     });
 
-    const parsed = JSON.parse(response.text || "{}");
+    const parsed = safeJsonParse(response.text, {});
     res.json({
       success: true,
       isSimulated: false,

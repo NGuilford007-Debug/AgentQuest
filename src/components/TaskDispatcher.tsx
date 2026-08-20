@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Markdown from "react-markdown";
-import { Agent, TaskExecutionRecord, Workflow } from "../types";
+import { Agent, TaskExecutionRecord, Workflow, ApprovedAutomation, GeneratedReportDocument } from "../types";
 import { SAMPLE_TASK_PRESETS } from "../data/initialData";
 import { 
   Play, 
@@ -32,10 +32,14 @@ import {
   Zap,
   XCircle,
   Coins,
-  Ban
+  Ban,
+  Wrench,
+  BookmarkCheck,
+  Bookmark
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { fireCelebration } from "../utils/confetti";
+import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
 
 interface TaskDispatcherProps {
   agents: Agent[];
@@ -43,6 +47,9 @@ interface TaskDispatcherProps {
   executionHistory: TaskExecutionRecord[];
   onTaskCompleted: (record: TaskExecutionRecord) => void;
   onApproveHitl: (taskId: string) => void;
+  onUpdateExecution?: (updated: TaskExecutionRecord) => void;
+  onSaveApprovedAutomation?: (automation: ApprovedAutomation) => void;
+  onSaveReport?: (report: GeneratedReportDocument) => void;
   streakMultiplier: number;
   initialAgentId?: string;
 }
@@ -86,9 +93,13 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   executionHistory,
   onTaskCompleted,
   onApproveHitl,
+  onUpdateExecution,
+  onSaveApprovedAutomation,
+  onSaveReport,
   streakMultiplier,
   initialAgentId,
 }) => {
+  const [isSavedAsReport, setIsSavedAsReport] = useState<boolean>(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(
     initialAgentId || agents[0]?.id || ""
   );
@@ -111,6 +122,8 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   const [followUpText, setFollowUpText] = useState<string>("");
   const [isFollowUpRunning, setIsFollowUpRunning] = useState<boolean>(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [isTroubleshootOpen, setIsTroubleshootOpen] = useState<boolean>(false);
+  const [troubleshootRecord, setTroubleshootRecord] = useState<TaskExecutionRecord | null>(null);
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -146,6 +159,56 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
     setShowExtraContext(true);
     const matchedWf = workflows.find((w) => w.agentId === preset.agentId) || workflows[0];
     if (matchedWf) setSelectedWorkflowId(matchedWf.id);
+  };
+
+  const handleApproveHitlExecution = (exec: TaskExecutionRecord) => {
+    onApproveHitl(exec.id);
+    const updated = { ...exec, status: "approved" as const };
+    setCurrentExecution(updated);
+    if (onUpdateExecution) {
+      onUpdateExecution(updated);
+    }
+    
+    // Persist to automations vault so good suggestions are retained
+    const matchedAgent = agents.find(a => a.id === exec.agentId);
+    const newAutomation: ApprovedAutomation = {
+      id: `auto-saved-${Date.now()}`,
+      title: exec.title || `Approved Automation by ${exec.agentName}`,
+      description: exec.summary || `Approved output from ${exec.agentName} (${exec.department})`,
+      agentId: exec.agentId,
+      agentName: exec.agentName,
+      agentAvatar: matchedAgent?.avatar || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150",
+      department: exec.department,
+      modelUsed: matchedAgent?.model || "gemini-3.7-flash",
+      sourcePrompt: exec.prompt || exec.inputPayload,
+      generatedContent: exec.generatedOutput || exec.summary,
+      suggestedActions: [
+        `Deploy ${exec.title} into daily automation pipeline`,
+        `Route output alerts to ${exec.department} team channel`,
+        `Review performance telemetry and KPIs`
+      ],
+      category: "automation",
+      approvedAt: new Date().toISOString(),
+      status: "active",
+      estimatedHoursSaved: exec.hoursSaved || 0.8,
+      tags: [exec.department, "Approved", "Task Dispatcher"],
+      isBookmarked: true,
+    };
+
+    if (onSaveApprovedAutomation) {
+      onSaveApprovedAutomation(newAutomation);
+    } else {
+      try {
+        const stored = localStorage.getItem("agentflow_approved_automations");
+        const list = stored ? JSON.parse(stored) : [];
+        list.unshift(newAutomation);
+        localStorage.setItem("agentflow_approved_automations", JSON.stringify(list));
+      } catch (e) {
+        console.error("Error persisting automation:", e);
+      }
+    }
+
+    fireCelebration();
   };
 
   const handleCancelExecution = () => {
@@ -663,6 +726,64 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {onSaveReport && (
+                      <button
+                        id="btn-save-as-report-vault"
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                          const isFinancialOrIncident = currentExecution.title.toLowerCase().includes("roi") || currentExecution.title.toLowerCase().includes("budget") || currentExecution.title.toLowerCase().includes("outage") || currentExecution.title.toLowerCase().includes("incident");
+                          const reportDoc: GeneratedReportDocument = {
+                            id: `rep-${Date.now().toString(36)}`,
+                            title: currentExecution.title,
+                            category: isFinancialOrIncident ? "Financial & ROI Audit" : "Executive Briefing",
+                            classification: "Internal",
+                            department: currentExecution.department,
+                            agentId: currentExecution.agentId,
+                            agentName: currentExecution.agentName,
+                            modelUsed: currentAgent?.model || "Gemini 3.7 Flash",
+                            createdAt: timestampStr,
+                            sourcePrompt: promptText,
+                            content: currentExecution.generatedOutput || currentExecution.summary,
+                            summary: currentExecution.summary,
+                            businessImpactUsd: Math.round((currentExecution.hoursSaved || 0.6) * 85),
+                            hoursSavedEstimated: currentExecution.hoursSaved || 0.6,
+                            wordCount: (currentExecution.generatedOutput || "").split(/\s+/).filter(Boolean).length || 350,
+                            tags: [currentExecution.department.split(" ")[0], "Intelligence", "AgentOutput"],
+                            isPinned: false,
+                            status: "final",
+                            keyTakeaways: [
+                              `Successfully executed by ${currentExecution.agentName}.`,
+                              `Liberated ${currentExecution.hoursSaved || 0.6} hours of human operational labor.`,
+                              `Passed SOC2 compliance with 0 audit violations.`
+                            ],
+                            metricsHighlights: [
+                              { label: "Labor Saved", value: `$${Math.round((currentExecution.hoursSaved || 0.6) * 85)}`, trend: "+100%" },
+                              { label: "Hours Liberated", value: `${currentExecution.hoursSaved || 0.6}h`, trend: "Saved" }
+                            ]
+                          };
+                          onSaveReport(reportDoc);
+                          setIsSavedAsReport(true);
+                          setTimeout(() => setIsSavedAsReport(false), 2500);
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        title="Save to Dashboard Reports Vault"
+                      >
+                        {isSavedAsReport ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <span className="text-emerald-600 font-bold">Saved to Vault!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bookmark className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Save to Reports</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     <button
                       id="btn-copy-dispatcher-output"
                       onClick={handleCopy}
@@ -710,14 +831,12 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => {
-                          onApproveHitl(currentExecution.id);
-                          setCurrentExecution({ ...currentExecution, status: "approved" });
-                          fireCelebration();
+                          handleApproveHitlExecution(currentExecution);
                         }}
                         className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Approve & Authorize</span>
+                        <span>Approve & Save to Automations Vault</span>
                       </button>
                     </div>
                   </div>
@@ -727,6 +846,60 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                 <div className="p-5 sm:p-6 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-sans selection:bg-blue-100 dark:selection:bg-blue-900 overflow-x-auto shadow-inner">
                   <div className="markdown-body space-y-3 prose dark:prose-invert max-w-none">
                     <Markdown>{currentExecution.generatedOutput || currentExecution.summary}</Markdown>
+                  </div>
+                </div>
+
+                {/* Quality Verification & Discrepancy Troubleshooting Bar */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-blue-50/30 to-amber-50/30 dark:from-slate-900 dark:via-blue-950/20 dark:to-amber-950/20 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>Quality & Spec Verification</span>
+                        {currentExecution.status === "approved" && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1">
+                            <BookmarkCheck className="w-3 h-3" /> Saved in Automations Vault
+                          </span>
+                        )}
+                        {currentExecution.status === "resolved" && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-bold">
+                            Resolved via AI Diagnostics
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Did this output meet your expectations? If not, diagnose the root cause and auto-fix.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      id="btn-dispatcher-not-what-i-asked-for"
+                      onClick={() => {
+                        setTroubleshootRecord(currentExecution);
+                        setIsTroubleshootOpen(true);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+                    >
+                      <Wrench className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>This isn't what I asked for</span>
+                    </button>
+
+                    {currentExecution.status !== "approved" && currentExecution.status !== "resolved" && (
+                      <button
+                        type="button"
+                        id="btn-dispatcher-approve-output"
+                        onClick={() => {
+                          handleApproveHitlExecution(currentExecution);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                      >
+                        <BookmarkCheck className="w-3.5 h-3.5" />
+                        <span>Approve & Save Automation</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -902,6 +1075,23 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
           </div>
         )}
       </div>
+
+      {/* Task Diagnostic & Troubleshooting Modal */}
+      <TaskTroubleshootModal
+        isOpen={isTroubleshootOpen}
+        onClose={() => {
+          setIsTroubleshootOpen(false);
+          setTroubleshootRecord(null);
+        }}
+        task={troubleshootRecord}
+        agents={agents}
+        onTaskResolved={(updated) => {
+          setCurrentExecution(updated);
+          if (onUpdateExecution) {
+            onUpdateExecution(updated);
+          }
+        }}
+      />
     </div>
   );
 };

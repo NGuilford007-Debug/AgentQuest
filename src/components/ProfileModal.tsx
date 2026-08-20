@@ -96,7 +96,7 @@ const BENCHMARK_PRESETS: BenchmarkPreset[] = [
     id: "deep-reasoning",
     name: "Deep Enterprise Reasoning",
     badge: "Maximum Depth",
-    model: "gemini-2.5-pro",
+    model: "gemini-3.1-pro-preview",
     temperature: 0.2,
     description: "Deep multi-step analytical reasoning and 2M token context for complex codebase refactoring, multi-page financial audits, and architecture design.",
     idealFor: "Engineering specs, legal contract reviews, database migrations",
@@ -334,11 +334,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 Settings & Personalization Studio
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
-                  Level {userProfile.level} • {userProfile.levelTitle}
+                  {userProfile.role} • {userProfile.department}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize your profile, configure enterprise benchmark presets, tune agent flexibility, or start with a clean slate.
+                Personalize your profile, configure enterprise benchmark presets, tune agent parameters, or initialize baseline telemetry.
               </p>
             </div>
           </div>
@@ -798,10 +798,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                      Clean Slate Data & Zero-State Baseline
+                      Baseline Telemetry & Zero-State Baseline
                     </h3>
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                      Starting with a clean slate ensures your gamification stats, XP, level, and task histories only reflect real user interactions rather than unearned sample data.
+                      Starting with a baseline initialization ensures your autonomous metrics, labor savings, and task histories accurately reflect actual live production workloads.
                     </p>
                   </div>
                 </div>
@@ -810,26 +810,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               {/* Current Metrics Baseline */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Current Level</div>
-                  <div className="text-base font-bold text-slate-800 dark:text-slate-100 mt-0.5">
-                    Level {userProfile.level}
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Autonomy Ratio</div>
+                  <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                    {userProfile.autonomousRunRatio ?? 82}%
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Total Earned XP</div>
-                  <div className="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5">
-                    {userProfile.xp} XP
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">OpEx Cost Replaced</div>
+                  <div className="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
+                    ${(userProfile.costSavedUsd || 15600).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Hours Saved</div>
-                  <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Hours Liberated</div>
+                  <div className="text-base font-bold text-slate-800 dark:text-slate-100 mt-0.5 font-mono">
                     {userProfile.hoursSavedTotal.toFixed(1)} hrs
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">AI Credits</div>
-                  <div className="text-base font-bold text-purple-600 dark:text-purple-400 mt-0.5">
+                  <div className="text-base font-bold text-purple-600 dark:text-purple-400 mt-0.5 font-mono">
                     {userProfile.creditsBalance?.toLocaleString() || "5,000"}
                   </div>
                 </div>
@@ -847,7 +847,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       </h4>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      Resets Level to 1, XP to 0, hours saved to 0, and restores starting credit allowance.
+                      Initializes telemetry back to clean baseline: 0 hours saved, standard autonomy ratio, and restores full starting credit allowance.
                     </p>
                   </div>
 
@@ -946,6 +946,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            <span>Settings saved automatically to local storage</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Confirm & Close</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

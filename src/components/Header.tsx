@@ -195,63 +195,59 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Gamification Bar & User Hub */}
+        {/* Executive Telemetry & Operator Hub */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Credits Balance Pill */}
+          {/* Autonomy Operational Index */}
           <div 
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold shadow-xs"
-            title={`${(userProfile.creditsBalance ?? 4850).toLocaleString()} Credits Available (Spent on agent generations, refund on cancellation)`}
+            onClick={onOpenGamification}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shadow-xs"
+            title="Operational Autonomy Index: Percentage of tasks executed 100% autonomously without human bottleneck"
           >
-            <Coins className="w-3.5 h-3.5 text-blue-500" />
-            <span>{(userProfile.creditsBalance ?? 4850).toLocaleString()}</span>
-            <span className="text-[10px] text-blue-500/80 font-normal hidden sm:inline">Credits</span>
+            <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
+            <span>{userProfile.autonomousRunRatio ?? 72}% Autonomous</span>
           </div>
 
-          {/* Streak Flame Pill (if gamification enabled) */}
-          {enableGamification && (
-            <div 
-              onClick={onOpenGamification}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 text-xs font-semibold cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors shadow-xs"
-              title={`${userProfile.streakDays} Day Automation Streak (${userProfile.streakMultiplier}x XP Multiplier)`}
-            >
-              <Flame className="w-4 h-4 text-amber-500 fill-amber-500 animate-bounce" />
-              <span>{userProfile.streakDays}d Streak</span>
-              <span className="text-[10px] px-1 py-0.2 bg-amber-200/80 dark:bg-amber-800/80 rounded text-amber-900 dark:text-amber-100 font-bold">
-                {userProfile.streakMultiplier}x
+          {/* OpEx Value Created */}
+          <div 
+            onClick={onOpenMonetization}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-xs"
+            title="Total Operating Expense (OpEx) saved by autonomous agent workflows"
+          >
+            <DollarSign className="w-3.5 h-3.5 text-blue-500" />
+            <span>${(userProfile.costSavedUsd || 15600).toLocaleString()} OpEx Saved</span>
+          </div>
+
+          {/* Credits Balance Pill */}
+          <div 
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold shadow-xs"
+            title={`${(userProfile.creditsBalance ?? 5000).toLocaleString()} Execution Credits Allocated`}
+          >
+            <Coins className="w-3.5 h-3.5 text-amber-500" />
+            <span>{(userProfile.creditsBalance ?? 5000).toLocaleString()}</span>
+            <span className="text-[10px] text-slate-500 font-normal">Credits</span>
+          </div>
+
+          {/* Executive Operator Profile Pill */}
+          <div 
+            id="header-user-profile-pill"
+            onClick={onOpenProfileModal || onOpenGamification}
+            className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+            title="Click to view Operator Profile, Company Milestones, or Workspace Settings"
+          >
+            <img
+              src={userProfile.avatar}
+              alt={userProfile.name}
+              className="w-7 h-7 rounded-full border border-blue-500/30 object-cover"
+            />
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">
+                {userProfile.name}
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight truncate max-w-[120px]">
+                {userProfile.role}
               </span>
             </div>
-          )}
-
-          {/* Level & XP Widget (if gamification enabled) */}
-          {enableGamification && (
-            <div 
-              id="header-user-profile-pill"
-              onClick={onOpenProfileModal || onOpenGamification}
-              className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
-              title="Click to view User Profile, Identity Settings, or Clean Slate reset"
-            >
-              <div className="flex flex-col text-right">
-                <div className="flex items-center gap-1 text-xs font-bold text-slate-800 dark:text-slate-100">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Lv. {userProfile.level}</span>
-                  <span className="text-slate-500 dark:text-slate-400 font-normal text-[11px]">
-                    ({userProfile.xp.toLocaleString()} XP)
-                  </span>
-                </div>
-                <div className="w-24 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1">
-                  <div 
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.max(12, xpProgressPercent)}%`, backgroundColor: primaryColor }}
-                  />
-                </div>
-              </div>
-              <img
-                src={userProfile.avatar}
-                alt={userProfile.name}
-                className="w-8 h-8 rounded-full border border-blue-500/30 object-cover"
-              />
-            </div>
-          )}
+          </div>
 
           {/* Dedicated Settings, Benchmark Presets & Clean Slate Button */}
           {onOpenProfileModal && (

@@ -19,7 +19,9 @@ import {
   DeveloperCompanyProfile,
   RateCardConfig,
   TenantBillingRecord,
-  FinancialMetricSnapshot
+  FinancialMetricSnapshot,
+  ApprovedAutomation,
+  GeneratedReportDocument
 } from "./types";
 import { 
   INITIAL_AGENTS, 
@@ -30,8 +32,10 @@ import {
   INITIAL_MODELS,
   AVAILABLE_PERMISSIONS,
   INITIAL_CONNECTED_APPS,
-  INITIAL_API_AUDIT_LOGS
+  INITIAL_API_AUDIT_LOGS,
+  INITIAL_APPROVED_AUTOMATIONS
 } from "./data/initialData";
+import { INITIAL_GENERATED_REPORTS } from "./data/initialReports";
 import { INITIAL_WORKPLACE_STAGES } from "./data/workplaceStages";
 import { INITIAL_ASSET_ITEMS, INITIAL_ASSET_DIRECTORIES } from "./data/initialAssets";
 import { DEFAULT_WHITELABEL_CONFIG, WHITELABEL_PRESETS } from "./data/whiteLabelPresets";
@@ -43,6 +47,7 @@ import {
 } from "./data/initialMonetization";
 import { Header } from "./components/Header";
 import { Sidebar, NavTab } from "./components/Sidebar";
+import { Dashboard } from "./components/Dashboard";
 import { AgentRoster } from "./components/AgentRoster";
 import { WorkflowCanvas } from "./components/WorkflowCanvas";
 import { AssetGallery } from "./components/AssetGallery";
@@ -53,6 +58,7 @@ import { PermissionsMatrix } from "./components/PermissionsMatrix";
 import { ROIAnalytics } from "./components/ROIAnalytics";
 import { WhiteLabelStudio } from "./components/WhiteLabelStudio";
 import { MonetizationHub } from "./components/MonetizationHub";
+import { ApprovedAutomationsVault } from "./components/ApprovedAutomationsVault";
 import { AgentBuilderModal } from "./components/AgentBuilderModal";
 import { ModelManagerModal } from "./components/ModelManagerModal";
 import { SaveStateManager } from "./components/SaveStateManager";
@@ -197,7 +203,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : HISTORICAL_FINANCIAL_SNAPSHOTS;
   });
 
-  const [currentTab, setCurrentTab] = useState<NavTab>("agents");
+  const [approvedAutomations, setApprovedAutomations] = useState<ApprovedAutomation[]>(() => {
+    const saved = localStorage.getItem("agentflow_approved_automations");
+    return saved ? JSON.parse(saved) : INITIAL_APPROVED_AUTOMATIONS;
+  });
+
+  const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>(() => {
+    const saved = localStorage.getItem("agentflow_saved_reports");
+    return saved ? JSON.parse(saved) : INITIAL_GENERATED_REPORTS;
+  });
+
+  const [currentTab, setCurrentTab] = useState<NavTab>("dashboard");
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>(
     workflows[0]?.id || "wf-1"
   );
@@ -322,6 +338,16 @@ export default function App() {
     localStorage.setItem("agentflow_financial_history", JSON.stringify(financialHistory));
     triggerAutoSaveIndicator();
   }, [financialHistory]);
+
+  useEffect(() => {
+    localStorage.setItem("agentflow_approved_automations", JSON.stringify(approvedAutomations));
+    triggerAutoSaveIndicator();
+  }, [approvedAutomations]);
+
+  useEffect(() => {
+    localStorage.setItem("agentflow_saved_reports", JSON.stringify(savedReports));
+    triggerAutoSaveIndicator();
+  }, [savedReports]);
 
   // Keyboard shortcut Ctrl+S / Cmd+S to open save state manager
   useEffect(() => {
@@ -541,6 +567,12 @@ export default function App() {
     );
   };
 
+  const handleBatchUpdateAgentStatus = (agentIds: string[], status: "active" | "idle") => {
+    setAgents((prev) =>
+      prev.map((a) => (agentIds.includes(a.id) ? { ...a, status } : a))
+    );
+  };
+
   const handleUpdateAgent = (updated: Agent) => {
     setAgents((prev) =>
       prev.map((a) => (a.id === updated.id ? updated : a))
@@ -549,6 +581,10 @@ export default function App() {
 
   const handleDeleteAgent = (agentId: string) => {
     setAgents((prev) => prev.filter((a) => a.id !== agentId));
+  };
+
+  const handleBatchDeleteAgents = (agentIds: string[]) => {
+    setAgents((prev) => prev.filter((a) => !agentIds.includes(a.id)));
   };
 
   const handleSaveModel = (model: AiModel) => {
@@ -752,6 +788,20 @@ export default function App() {
     });
   };
 
+  const handleUpdateExecution = (updatedRecord: TaskExecutionRecord) => {
+    setExecutionHistory((prev) => {
+      const exists = prev.some((r) => r.id === updatedRecord.id);
+      if (exists) {
+        return prev.map((r) => (r.id === updatedRecord.id ? updatedRecord : r));
+      }
+      return [updatedRecord, ...prev];
+    });
+
+    if (updatedRecord.status === "resolved" || updatedRecord.status === "approved") {
+      addXpAndCheckLevel(150, updatedRecord.hoursSaved || 0);
+    }
+  };
+
   const handleClaimQuest = (questId: string) => {
     const quest = userProfile.quests.find((q) => q.id === questId);
     if (!quest || quest.claimed) return;
@@ -898,6 +948,56 @@ export default function App() {
     setCurrentTab("dispatcher");
   };
 
+  // Approved Automations Vault Handlers
+  const handleSaveApprovedAutomation = (automation: ApprovedAutomation) => {
+    setApprovedAutomations((prev) => {
+      const idx = prev.findIndex((a) => a.id === automation.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = automation;
+        return next;
+      }
+      return [automation, ...prev];
+    });
+    addXpAndCheckLevel(120, automation.estimatedHoursSaved || 0.8);
+    fireCelebration();
+  };
+
+  const handleUpdateApprovedAutomation = (updated: ApprovedAutomation) => {
+    setApprovedAutomations((prev) =>
+      prev.map((a) => (a.id === updated.id ? updated : a))
+    );
+  };
+
+  const handleDeleteApprovedAutomation = (id: string) => {
+    setApprovedAutomations((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  // Saved Intelligence Reports & Documents Handlers
+  const handleSaveReport = (report: GeneratedReportDocument) => {
+    setSavedReports((prev) => {
+      const idx = prev.findIndex((r) => r.id === report.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = report;
+        return next;
+      }
+      return [report, ...prev];
+    });
+    addXpAndCheckLevel(200, report.hoursSavedEstimated || 1.5);
+    fireCelebration();
+  };
+
+  const handleDeleteReport = (reportId: string) => {
+    setSavedReports((prev) => prev.filter((r) => r.id !== reportId));
+  };
+
+  const handleTogglePinReport = (reportId: string) => {
+    setSavedReports((prev) =>
+      prev.map((r) => (r.id === reportId ? { ...r, isPinned: !r.isPinned } : r))
+    );
+  };
+
   // White-Label Tenant Management Handlers
   const handleUpdateWhiteLabelConfig = (updated: WhiteLabelConfig) => {
     setWhiteLabelConfig(updated);
@@ -987,12 +1087,38 @@ export default function App() {
           claimableQuestsCount={claimableQuestsCount}
           unhealthyAgentsCount={agents.filter((a) => (a.stats.successRate ?? 95) < 90).length}
           totalAssetsCount={assets.length}
+          automationsCount={approvedAutomations.length}
+          savedReportsCount={savedReports.length}
           whiteLabelConfig={whiteLabelConfig}
           isMasterDeveloper={isMasterDeveloper}
           onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
         />
 
         {/* Dynamic Tab Body */}
+        {currentTab === "dashboard" && (
+          <Dashboard
+            agents={agents}
+            workflows={workflows}
+            userProfile={userProfile}
+            executionHistory={executionHistory}
+            savedReports={savedReports}
+            onSaveReport={handleSaveReport}
+            onDeleteReport={handleDeleteReport}
+            onTogglePinReport={handleTogglePinReport}
+            onNavigateToDispatcher={(agentId) => {
+              if (agentId) setQuickTaskAgentId(agentId);
+              setCurrentTab("dispatcher");
+            }}
+            onNavigateToVault={() => setCurrentTab("automations")}
+            onNavigateToMonetization={() => setCurrentTab("monetization")}
+            onNavigateToRoi={() => setCurrentTab("analytics")}
+            onOpenAgentBuilder={() => {
+              setEditingAgent(null);
+              setIsAgentBuilderOpen(true);
+            }}
+          />
+        )}
+
         {currentTab === "agents" && (
           <AgentRoster
             agents={agents}
@@ -1009,6 +1135,8 @@ export default function App() {
             onTaskAgent={handleTaskAgent}
             onToggleAgentStatus={handleToggleAgentStatus}
             onDeleteAgent={handleDeleteAgent}
+            onBatchUpdateStatus={handleBatchUpdateAgentStatus}
+            onBatchDeleteAgents={handleBatchDeleteAgents}
             onOpenHealthMonitor={() => setCurrentTab("health")}
             onOpenModelManager={handleOpenModelManager}
             onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
@@ -1064,6 +1192,24 @@ export default function App() {
           />
         )}
 
+        {currentTab === "automations" && (
+          <ApprovedAutomationsVault
+            automations={approvedAutomations}
+            agents={agents}
+            executionHistory={executionHistory}
+            onUpdateAutomation={handleUpdateApprovedAutomation}
+            onDeleteAutomation={handleDeleteApprovedAutomation}
+            onCreateAutomation={handleSaveApprovedAutomation}
+            onRunAutomation={(automation) => {
+              setQuickTaskAgentId(automation.agentId);
+              setIsQuickTaskOpen(true);
+            }}
+            onRewardXP={(amount, hours) => {
+              addXpAndCheckLevel(amount, hours || 0);
+            }}
+          />
+        )}
+
         {currentTab === "assets" && (
           <AssetGallery
             assets={assets}
@@ -1080,6 +1226,9 @@ export default function App() {
             executionHistory={executionHistory}
             onTaskCompleted={handleTaskCompleted}
             onApproveHitl={handleApproveHitl}
+            onUpdateExecution={handleUpdateExecution}
+            onSaveApprovedAutomation={handleSaveApprovedAutomation}
+            onSaveReport={handleSaveReport}
             streakMultiplier={userProfile.streakMultiplier}
           />
         )}
@@ -1089,6 +1238,11 @@ export default function App() {
             userProfile={userProfile}
             onClaimQuest={handleClaimQuest}
             onOpenProfileModal={() => setIsProfileModalOpen(true)}
+            onOpenAutomationsVault={() => setCurrentTab("automations")}
+            onOpenAgentBuilder={() => {
+              setEditingAgent(null);
+              setIsAgentBuilderOpen(true);
+            }}
           />
         )}
 
@@ -1119,6 +1273,8 @@ export default function App() {
           <ROIAnalytics
             agents={agents}
             executionHistory={executionHistory}
+            onUpdateExecution={handleUpdateExecution}
+            onApproveHitl={handleApproveHitl}
           />
         )}
 
@@ -1258,6 +1414,7 @@ export default function App() {
         initialAgentId={quickTaskAgentId}
         workflows={workflows}
         onTaskCompleted={handleTaskCompleted}
+        onSaveApprovedAutomation={handleSaveApprovedAutomation}
         streakMultiplier={userProfile.streakMultiplier}
       />
 

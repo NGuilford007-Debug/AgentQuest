@@ -23,7 +23,13 @@ import {
   ArrowRight,
   Lock,
   Eye,
-  Info
+  Info,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  X,
+  Check,
+  Power
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -36,6 +42,8 @@ interface AgentRosterProps {
   onTaskAgent: (agentId: string) => void;
   onToggleAgentStatus: (agentId: string) => void;
   onDeleteAgent: (agentId: string) => void;
+  onBatchUpdateStatus?: (agentIds: string[], status: "active" | "idle") => void;
+  onBatchDeleteAgents?: (agentIds: string[]) => void;
   onOpenHealthMonitor?: (agentId?: string) => void;
   onOpenModelManager?: (agentId?: string) => void;
   onOpenTemplateModal?: () => void;
@@ -54,6 +62,8 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
   onTaskAgent,
   onToggleAgentStatus,
   onDeleteAgent,
+  onBatchUpdateStatus,
+  onBatchDeleteAgents,
   onOpenHealthMonitor,
   onOpenModelManager,
   onOpenTemplateModal,
@@ -66,6 +76,11 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showTemplatesSpotlight, setShowTemplatesSpotlight] = useState<boolean>(true);
   const [clientBlueprintModalAgent, setClientBlueprintModalAgent] = useState<Agent | null>(null);
+  
+  // Bulk selection state
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState<boolean>(false);
+  const [bulkActionSuccessMsg, setBulkActionSuccessMsg] = useState<string | null>(null);
 
   const featuredTemplates = AGENT_TEMPLATES.slice(0, 4);
   const unhealthyAgents = agents.filter((a) => (a.stats.successRate ?? 95) < 90);
@@ -83,8 +98,91 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
     return true;
   });
 
+  const allFilteredSelected = filteredAgents.length > 0 && filteredAgents.every((a) => selectedAgentIds.includes(a.id));
+  const someFilteredSelected = filteredAgents.some((a) => selectedAgentIds.includes(a.id)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Unselect all visible filtered
+      const filteredIds = new Set(filteredAgents.map((a) => a.id));
+      setSelectedAgentIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+    } else {
+      // Select all visible filtered
+      const newSelected = new Set([...selectedAgentIds, ...filteredAgents.map((a) => a.id)]);
+      setSelectedAgentIds(Array.from(newSelected));
+    }
+  };
+
+  const handleToggleSelectAgent = (agentId: string) => {
+    setSelectedAgentIds((prev) =>
+      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedAgentIds([]);
+  };
+
+  // Bulk Operations
+  const handleBulkEnable = () => {
+    if (selectedAgentIds.length === 0) return;
+    if (onBatchUpdateStatus) {
+      onBatchUpdateStatus(selectedAgentIds, "active");
+    } else {
+      selectedAgentIds.forEach((id) => {
+        const ag = agents.find((a) => a.id === id);
+        if (ag && ag.status !== "active") {
+          onToggleAgentStatus(id);
+        }
+      });
+    }
+    showToast(`Enabled ${selectedAgentIds.length} agent${selectedAgentIds.length > 1 ? "s" : ""}`);
+  };
+
+  const handleBulkDisable = () => {
+    if (selectedAgentIds.length === 0) return;
+    if (onBatchUpdateStatus) {
+      onBatchUpdateStatus(selectedAgentIds, "idle");
+    } else {
+      selectedAgentIds.forEach((id) => {
+        const ag = agents.find((a) => a.id === id);
+        if (ag && ag.status === "active") {
+          onToggleAgentStatus(id);
+        }
+      });
+    }
+    showToast(`Paused / Disabled ${selectedAgentIds.length} agent${selectedAgentIds.length > 1 ? "s" : ""}`);
+  };
+
+  const handleConfirmBulkDelete = () => {
+    if (selectedAgentIds.length === 0) return;
+    if (onBatchDeleteAgents) {
+      onBatchDeleteAgents(selectedAgentIds);
+    } else {
+      selectedAgentIds.forEach((id) => onDeleteAgent(id));
+    }
+    showToast(`Deleted ${selectedAgentIds.length} agent${selectedAgentIds.length > 1 ? "s" : ""}`);
+    setSelectedAgentIds([]);
+    setShowBulkDeleteModal(false);
+  };
+
+  const showToast = (msg: string) => {
+    setBulkActionSuccessMsg(msg);
+    setTimeout(() => setBulkActionSuccessMsg(null), 3000);
+  };
+
+  const selectedAgentsList = agents.filter((a) => selectedAgentIds.includes(a.id));
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-slate-50 dark:bg-slate-950">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-slate-50 dark:bg-slate-950 relative">
+      {/* Top Notification Toast */}
+      {bulkActionSuccessMsg && (
+        <div className="fixed top-20 right-6 z-50 p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-700 shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>{bulkActionSuccessMsg}</span>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -102,7 +200,7 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isMasterDeveloper 
-              ? "Full developer administrative mode. You can remix system prompts, change AI models, and build new agents."
+              ? "Full developer administrative mode. Select agents to batch-enable, disable, or delete."
               : `Production-ready agent fleet managed and secured by ${developerCompanyName}. Execution & tasking enabled.`}
           </p>
         </div>
@@ -298,34 +396,147 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
         </div>
       )}
 
-      {/* Filters and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Search agents by role, persona, or keyword..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500"
-        />
+      {/* Filters, Search Bar & Multi-Select Control Header */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Search agents by role, persona, or keyword..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500"
+          />
 
-        <select
-          value={selectedDept}
-          onChange={(e) => setSelectedDept(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
-        >
-          <option value="all">All Departments ({agents.length})</option>
-          <option value="DevOps & SecOps">DevOps & SecOps</option>
-          <option value="Sales & CRM">Sales & CRM</option>
-          <option value="Customer Support">Customer Support</option>
-          <option value="Finance & Legal">Finance & Legal</option>
-          <option value="Engineering">Engineering</option>
-          <option value="Human Resources">Human Resources</option>
-        </select>
+          <select
+            value={selectedDept}
+            onChange={(e) => setSelectedDept(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
+          >
+            <option value="all">All Departments ({agents.length})</option>
+            <option value="DevOps & SecOps">DevOps & SecOps</option>
+            <option value="Sales & CRM">Sales & CRM</option>
+            <option value="Customer Support">Customer Support</option>
+            <option value="Finance & Legal">Finance & Legal</option>
+            <option value="Engineering">Engineering</option>
+            <option value="Human Resources">Human Resources</option>
+          </select>
+        </div>
+
+        {/* Multi-Selection Control Sub-Bar */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className="flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-semibold transition-colors"
+            >
+              {allFilteredSelected ? (
+                <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              ) : someFilteredSelected ? (
+                <MinusSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>
+                {allFilteredSelected
+                  ? "Deselect All"
+                  : someFilteredSelected
+                  ? `Select All (${filteredAgents.length})`
+                  : `Select All (${filteredAgents.length})`}
+              </span>
+            </button>
+
+            {selectedAgentIds.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-[11px]">
+                {selectedAgentIds.length} of {agents.length} selected
+              </span>
+            )}
+          </div>
+
+          {selectedAgentIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Clear Selection</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* DOCKED / FLOATING BULK ACTION TOOLBAR (VISIBLE WHEN 1+ AGENTS ARE SELECTED) */}
+      {selectedAgentIds.length > 0 && (
+        <div className="sticky top-2 z-40 p-3.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white border border-slate-700 shadow-2xl backdrop-blur-md flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              {selectedAgentIds.length}
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                <span>Bulk Action Menu</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-normal">
+                  {selectedAgentIds.length} Agent{selectedAgentIds.length > 1 ? "s" : ""} Selected
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Apply batch operations across your selected fleet
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Enable All */}
+            <button
+              type="button"
+              onClick={handleBulkEnable}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              title="Activate selected agents"
+            >
+              <PlayCircle className="w-3.5 h-3.5" />
+              <span>Enable ({selectedAgentIds.length})</span>
+            </button>
+
+            {/* Disable All */}
+            <button
+              type="button"
+              onClick={handleBulkDisable}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+              title="Pause selected agents"
+            >
+              <PauseCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Disable ({selectedAgentIds.length})</span>
+            </button>
+
+            {/* Delete All */}
+            <button
+              type="button"
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              title="Delete selected agents from fleet"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete ({selectedAgentIds.length})</span>
+            </button>
+
+            {/* Clear button */}
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Cancel selection"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Agents Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-4">
         {filteredAgents.map((agent) => {
+          const isSelected = selectedAgentIds.includes(agent.id);
           const isAutonomous = agent.autonomyLevel === "autonomous";
           const isHitl = agent.autonomyLevel === "hitl";
           const successRate = agent.stats.successRate ?? 95;
@@ -335,8 +546,11 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
           return (
             <div
               key={agent.id}
-              className={`p-5 rounded-2xl bg-white dark:bg-slate-900 border transition-all flex flex-col justify-between shadow-xs space-y-4 ${
-                isCriticalHealth
+              onClick={() => handleToggleSelectAgent(agent.id)}
+              className={`p-5 rounded-2xl bg-white dark:bg-slate-900 border transition-all flex flex-col justify-between shadow-xs space-y-4 cursor-pointer relative ${
+                isSelected
+                  ? "border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/20"
+                  : isCriticalHealth
                   ? "border-rose-300 dark:border-rose-900/60 ring-1 ring-rose-500/20"
                   : isWarningHealth
                   ? "border-amber-300 dark:border-amber-900/60"
@@ -345,7 +559,22 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
             >
               {/* Agent Top Row */}
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3.5 min-w-0">
+                <div className="flex items-start gap-3 min-w-0">
+                  {/* Checkbox Trigger */}
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleSelectAgent(agent.id);
+                    }}
+                    className="mt-1 shrink-0 cursor-pointer p-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    ) : (
+                      <Square className="w-5 h-5 text-slate-300 dark:text-slate-600 hover:text-slate-500" />
+                    )}
+                  </div>
+
                   <img
                     src={agent.avatar}
                     alt={agent.name}
@@ -356,15 +585,22 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
                       <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">
                         {agent.name}
                       </h3>
-                      <span
-                        className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleAgentStatus(agent.id);
+                        }}
+                        className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase transition-all flex items-center gap-1 ${
                           agent.status === "active"
-                            ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                            ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200"
                         }`}
+                        title="Click to toggle agent status"
                       >
-                        {agent.status}
-                      </span>
+                        <Power className="w-2.5 h-2.5" />
+                        <span>{agent.status}</span>
+                      </button>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
@@ -373,7 +609,10 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
                       {onOpenModelManager ? (
                         <button
                           type="button"
-                          onClick={() => onOpenModelManager(agent.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenModelManager(agent.id);
+                          }}
                           className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/60 text-slate-600 dark:text-slate-300 hover:text-blue-600 border border-slate-200 dark:border-slate-700 font-mono transition-colors"
                           title="Click to switch or configure AI model"
                         >
@@ -456,7 +695,10 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div 
+                onClick={(e) => e.stopPropagation()} 
+                className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800"
+              >
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
                   <span>{agent.permissions.length} Scopes Active</span>
@@ -517,6 +759,54 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
           );
         })}
       </div>
+
+      {/* BULK DELETE CONFIRMATION MODAL */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full overflow-hidden p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-200 dark:border-rose-800 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  Delete {selectedAgentIds.length} Selected Agents?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  This action will permanently delete these agents from your enterprise fleet.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto space-y-1.5">
+              {selectedAgentsList.map((a) => (
+                <div key={a.id} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                  <img src={a.avatar} alt={a.name} className="w-5 h-5 rounded-md object-cover" />
+                  <span className="font-bold">{a.name}</span>
+                  <span className="text-slate-400 text-[10px]">({a.department})</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBulkDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 transition-all"
+              >
+                Confirm Delete ({selectedAgentIds.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* READ-ONLY CLIENT BLUEPRINT MODAL */}
       {clientBlueprintModalAgent && (

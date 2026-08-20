@@ -255,8 +255,12 @@ export interface Badge {
   category: "automation" | "speed" | "collaboration" | "governance" | "mastery";
   rarity: "common" | "rare" | "epic" | "legendary";
   unlockedAt?: string;
-  xpReward: number;
+  xpReward?: number;
   progress: number; // 0 to 100
+  businessImpact?: string;
+  achievementType?: "approved_automation" | "company_milestone" | "operational_scale" | "governance";
+  targetMetric?: string;
+  associatedPlaybook?: string;
 }
 
 export interface Quest {
@@ -267,11 +271,12 @@ export interface Quest {
   current: number;
   target: number;
   unit: string;
-  xpReward: number;
+  xpReward?: number;
   completed: boolean;
   claimed: boolean;
   expiresIn?: string;
   iconName: string;
+  businessGoal?: string;
 }
 
 export interface EmployeeProfile {
@@ -293,6 +298,9 @@ export interface EmployeeProfile {
   accuracyScore: number;
   creditsBalance?: number;
   creditsTotal?: number;
+  approvedAutomationsCount?: number;
+  autonomousRunRatio?: number;
+  companyMilestonesCompleted?: number;
   badges: Badge[];
   quests: Quest[];
 }
@@ -311,6 +319,9 @@ export interface LeaderboardUser {
   activeAgents: number;
   isCurrentUser?: boolean;
   streak: number;
+  opexSavedUsd?: number;
+  autonomyRate?: number;
+  approvedPlaybooksCount?: number;
 }
 
 export interface StepExecutionResult {
@@ -324,6 +335,21 @@ export interface StepExecutionResult {
   extractedData?: Record<string, any>;
 }
 
+export interface TaskTroubleshootReport {
+  id: string;
+  taskId: string;
+  discrepancyType: "missing_constraints" | "wrong_format" | "hallucination_drift" | "persona_mismatch" | "too_shallow" | "other";
+  userFeedback: string;
+  diagnosis: string;
+  rootCauseCategory: string;
+  missingElements: string[];
+  optimizedPrompt: string;
+  recommendedTemperature: number;
+  recommendedModel: string;
+  keyFixTips: string[];
+  timestamp: string;
+}
+
 export interface TaskExecutionRecord {
   id: string;
   agentId: string;
@@ -333,7 +359,7 @@ export interface TaskExecutionRecord {
   title: string;
   department: Department;
   inputPayload: string;
-  status: "running" | "completed" | "needs_review" | "failed" | "approved" | "cancelled";
+  status: "running" | "completed" | "needs_review" | "failed" | "approved" | "cancelled" | "rejected" | "discrepancy" | "resolved";
   summary: string;
   generatedOutput?: string;
   prompt?: string;
@@ -346,6 +372,13 @@ export interface TaskExecutionRecord {
   creditsCost?: number;
   tokensConsumed?: number;
   cancelledReason?: string;
+  feedback?: {
+    isApproved: boolean;
+    discrepancyReason?: string;
+    userNote?: string;
+    troubleshootReport?: TaskTroubleshootReport;
+    resolvedAt?: string;
+  };
   timestamp: string;
   isSimulated?: boolean;
 }
@@ -495,18 +528,25 @@ export interface GamifiedMilestone {
   tier: "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5";
   tierName: string;
   tierLevel: number;
-  category: "agents" | "prompts" | "workflows" | "governance" | "impact";
+  category: "agents" | "prompts" | "workflows" | "governance" | "impact" | "automations" | "revenue";
   iconName: string;
   currentValue: number;
   targetValue: number;
   metricLabel: string;
-  xpReward: number;
+  xpReward?: number;
   perkReward: string;
   perkIcon?: string;
   completed: boolean;
   claimed: boolean;
   unlockedAt?: string;
+  businessImpact?: string;
+  operationalCapability?: string;
+  isCompanyMilestone?: boolean;
+  isAutomationAchievement?: boolean;
+  isApprovedAutomationAchievement?: boolean;
 }
+
+export type CompanyMilestone = GamifiedMilestone;
 
 export interface PromptSnippet {
   id: string;
@@ -814,5 +854,77 @@ export interface MasterAccessSettings {
   detectedEnvironment: "google_ai_studio" | "standalone_web_app" | "client_custom_domain";
 }
 
+// ----------------------------------------------------
+// Approved Automations & Playbooks Vault
+// ----------------------------------------------------
 
+export type ApprovedAutomationCategory = 
+  | "workflow" 
+  | "automation" 
+  | "script" 
+  | "policy" 
+  | "playbook" 
+  | "email_template";
 
+export interface ApprovedAutomation {
+  id: string;
+  title: string;
+  description: string;
+  agentId: string;
+  agentName: string;
+  agentAvatar: string;
+  department: Department;
+  modelUsed: string;
+  sourcePrompt: string;
+  generatedContent: string;
+  suggestedActions: string[];
+  category: ApprovedAutomationCategory;
+  approvedAt: string;
+  status: "active" | "deployed" | "archived";
+  workflowId?: string; // If converted to a live studio workflow
+  estimatedHoursSaved: number;
+  tags: string[];
+  isBookmarked?: boolean;
+}
+
+// ----------------------------------------------------
+// Generated Reports & Executive Documents Storage
+// ----------------------------------------------------
+
+export type ReportCategory = 
+  | "Executive Briefing"
+  | "Financial & ROI Audit"
+  | "SRE & Incident Post-Mortem"
+  | "Client Proposal & Sales"
+  | "Operational Playbook & SOP"
+  | "Compliance & Security Review";
+
+export type ReportClassification = "Confidential" | "Internal" | "Executive Board" | "Client Facing";
+
+export interface GeneratedReportDocument {
+  id: string;
+  title: string;
+  category: ReportCategory;
+  classification: ReportClassification;
+  department: Department;
+  agentId: string;
+  agentName: string;
+  agentAvatar?: string;
+  modelUsed: string;
+  createdAt: string;
+  sourcePrompt: string;
+  content: string;
+  summary: string;
+  businessImpactUsd: number;
+  hoursSavedEstimated: number;
+  wordCount: number;
+  tags: string[];
+  isPinned?: boolean;
+  status: "final" | "draft" | "under_review";
+  keyTakeaways?: string[];
+  metricsHighlights?: {
+    label: string;
+    value: string;
+    trend?: string;
+  }[];
+}
