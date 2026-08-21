@@ -24,7 +24,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   RefreshCw,
-  Award
+  Award,
+  FileDown
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -45,6 +46,9 @@ import {
 } from "recharts";
 import Markdown from "react-markdown";
 import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
+import { ROIForecastSection } from "./ROIForecastSection";
+import { ROIReportPdfModal } from "./ROIReportPdfModal";
+import { ForecastSummaryData } from "../utils/pdfExport";
 
 interface ROIAnalyticsProps {
   agents: Agent[];
@@ -156,8 +160,10 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
   const [chartMetric, setChartMetric] = useState<"cumulative" | "breakdown" | "daily">("cumulative");
   const [troubleshootTask, setTroubleshootTask] = useState<TaskExecutionRecord | null>(null);
   const [isTroubleshootOpen, setIsTroubleshootOpen] = useState<boolean>(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<string>("all");
+  const [forecastSummaryData, setForecastSummaryData] = useState<ForecastSummaryData | null>(null);
 
   const blendedHourlyCost = 85; // $85/hr standard loaded engineer/SDR capacity
   
@@ -256,7 +262,7 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-slate-50 dark:bg-slate-950">
-      {/* HEADER WITH PERIOD SELECTOR */}
+      {/* HEADER WITH PERIOD SELECTOR & EXPORT PDF BUTTON */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -264,26 +270,39 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
             <span>Enterprise ROI & Telemetry Studio</span>
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time measurement of human toil reduction, agent efficiency trend lines, and quality verification.
+            Real-time measurement of human toil reduction, agent efficiency trend lines, and predictive growth modeling.
           </p>
         </div>
 
-        {/* Time Horizon Pills */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 self-start sm:self-auto shadow-2xs">
-          {(["7d", "30d", "90d", "1y"] as const).map((period) => (
-            <button
-              key={period}
-              type="button"
-              onClick={() => setTimeHorizon(period)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                timeHorizon === period
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              }`}
-            >
-              {period === "7d" ? "7 Days" : period === "30d" ? "30 Days" : period === "90d" ? "90 Days" : "1 Year"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          {/* Time Horizon Pills */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            {(["7d", "30d", "90d", "1y"] as const).map((period) => (
+              <button
+                key={period}
+                type="button"
+                onClick={() => setTimeHorizon(period)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  timeHorizon === period
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                {period === "7d" ? "7 Days" : period === "30d" ? "30 Days" : period === "90d" ? "90 Days" : "1 Year"}
+              </button>
+            ))}
+          </div>
+
+          {/* Export Report PDF Action Button */}
+          <button
+            id="btn-header-export-pdf"
+            type="button"
+            onClick={() => setIsPdfModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-sm shadow-emerald-500/20 flex items-center gap-1.5 border border-emerald-500/30 active:scale-95 transition-all"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>Export Report (PDF)</span>
+          </button>
         </div>
       </div>
 
@@ -342,6 +361,14 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
           </div>
         </div>
       </div>
+
+      {/* PREDICTIVE 'ROI FORECAST' SECTION WITH RECHARTS & SCENARIO ENGINE */}
+      <ROIForecastSection
+        agents={agents}
+        executionHistory={executionHistory}
+        onOpenPdfModal={() => setIsPdfModalOpen(true)}
+        onUpdateForecastData={(data) => setForecastSummaryData(data)}
+      />
 
       {/* PRIMARY RECHARTS SECTION: TREND LINES FOR HOURS SAVED OVER TIME */}
       <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
@@ -804,6 +831,18 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
         agents={agents}
         onTaskResolved={handleTaskResolved}
       />
+
+      {/* EXECUTIVE ROI & FORECAST PDF EXPORT MODAL */}
+      {forecastSummaryData && (
+        <ROIReportPdfModal
+          isOpen={isPdfModalOpen}
+          onClose={() => setIsPdfModalOpen(false)}
+          agents={agents}
+          executionHistory={executionHistory}
+          forecastSummaryData={forecastSummaryData}
+          timeHorizon={timeHorizon}
+        />
+      )}
     </div>
   );
 };

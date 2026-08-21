@@ -70,6 +70,7 @@ import { AgentTemplateModal } from "./components/AgentTemplateModal";
 import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
 import { QuickTaskModal } from "./components/QuickTaskModal";
 import { ProfileModal } from "./components/ProfileModal";
+import { PricingCheckoutModal } from "./components/PricingCheckoutModal";
 import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 
@@ -227,6 +228,7 @@ export default function App() {
   const [isQuickTaskOpen, setIsQuickTaskOpen] = useState(false);
   const [quickTaskAgentId, setQuickTaskAgentId] = useState<string | undefined>(undefined);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [showFocusHUD, setShowFocusHUD] = useState(true);
 
   // Auto-save feedback indicators
@@ -708,6 +710,64 @@ export default function App() {
     setActiveWorkflowId(remaining[0].id);
   };
 
+  const handleBatchDeleteWorkflows = (workflowIds: string[]) => {
+    const remaining = workflows.filter((w) => !workflowIds.includes(w.id));
+    if (remaining.length === 0) {
+      const defaultWf: Workflow = {
+        id: `wf-${Date.now()}`,
+        agentId: agents[0]?.id || "agent-1",
+        name: "Primary Enterprise Automation Pipeline",
+        description: "Default pipeline orchestration",
+        department: "Engineering",
+        isActive: true,
+        totalRuns: 0,
+        avgHoursSavedPerRun: 0.5,
+        nodes: [
+          {
+            id: `node-${Date.now()}-1`,
+            type: "trigger",
+            name: "Enterprise Event Ingestion",
+            description: "Listen for API webhooks and database triggers",
+            iconName: "Zap",
+            position: { x: 80, y: 160 },
+            config: { triggerType: "Webhook" },
+          },
+          {
+            id: `node-${Date.now()}-2`,
+            type: "ai_process",
+            name: "Gemini Reasoning Core",
+            description: "Analyze context and generate structured resolution",
+            iconName: "Sparkles",
+            position: { x: 340, y: 160 },
+            config: {
+              promptTemplate: "Analyze the input data and generate actionable remediation recommendations.",
+            },
+          },
+          {
+            id: `node-${Date.now()}-3`,
+            type: "action_output",
+            name: "Enterprise Webhook Dispatch",
+            description: "Send results to downstream channels",
+            iconName: "CheckCircle2",
+            position: { x: 600, y: 160 },
+            config: { actionTarget: "Enterprise API" },
+          },
+        ],
+        connections: [
+          { id: `c-1`, from: `node-${Date.now()}-1`, to: `node-${Date.now()}-2` },
+          { id: `c-2`, from: `node-${Date.now()}-2`, to: `node-${Date.now()}-3` },
+        ],
+      };
+      setWorkflows([defaultWf]);
+      setActiveWorkflowId(defaultWf.id);
+    } else {
+      setWorkflows(remaining);
+      if (!remaining.some((w) => w.id === activeWorkflowId)) {
+        setActiveWorkflowId(remaining[0].id);
+      }
+    }
+  };
+
   const handleRunTestWorkflow = (wf: Workflow) => {
     setActiveWorkflowId(wf.id);
     setCurrentTab("dispatcher");
@@ -1057,6 +1117,7 @@ export default function App() {
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenWhiteLabel={() => setCurrentTab("whitelabel")}
         onOpenMonetization={() => setCurrentTab("monetization")}
+        onOpenPricing={() => setIsPricingModalOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
         isAutoSaving={isAutoSaving}
         lastSavedTime={lastSavedTime}
@@ -1122,6 +1183,7 @@ export default function App() {
         {currentTab === "agents" && (
           <AgentRoster
             agents={agents}
+            workflows={workflows}
             models={models}
             onCreateAgent={() => {
               setEditingAgent(null);
@@ -1185,6 +1247,7 @@ export default function App() {
             onCreateNewWorkflow={handleCreateNewWorkflow}
             onDuplicateWorkflow={handleDuplicateWorkflow}
             onDeleteWorkflow={handleDeleteWorkflow}
+            onBatchDeleteWorkflows={handleBatchDeleteWorkflows}
             onRunTestWorkflow={handleRunTestWorkflow}
             onRewardNodeAdded={() => addXpAndCheckLevel(50)}
             isMasterDeveloper={isMasterDeveloper}
@@ -1431,6 +1494,18 @@ export default function App() {
         }}
         onResetToCleanSlate={handleResetToCleanSlate}
         onClearExecutionHistory={handleClearExecutionHistory}
+      />
+
+      {/* Modal: Pricing & Stripe Subscription Checkout */}
+      <PricingCheckoutModal
+        isOpen={isPricingModalOpen}
+        onClose={() => setIsPricingModalOpen(false)}
+        customerEmail={developerProfile?.developerEmail || "customer@enterprise.com"}
+        tenantName={whiteLabelConfig?.companyName || "Enterprise Team"}
+        onSuccessUpgrade={(planId) => {
+          addXpAndCheckLevel(500, 1.5);
+          fireCelebration();
+        }}
       />
     </div>
   );

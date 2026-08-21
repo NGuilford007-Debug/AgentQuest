@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Agent, AgentTemplate, AiModel, Department } from "../types";
+import { Agent, AgentTemplate, AiModel, Department, Workflow } from "../types";
 import { AGENT_TEMPLATES } from "../data/agentTemplates";
+import { BatchDeleteConfirmationModal } from "./BatchDeleteConfirmationModal";
 import { 
   Bot, 
   Plus, 
@@ -35,6 +36,7 @@ import { DynamicIcon } from "./DynamicIcon";
 
 interface AgentRosterProps {
   agents: Agent[];
+  workflows?: Workflow[];
   models?: AiModel[];
   onCreateAgent: () => void;
   onEditAgent: (agent: Agent) => void;
@@ -55,6 +57,7 @@ interface AgentRosterProps {
 
 export const AgentRoster: React.FC<AgentRosterProps> = ({
   agents,
+  workflows = [],
   models = [],
   onCreateAgent,
   onEditAgent,
@@ -760,53 +763,15 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
         })}
       </div>
 
-      {/* BULK DELETE CONFIRMATION MODAL */}
-      {showBulkDeleteModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full overflow-hidden p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-200 dark:border-rose-800 shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  Delete {selectedAgentIds.length} Selected Agents?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  This action will permanently delete these agents from your enterprise fleet.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto space-y-1.5">
-              {selectedAgentsList.map((a) => (
-                <div key={a.id} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
-                  <img src={a.avatar} alt={a.name} className="w-5 h-5 rounded-md object-cover" />
-                  <span className="font-bold">{a.name}</span>
-                  <span className="text-slate-400 text-[10px]">({a.department})</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setShowBulkDeleteModal(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmBulkDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 transition-all"
-              >
-                Confirm Delete ({selectedAgentIds.length})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* BATCH DELETE CONFIRMATION MODAL WITH DETAILED AUTOMATION IMPACT ANALYSIS */}
+      <BatchDeleteConfirmationModal
+        isOpen={showBulkDeleteModal}
+        type="agents"
+        selectedAgents={selectedAgentsList}
+        allWorkflows={workflows}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleConfirmBulkDelete}
+      />
 
       {/* READ-ONLY CLIENT BLUEPRINT MODAL */}
       {clientBlueprintModalAgent && (

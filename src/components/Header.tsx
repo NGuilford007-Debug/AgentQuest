@@ -23,6 +23,7 @@ import {
   Unlock, 
   Shield, 
   Coins,
+  CreditCard,
   User,
   RotateCcw,
   Settings
@@ -41,6 +42,7 @@ interface HeaderProps {
   onOpenExport?: () => void;
   onOpenWhiteLabel?: () => void;
   onOpenMonetization?: () => void;
+  onOpenPricing?: () => void;
   onOpenProfileModal?: () => void;
   isAutoSaving?: boolean;
   lastSavedTime?: string;
@@ -61,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExport,
   onOpenWhiteLabel,
   onOpenMonetization,
+  onOpenPricing,
   onOpenProfileModal,
   isAutoSaving = false,
   lastSavedTime,
@@ -311,6 +314,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden md:inline">Monetization</span>
+            </button>
+          )}
+
+          {/* Pricing & Subscription Plans Quick Button */}
+          {onOpenPricing && (
+            <button
+              id="btn-header-pricing"
+              onClick={onOpenPricing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-all shadow-xs active:scale-95"
+              title="View Subscription Plans, Fleet Tiers & Stripe Checkout"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Pricing & Plans</span>
             </button>
           )}
 

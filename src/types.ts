@@ -130,6 +130,28 @@ export interface ModelBenchmarkResult {
   timestamp: string;
 }
 
+export interface AgentMonetizationConfig {
+  isMonetized: boolean;
+  pricingModel: "subscription" | "pay_per_query" | "usage_tokens" | "fixed_retainer";
+  priceAmount: number; // e.g. 49.00 ($/mo) or 0.50 ($/query)
+  billingInterval: "monthly" | "yearly" | "per_request" | "per_1k_tokens" | "one_time";
+  currency: "USD" | "EUR" | "GBP" | "CAD";
+  trialQueriesCount: number; // e.g. 3 free queries before requiring payment
+  stripeProductId: string; // e.g. "prod_agent_sentryops_live"
+  stripePriceId: string; // e.g. "price_1NxyZa2eZvKYlo2C..."
+  stripePaymentLink: string; // e.g. "https://buy.stripe.com/test_agent_paywall_..."
+  clientStripeConnectAccountId?: string; // e.g. "acct_1NxyZa2eZvKYlo2C"
+  clientRevenueSharePercent: number; // e.g. 90 (meaning 90% goes to client, 10% platform fee)
+  totalRevenueEarned: number; // cumulative gross USD
+  totalPaidQueriesProcessed: number;
+  activePayingSubscribersCount: number;
+  publicCheckoutTitle?: string;
+  publicOfferingDescription?: string;
+  customDomainPaywallUrl?: string;
+  paywallEnabled: boolean;
+  featuresIncluded?: string[];
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -155,6 +177,7 @@ export interface Agent {
     avgLatencySec: number;
     xpGenerated: number;
   };
+  monetization?: AgentMonetizationConfig;
   createdAt: string;
 }
 
@@ -888,8 +911,71 @@ export interface ApprovedAutomation {
 }
 
 // ----------------------------------------------------
-// Generated Reports & Executive Documents Storage
+// Client Agent Monetization via Stripe Connect Types
 // ----------------------------------------------------
+
+export interface ClientStripeConnectProfile {
+  tenantId: string;
+  tenantName: string;
+  isStripeConnected: boolean;
+  stripeAccountId: string; // e.g. "acct_1NxyZa2eZvKYlo2C"
+  stripeAccountEmail: string;
+  accountHolderName: string;
+  bankName: string;
+  bankAccountLast4: string;
+  accountType: "express" | "standard" | "custom";
+  status: "verified" | "pending_kyc" | "action_required" | "restricted";
+  availableStripeBalance: number;
+  pendingStripeBalance: number;
+  totalAgentGrossRevenue: number;
+  totalPlatformFeesPaid: number;
+  totalClientNetEarnings: number;
+  lifetimePayoutsTransferred: number;
+  defaultPayoutCadence: "instant" | "daily" | "weekly" | "monthly";
+  currency: "USD" | "EUR" | "GBP" | "CAD";
+  lastPayoutDate?: string;
+  lastPayoutAmount?: number;
+  customDomainPaywallUrl?: string;
+}
+
+export interface ClientAgentTransaction {
+  id: string;
+  timestamp: string;
+  tenantId: string;
+  tenantName: string;
+  agentId: string;
+  agentName: string;
+  agentAvatar: string;
+  department: Department;
+  customerName: string;
+  customerEmail: string;
+  customerCompany?: string;
+  pricingModel: "subscription" | "pay_per_query" | "usage_tokens" | "fixed_retainer";
+  grossAmount: number; // in USD
+  platformFeeAmount: number; // e.g. 10%
+  clientNetAmount: number; // e.g. 90%
+  stripePaymentIntentId: string;
+  stripeReceiptUrl?: string;
+  status: "succeeded" | "processing" | "refunded";
+  querySnippet?: string;
+  apiTokensUsed?: number;
+  billingPeriod?: string;
+}
+
+export interface ClientPayoutRecord {
+  id: string;
+  payoutId: string; // e.g. "po_1NxyZa2eZvKYlo2C..."
+  tenantId: string;
+  timestamp: string;
+  amount: number;
+  currency: string;
+  bankName: string;
+  bankAccountLast4: string;
+  status: "paid" | "in_transit" | "pending";
+  arrivalDate: string;
+  stripeTransferReference: string;
+}
+
 
 export type ReportCategory = 
   | "Executive Briefing"

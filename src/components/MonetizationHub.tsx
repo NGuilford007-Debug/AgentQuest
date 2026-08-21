@@ -29,18 +29,24 @@ import {
   FileText,
   PieChart,
   Percent,
-  Coins
+  Coins,
+  Bot
 } from "lucide-react";
 import { 
   DeveloperCompanyProfile, 
   RateCardConfig, 
   TenantBillingRecord, 
   FinancialMetricSnapshot,
-  TenantProfile
+  TenantProfile,
+  Agent,
+  ClientStripeConnectProfile,
+  ClientAgentTransaction,
+  ClientPayoutRecord
 } from "../types";
 import { ProjectedRevenueDashboard } from "./ProjectedRevenueDashboard";
 import { StripeFinancialsHub } from "./StripeFinancialsHub";
 import { WebAppDeploymentModal } from "./WebAppDeploymentModal";
+import { ClientAgentMonetizationHub } from "./ClientAgentMonetizationHub";
 
 interface MonetizationHubProps {
   developerProfile: DeveloperCompanyProfile;
@@ -51,6 +57,14 @@ interface MonetizationHubProps {
   onUpdateRateCard: (rateCard: RateCardConfig) => void;
   onUpdateTenantsBilling: (tenants: TenantBillingRecord[]) => void;
   tenants: TenantProfile[];
+  agents?: Agent[];
+  clientStripeProfiles?: ClientStripeConnectProfile[];
+  clientTransactions?: ClientAgentTransaction[];
+  clientPayouts?: ClientPayoutRecord[];
+  onUpdateAgent?: (updatedAgent: Agent) => void;
+  onAddTransaction?: (transaction: ClientAgentTransaction) => void;
+  onAddPayout?: (payout: ClientPayoutRecord) => void;
+  onUpdateClientProfile?: (profile: ClientStripeConnectProfile) => void;
 }
 
 export const MonetizationHub: React.FC<MonetizationHubProps> = ({
@@ -62,8 +76,16 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
   onUpdateRateCard,
   onUpdateTenantsBilling,
   tenants,
+  agents = [],
+  clientStripeProfiles = [],
+  clientTransactions = [],
+  clientPayouts = [],
+  onUpdateAgent = () => {},
+  onAddTransaction = () => {},
+  onAddPayout = () => {},
+  onUpdateClientProfile = () => {},
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<"overview" | "stripe_financials" | "projections" | "ratecard" | "tenants" | "simulator" | "developer_shield">("overview");
+  const [activeSubTab, setActiveSubTab] = useState<"overview" | "client_agents" | "stripe_financials" | "projections" | "ratecard" | "tenants" | "simulator" | "developer_shield">("overview");
   const [isWebAppModalOpen, setIsWebAppModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState<string>("all");
@@ -275,6 +297,21 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveSubTab("client_agents")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === "client_agents"
+              ? "bg-emerald-600 text-white shadow-sm shadow-emerald-500/20"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5">
+            <span>Client Agent Sales & Stripe</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold">90% PAYOUT</span>
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab("stripe_financials")}
           className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeSubTab === "stripe_financials"
@@ -435,6 +472,35 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Client Agent Monetization Stripe Spotlight Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white border border-emerald-500/30 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-slate-950 shadow-md">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-white">
+                    Client Agent Monetization & Stripe Connect
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">
+                    90% Direct Payout
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Clients can monetize agents via monthly subscriptions or pay-per-query Stripe paywalls with automated daily bank payouts.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveSubTab("client_agents")}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all shrink-0 self-start md:self-auto"
+            >
+              <span>Open Client Agent Sales Hub</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Projected Revenue Recharts Teaser Callout */}
@@ -688,6 +754,23 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1.1: CLIENT AGENT MONETIZATION & STRIPE CONNECT HUB */}
+      {/* ========================================================================= */}
+      {activeSubTab === "client_agents" && (
+        <ClientAgentMonetizationHub
+          agents={agents}
+          tenants={tenants}
+          clientStripeProfiles={clientStripeProfiles}
+          clientTransactions={clientTransactions}
+          clientPayouts={clientPayouts}
+          onUpdateAgent={onUpdateAgent}
+          onAddTransaction={onAddTransaction}
+          onAddPayout={onAddPayout}
+          onUpdateClientProfile={onUpdateClientProfile}
+        />
       )}
 
       {/* ========================================================================= */}

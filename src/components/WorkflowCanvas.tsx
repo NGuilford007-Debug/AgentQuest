@@ -13,6 +13,7 @@ import {
 import { PALETTE_TEMPLATES } from "../data/initialData";
 import { INITIAL_ASSET_ITEMS } from "../data/initialAssets";
 import { AssetGallery } from "./AssetGallery";
+import { BatchDeleteConfirmationModal } from "./BatchDeleteConfirmationModal";
 import { 
   Plus, 
   Trash2, 
@@ -72,6 +73,7 @@ interface WorkflowCanvasProps {
   onCreateNewWorkflow?: () => void;
   onDuplicateWorkflow?: (wf: Workflow) => void;
   onDeleteWorkflow?: (id: string) => void;
+  onBatchDeleteWorkflows?: (workflowIds: string[]) => void;
   onRunTestWorkflow: (workflow: Workflow) => void;
   onRewardNodeAdded?: () => void;
   isMasterDeveloper?: boolean;
@@ -88,6 +90,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onCreateNewWorkflow,
   onDuplicateWorkflow,
   onDeleteWorkflow,
+  onBatchDeleteWorkflows,
   onRunTestWorkflow,
   onRewardNodeAdded,
   isMasterDeveloper = true,
@@ -99,9 +102,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Single and Multi-selection state for Batch Node Edit
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [showBatchDeleteNodesModal, setShowBatchDeleteNodesModal] = useState<boolean>(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(workflow.agentId || (agents[0]?.id || ""));
   const [workflowName, setWorkflowName] = useState<string>(workflow.name);
   const [workflowDesc, setWorkflowDesc] = useState<string>(workflow.description);
+
+  // Workflow Pipeline Fleet Manager & Batch Delete state
+  const [showPipelineManagerModal, setShowPipelineManagerModal] = useState<boolean>(false);
+  const [selectedWorkflowIdsForBatch, setSelectedWorkflowIdsForBatch] = useState<string[]>([]);
+  const [showBatchDeleteWorkflowsModal, setShowBatchDeleteWorkflowsModal] = useState<boolean>(false);
+  const [pipelineSearch, setPipelineSearch] = useState<string>("");
   
   // Dragging & Connecting states
   const [draggedTemplate, setDraggedTemplate] = useState<any | null>(null);
@@ -358,12 +368,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Batch Operations
   const handleBatchDelete = () => {
     if (selectedNodeIds.length === 0) return;
+    setShowBatchDeleteNodesModal(true);
+  };
+
+  const handleConfirmBatchDeleteNodes = () => {
+    if (selectedNodeIds.length === 0) return;
     setNodes((prev) => prev.filter((n) => !selectedNodeIds.includes(n.id)));
     setConnections((prev) =>
       prev.filter((c) => !selectedNodeIds.includes(c.from) && !selectedNodeIds.includes(c.to))
     );
     setSelectedNodeIds([]);
     setSelectedNodeId(null);
+    setShowBatchDeleteNodesModal(false);
+  };
+
+  const handleConfirmBatchDeleteWorkflows = () => {
+    if (selectedWorkflowIdsForBatch.length === 0) return;
+    if (onBatchDeleteWorkflows) {
+      onBatchDeleteWorkflows(selectedWorkflowIdsForBatch);
+    } else if (onDeleteWorkflow) {
+      selectedWorkflowIdsForBatch.forEach((id) => onDeleteWorkflow(id));
+    }
+    setSelectedWorkflowIdsForBatch([]);
+    setShowBatchDeleteWorkflowsModal(false);
   };
 
   const handleBatchDuplicate = () => {
@@ -726,7 +753,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between z-20 shrink-0">
         <div className="flex items-center gap-3">
           {/* Workflow Selector */}
-          {workflows.length > 1 && onSelectWorkflow && (
+          {workflows.length > 0 && onSelectWorkflow && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Workflow:</span>
               <select
@@ -741,6 +768,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   </option>
                 ))}
               </select>
+
+              <button
+                type="button"
+                id="btn-manage-pipeline-fleet"
+                onClick={() => setShowPipelineManagerModal(true)}
+                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1 transition-colors"
+                title="Manage All Pipelines & Bulk Operations"
+              >
+                <WorkflowIcon className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="hidden sm:inline">Pipelines</span>
+                <span className="text-[10px] px-1 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold">
+                  {workflows.length}
+                </span>
+              </button>
             </div>
           )}
 
@@ -1895,6 +1936,196 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </div>
         </div>
       )}
+
+      {/* PIPELINE FLEET MANAGER MODAL (WITH WORKFLOW BATCH ACTIONS) */}
+      {showPipelineManagerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-800">
+                  <WorkflowIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Workflow Pipelines Fleet Manager</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 font-bold">
+                      {workflows.length} Total Pipelines
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Search, inspect execution metrics, multi-select, and execute batch operations across all pipelines.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPipelineManagerModal(false)}
+                className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Filter & Batch Actions Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+              <div className="relative w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="Filter pipelines by name or department..."
+                  value={pipelineSearch}
+                  onChange={(e) => setPipelineSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium focus:ring-2 focus:ring-indigo-500"
+                />
+                <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedWorkflowIdsForBatch.length === workflows.length) {
+                      setSelectedWorkflowIdsForBatch([]);
+                    } else {
+                      setSelectedWorkflowIdsForBatch(workflows.map((w) => w.id));
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {selectedWorkflowIdsForBatch.length === workflows.length ? "Deselect All" : "Select All"}
+                </button>
+
+                {selectedWorkflowIdsForBatch.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchDeleteWorkflowsModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 flex items-center gap-1.5 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Batch Delete ({selectedWorkflowIdsForBatch.length})</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Pipelines List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {workflows
+                .filter((w) => {
+                  if (!pipelineSearch.trim()) return true;
+                  const q = pipelineSearch.toLowerCase();
+                  return w.name.toLowerCase().includes(q) || w.department.toLowerCase().includes(q) || w.description.toLowerCase().includes(q);
+                })
+                .map((wf) => {
+                  const isSelected = selectedWorkflowIdsForBatch.includes(wf.id);
+                  const isCurrent = wf.id === workflow.id;
+                  const assignedAgent = agents.find((a) => a.id === wf.agentId);
+
+                  return (
+                    <div
+                      key={wf.id}
+                      onClick={() => {
+                        setSelectedWorkflowIdsForBatch((prev) =>
+                          prev.includes(wf.id) ? prev.filter((id) => id !== wf.id) : [...prev, wf.id]
+                        );
+                      }}
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 shadow-sm"
+                          : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedWorkflowIdsForBatch((prev) =>
+                              prev.includes(wf.id) ? prev.filter((id) => id !== wf.id) : [...prev, wf.id]
+                            );
+                          }}
+                          className="text-slate-400 hover:text-indigo-600"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
+                          <WorkflowIcon className="w-4 h-4" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
+                              {wf.name}
+                            </span>
+                            {isCurrent && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-indigo-600 text-white">
+                                Editing
+                              </span>
+                            )}
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${wf.isActive ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-slate-200 dark:bg-slate-700 text-slate-500"}`}>
+                              {wf.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                            {wf.department} • {wf.nodes?.length || 0} nodes • Executing Agent: <span className="font-semibold text-slate-600 dark:text-slate-300">{assignedAgent?.name || "Unassigned"}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right hidden sm:block">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                            {wf.totalRuns || 0} runs
+                          </span>
+                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                            ~{((wf.totalRuns || 0) * (wf.avgHoursSavedPerRun || 0.5)).toFixed(1)}h automated
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectWorkflow) onSelectWorkflow(wf.id);
+                            setShowPipelineManagerModal(false);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
+                        >
+                          Open Canvas
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH DELETE WORKFLOWS CONFIRMATION MODAL */}
+      <BatchDeleteConfirmationModal
+        isOpen={showBatchDeleteWorkflowsModal}
+        type="workflows"
+        selectedWorkflows={workflows.filter((w) => selectedWorkflowIdsForBatch.includes(w.id))}
+        allAgents={agents}
+        onClose={() => setShowBatchDeleteWorkflowsModal(false)}
+        onConfirm={handleConfirmBatchDeleteWorkflows}
+      />
+
+      {/* BATCH DELETE CANVAS NODES CONFIRMATION MODAL */}
+      <BatchDeleteConfirmationModal
+        isOpen={showBatchDeleteNodesModal}
+        type="nodes"
+        selectedNodes={nodes.filter((n) => selectedNodeIds.includes(n.id))}
+        allConnections={connections}
+        currentWorkflowName={workflowName}
+        onClose={() => setShowBatchDeleteNodesModal(false)}
+        onConfirm={handleConfirmBatchDeleteNodes}
+      />
 
       {/* AI Workflow Architect Prompt Modal */}
       {showAiModal && (

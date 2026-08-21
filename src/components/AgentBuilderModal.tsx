@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Agent, AgentTemplate, AiModel, AutonomyLevel, Department, PermissionScope } from "../types";
+import { Agent, AgentTemplate, AiModel, AutonomyLevel, Department, PermissionScope, AgentMonetizationConfig } from "../types";
 import { AVAILABLE_PERMISSIONS, INITIAL_MODELS } from "../data/initialData";
 import { AGENT_TEMPLATES, PROMPT_SNIPPETS, generateAutoSuggestedPrompt, evaluatePromptQuality } from "../data/agentTemplates";
 import { 
@@ -26,7 +26,11 @@ import {
   Activity,
   Lightbulb,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  DollarSign,
+  CreditCard,
+  Wallet,
+  Globe
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -91,13 +95,35 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
       "You are an enterprise AI Agent. Analyze incoming task inputs accurately, adhere strictly to security policies, extract structured parameters, and draft high-fidelity outputs."
   );
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
-  const [activeTab, setActiveTab] = useState<"identity" | "model" | "permissions" | "team">("identity");
+  const [activeTab, setActiveTab] = useState<"identity" | "model" | "permissions" | "team" | "monetization">("identity");
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [permissionSearchQuery, setPermissionSearchQuery] = useState("");
   const [selectedPermCategory, setSelectedPermCategory] = useState<string>("all");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [promptTips, setPromptTips] = useState<string[]>([]);
   const [showPromptSnippets, setShowPromptSnippets] = useState(false);
+
+  // Monetization & Stripe State
+  const [isMonetized, setIsMonetized] = useState<boolean>(initialAgent?.monetization?.isMonetized ?? false);
+  const [pricingModel, setPricingModel] = useState<AgentMonetizationConfig["pricingModel"]>(
+    initialAgent?.monetization?.pricingModel || "subscription"
+  );
+  const [priceAmount, setPriceAmount] = useState<number>(initialAgent?.monetization?.priceAmount ?? 149);
+  const [billingInterval, setBillingInterval] = useState<AgentMonetizationConfig["billingInterval"]>(
+    initialAgent?.monetization?.billingInterval || "monthly"
+  );
+  const [trialQueriesCount, setTrialQueriesCount] = useState<number>(
+    initialAgent?.monetization?.trialQueriesCount ?? 5
+  );
+  const [publicCheckoutTitle, setPublicCheckoutTitle] = useState<string>(
+    initialAgent?.monetization?.publicCheckoutTitle || initialAgent?.name || "Autonomous AI Agent Service"
+  );
+  const [publicOfferingDescription, setPublicOfferingDescription] = useState<string>(
+    initialAgent?.monetization?.publicOfferingDescription || initialAgent?.description || "Enterprise AI automation endpoint powered by Stripe Connect."
+  );
+  const [paywallEnabled, setPaywallEnabled] = useState<boolean>(
+    initialAgent?.monetization?.paywallEnabled ?? true
+  );
 
   const promptQuality = useMemo(() => {
     return evaluatePromptQuality(systemPrompt);
@@ -188,8 +214,39 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const agentId = initialAgent?.id || `agent-${Date.now()}`;
+    const stripeProdId = initialAgent?.monetization?.stripeProductId || `prod_${agentId.replace(/-/g, "_")}`;
+    const stripePriceId = initialAgent?.monetization?.stripePriceId || `price_${Date.now()}`;
+    const stripePaymentLink = initialAgent?.monetization?.stripePaymentLink || `https://buy.stripe.com/test_${agentId}_${priceAmount}`;
+
+    const monetizationConfig: AgentMonetizationConfig | undefined = isMonetized ? {
+      isMonetized: true,
+      pricingModel,
+      priceAmount,
+      billingInterval,
+      currency: "USD",
+      trialQueriesCount,
+      stripeProductId: stripeProdId,
+      stripePriceId: stripePriceId,
+      stripePaymentLink,
+      clientStripeConnectAccountId: initialAgent?.monetization?.clientStripeConnectAccountId || "acct_client_apex_01",
+      clientRevenueSharePercent: 90,
+      totalRevenueEarned: initialAgent?.monetization?.totalRevenueEarned || 0,
+      totalPaidQueriesProcessed: initialAgent?.monetization?.totalPaidQueriesProcessed || 0,
+      activePayingSubscribersCount: initialAgent?.monetization?.activePayingSubscribersCount || 0,
+      publicCheckoutTitle,
+      publicOfferingDescription,
+      customDomainPaywallUrl: `https://agents.apexenterprise.ai/${agentId}`,
+      paywallEnabled,
+      featuresIncluded: initialAgent?.monetization?.featuresIncluded || [
+        "24/7 Guaranteed Execution SLA",
+        "Direct API & Webhook Access",
+        "Context Memory & Encryption"
+      ]
+    } : (initialAgent?.monetization ? { ...initialAgent.monetization, isMonetized: false } : undefined);
+
     const newAgent: Agent = {
-      id: initialAgent?.id || `agent-${Date.now()}`,
+      id: agentId,
       name,
       role,
       avatar,
@@ -214,6 +271,7 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
         xpGenerated: 0,
       },
       createdAt: initialAgent?.createdAt || new Date().toISOString().split("T")[0],
+      monetization: monetizationConfig,
     };
     onSaveAgent(newAgent);
     onClose();
@@ -316,6 +374,12 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
             { id: "model", label: "2. Model & Autonomy", icon: Sliders },
             { id: "permissions", label: "3. Access Permissions", icon: ShieldCheck, badge: `${selectedPermissions.length}` },
             { id: "team", label: "4. Assignment & Team", icon: Users },
+            { 
+              id: "monetization", 
+              label: "5. Stripe Monetization", 
+              icon: DollarSign, 
+              badge: isMonetized ? `$${priceAmount}` : undefined 
+            },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -333,7 +397,11 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
                 <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
                 {tab.badge && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px]">
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    tab.id === "monetization" 
+                      ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                      : "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                  }`}>
                     {tab.badge}
                   </span>
                 )}
@@ -894,6 +962,172 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
             </div>
           )}
 
+          {/* TAB 5: STRIPE MONETIZATION & PRICING */}
+          {activeTab === "monetization" && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-indigo-50 dark:from-emerald-950/30 dark:to-indigo-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Enable Stripe Paywall & Monetization
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    Allow external clients to subscribe to this agent or purchase pay-per-task access with 90% direct payout.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isMonetized}
+                  onChange={(e) => setIsMonetized(e.target.checked)}
+                  className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                />
+              </div>
+
+              {isMonetized && (
+                <div className="space-y-4">
+                  {/* Pricing Model */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Monetization Model
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        {
+                          id: "subscription",
+                          title: "Monthly Subscription",
+                          desc: "Recurring MRR for continuous access",
+                          example: "$149 / month",
+                        },
+                        {
+                          id: "pay_per_query",
+                          title: "Pay-Per-Task / Query",
+                          desc: "Micro-charge per completed execution",
+                          example: "$0.75 / task query",
+                        },
+                        {
+                          id: "fixed_retainer",
+                          title: "Enterprise Retainer",
+                          desc: "Fixed SLA package with priority limits",
+                          example: "$499 / month",
+                        },
+                      ].map((modelOpt) => (
+                        <div
+                          key={modelOpt.id}
+                          onClick={() => {
+                            setPricingModel(modelOpt.id as any);
+                            if (modelOpt.id === "subscription") setBillingInterval("monthly");
+                            else if (modelOpt.id === "pay_per_query") setBillingInterval("per_request");
+                            else setBillingInterval("monthly");
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                            pricingModel === modelOpt.id
+                              ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40 ring-1 ring-emerald-500"
+                              : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                          }`}
+                        >
+                          <div className="font-bold text-xs text-slate-900 dark:text-white">
+                            {modelOpt.title}
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">{modelOpt.desc}</div>
+                          <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-2">
+                            {modelOpt.example}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Price Rate & Free Trial */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Price Rate ($ USD) *
+                      </label>
+                      <div className="relative">
+                        <DollarSign className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.10"
+                          value={priceAmount}
+                          onChange={(e) => setPriceAmount(Number(e.target.value))}
+                          className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Client receives 90% ($
+                        {(priceAmount * 0.9).toFixed(2)}) directly to bank via Stripe Connect.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Free Trial Queries Before Paywall
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={trialQueriesCount}
+                        onChange={(e) => setTrialQueriesCount(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Prospective buyers can test {trialQueriesCount} queries for free before checkout triggers.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Public Storefront Copy */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Public Offering Headline
+                      </label>
+                      <input
+                        type="text"
+                        value={publicCheckoutTitle}
+                        onChange={(e) => setPublicCheckoutTitle(e.target.value)}
+                        placeholder="e.g. 24/7 DevOps Incident Triage Sentinel"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Public Description / SLA Guarantee
+                      </label>
+                      <input
+                        type="text"
+                        value={publicOfferingDescription}
+                        onChange={(e) => setPublicOfferingDescription(e.target.value)}
+                        placeholder="e.g. Instant triage across Datadog, Slack, and Jira"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Enforce Stripe Paywall on Public Endpoint
+                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={paywallEnabled}
+                        onChange={(e) => setPaywallEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer Action Buttons */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <button
@@ -904,13 +1138,14 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
               Cancel
             </button>
             <div className="flex items-center gap-2">
-              {activeTab !== "team" ? (
+              {activeTab !== "monetization" ? (
                 <button
                   type="button"
                   onClick={() => {
                     if (activeTab === "identity") setActiveTab("model");
                     else if (activeTab === "model") setActiveTab("permissions");
                     else if (activeTab === "permissions") setActiveTab("team");
+                    else if (activeTab === "team") setActiveTab("monetization");
                   }}
                   className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
@@ -919,9 +1154,10 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
               ) : (
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 active:scale-95 transition-all"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5"
                 >
-                  {initialAgent ? "Save Changes" : "Deploy & Assign Agent"}
+                  <DollarSign className="w-3.5 h-3.5" />
+                  {initialAgent ? "Save Agent & Monetization" : "Deploy Monetized Agent"}
                 </button>
               )}
             </div>

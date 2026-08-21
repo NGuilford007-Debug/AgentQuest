@@ -242,14 +242,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "monetization",
-      label: "Developer Monetization",
+      label: isMasterDeveloper ? "Monetization & Stripe Hub" : "Agent Monetization & Payouts",
       shortLabel: "Revenue",
       category: "enterprise",
       icon: DollarSign,
       badge: "Stripe",
       badgeColor: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold",
-      description: "Stripe Payables & Receivables, margins & forecasts",
-      enabled: isMasterDeveloper,
+      description: "Stripe Payables, agent sales, client payouts & forecasts",
+      enabled: true,
     },
   ];
 
