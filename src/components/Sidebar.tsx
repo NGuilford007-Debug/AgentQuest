@@ -21,11 +21,16 @@ import {
   Lock,
   Unlock,
   LayoutDashboard,
-  FileText
+  FileText,
+  MessageSquareCode,
+  Image as ImageIcon,
+  Wand2
 } from "lucide-react";
 import { WhiteLabelConfig } from "../types";
 
 export type NavTab = 
+  | "chat"
+  | "imagestudio"
   | "dashboard"
   | "agents" 
   | "health"
@@ -92,10 +97,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const toggles = whiteLabelConfig?.featureToggles;
 
   const allNavItems: NavItemConfig[] = [
+    // FLAGSHIP CHAT & IMAGE STUDIO
+    {
+      id: "chat",
+      label: "Smart Agent Chat",
+      shortLabel: "AI Chat",
+      category: "core",
+      icon: MessageSquareCode,
+      badge: "Main View",
+      badgeColor: "bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-bold",
+      description: "Auto & manual multi-agent conversational workspace",
+      enabled: true,
+    },
+    {
+      id: "imagestudio",
+      label: "AI Image Studio",
+      shortLabel: "Image Studio",
+      category: "core",
+      icon: ImageIcon,
+      badge: "Imagen 3",
+      badgeColor: "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold",
+      description: "High-resolution visuals, concepts & apparel designs",
+      enabled: true,
+    },
+
     // CORE FLEET & EXECUTION
     {
       id: "dashboard",
-      label: "Business Dashboard",
+      label: "Executive Dashboard",
       shortLabel: "Dashboard",
       category: "core",
       icon: LayoutDashboard,
@@ -175,13 +204,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "assets",
-      label: "Asset Gallery & Gen",
-      shortLabel: "Assets",
+      label: "Media & Asset Library",
+      shortLabel: "Media",
       category: "tools",
       icon: Layers,
       badge: totalAssetsCount > 0 ? `${totalAssetsCount} Items` : null,
       badgeColor: "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 font-bold",
-      description: "Apparel shirt designs, vector kits & specs",
+      description: "Browse generated images, video concepts & vector assets",
       enabled: toggles ? toggles.enableAssetGallery : true,
     },
     {

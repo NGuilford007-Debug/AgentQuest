@@ -30,9 +30,12 @@ import {
   XCircle,
   Coins,
   Ban,
-  X
+  X,
+  Eraser,
+  Trash2
 } from "lucide-react";
 import { fireCelebration } from "../utils/confetti";
+import { AiTextEnhancer } from "./AiTextEnhancer";
 
 interface QuickTaskModalProps {
   isOpen: boolean;
@@ -192,6 +195,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
     setAuditLogs([]);
 
     const startTime = Date.now();
+    const effectiveContext = (showExtraContext && extraContext && extraContext.trim()) ? extraContext.trim() : undefined;
 
     try {
       const response = await fetch("/api/gemini/prompt-agent", {
@@ -202,7 +206,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
           agentId: currentAgent.id,
           agent: currentAgent,
           prompt: finalPrompt,
-          context: extraContext,
+          context: effectiveContext,
           temperature: currentAgent.temperature,
           permissions: currentAgent.permissions,
         }),
@@ -479,9 +483,33 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
                 <Sparkles className="w-4 h-4 text-blue-600" />
                 <span>What do you need done?</span>
               </label>
-              <span className="text-[11px] text-slate-400">
-                Press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono">⌘ + Enter</kbd> to run
-              </span>
+              
+              <div className="flex items-center gap-2">
+                <AiTextEnhancer
+                  value={prompt}
+                  onApply={(enhanced) => setPrompt(enhanced)}
+                  contextType="prompt"
+                />
+
+                {(prompt || extraContext) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrompt("");
+                      setExtraContext("");
+                      setShowExtraContext(false);
+                    }}
+                    className="text-[11px] font-semibold text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40"
+                    title="Clear prompt & context for clean generation"
+                  >
+                    <Eraser className="w-3 h-3" />
+                    <span>Clean Slate</span>
+                  </button>
+                )}
+                <span className="text-[11px] text-slate-400 hidden sm:inline">
+                  Press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono">⌘ + Enter</kbd> to run
+                </span>
+              </div>
             </div>
 
             <div className="relative">
@@ -526,14 +554,27 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
 
             {/* Toggle Extra Context / Logs */}
             <div>
-              <button
-                type="button"
-                onClick={() => setShowExtraContext(!showExtraContext)}
-                className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline pt-1"
-              >
-                {showExtraContext ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                <span>{showExtraContext ? "Hide Extra Context / Payload" : "+ Add Raw Payload / Stack Trace / Doc Link"}</span>
-              </button>
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowExtraContext(!showExtraContext)}
+                  className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline"
+                >
+                  {showExtraContext ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <span>{showExtraContext ? "Hide Extra Context / Payload" : "+ Add Raw Payload / Stack Trace / Doc Link (Optional)"}</span>
+                </button>
+
+                {showExtraContext && extraContext && (
+                  <button
+                    type="button"
+                    onClick={() => setExtraContext("")}
+                    className="text-[10px] font-semibold text-slate-400 hover:text-red-500 flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear Payload</span>
+                  </button>
+                )}
+              </div>
 
               {showExtraContext && (
                 <div className="mt-2 animate-in fade-in">
@@ -541,7 +582,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
                     rows={3}
                     value={extraContext}
                     onChange={(e) => setExtraContext(e.target.value)}
-                    placeholder="Paste logs, stack traces, JSON payloads, or customer background here..."
+                    placeholder="Paste logs, stack traces, JSON payloads, or customer background here (leave blank for clean prompt)..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

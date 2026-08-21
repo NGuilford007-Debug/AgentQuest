@@ -71,6 +71,8 @@ import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
 import { QuickTaskModal } from "./components/QuickTaskModal";
 import { ProfileModal } from "./components/ProfileModal";
 import { PricingCheckoutModal } from "./components/PricingCheckoutModal";
+import { SmartChat } from "./components/SmartChat";
+import { ImageStudio } from "./components/ImageStudio";
 import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 
@@ -214,7 +216,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_GENERATED_REPORTS;
   });
 
-  const [currentTab, setCurrentTab] = useState<NavTab>("dashboard");
+  const [currentTab, setCurrentTab] = useState<NavTab>("chat");
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>(
     workflows[0]?.id || "wf-1"
   );
@@ -1156,6 +1158,29 @@ export default function App() {
         />
 
         {/* Dynamic Tab Body */}
+        {currentTab === "chat" && (
+          <SmartChat
+            agents={agents}
+            workflows={workflows}
+            assets={assets}
+            executionHistory={executionHistory}
+            onTaskCompleted={handleTaskCompleted}
+            onSaveApprovedAutomation={handleSaveApprovedAutomation}
+            onNavigateToStudio={() => setCurrentTab("studio")}
+            onNavigateToImageStudio={() => setCurrentTab("imagestudio")}
+          />
+        )}
+
+        {currentTab === "imagestudio" && (
+          <ImageStudio
+            assets={assets}
+            onSaveAsset={handleAddAsset}
+            onNavigateToDispatcher={(prompt) => {
+              setCurrentTab("chat");
+            }}
+          />
+        )}
+
         {currentTab === "dashboard" && (
           <Dashboard
             agents={agents}

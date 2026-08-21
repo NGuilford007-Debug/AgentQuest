@@ -347,11 +347,14 @@ const handlePromptAgent = async (req: express.Request, res: express.Response) =>
   const sysPrompt = agent?.systemPrompt || `You are ${agentName}, a specialist in ${agentRole} for ${agentDept}.`;
   const targetModel = agent?.model?.startsWith("gemini") ? agent.model : "gemini-3.7-flash";
 
+  const rawContext = typeof context === "string" ? context.trim() : "";
+  const effectiveContext = rawContext.length > 0 ? rawContext : undefined;
+
   try {
     const ai = getGeminiClient();
 
     if (!ai) {
-      const simulatedWorkProduct = getSimulatedPromptOutput(agent, prompt, context);
+      const simulatedWorkProduct = getSimulatedPromptOutput(agent, prompt, effectiveContext);
       return res.json({
         success: true,
         isSimulated: true,
@@ -383,8 +386,8 @@ CORE OPERATING GUIDELINES:
 3. CLEAN RELEVANCE: Keep your generated deliverable directly focused on the user's explicit directive. Do not append random unsolicited side-topics unless requested.
 4. IDENTITY: Sign off naturally as ${agentName} (${agentRole}).`;
 
-    const fullContent = context 
-      ? `Task Directive / Prompt:\n${prompt}\n\nAdditional Context / Payload:\n${context}`
+    const fullContent = effectiveContext 
+      ? `Task Directive / Prompt:\n${prompt}\n\nAdditional Context / Payload:\n${effectiveContext}`
       : prompt;
 
     const { response, modelUsed } = await callGeminiWithFallback(ai, targetModel, {
@@ -1003,6 +1006,145 @@ Perform root cause analysis and output the required JSON diagnostic report.`;
     console.warn("[Troubleshoot API] Error analyzing discrepancy with live Gemini model:", err?.message || err);
     res.json(buildSimulatedTroubleshoot());
   }
+});
+
+// API: AI Text Enhancer for any input field
+app.post("/api/gemini/enhance-text", async (req, res) => {
+  const { text, contextType = "prompt", mode = "enterprise" } = req.body;
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: "Text is required" });
+  }
+
+  try {
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.json({
+        success: true,
+        isSimulated: true,
+        enhancedText: `[Optimized Directive]: ${text.trim()}\n\nRequirements:\n- Produce high-fidelity enterprise deliverables.\n- Enforce strict typing and error boundaries.\n- Structure output in clear, professional markdown.`,
+      });
+    }
+
+    const systemPrompt = `You are an elite Prompt Engineer & Enterprise AI Communication Optimizer.
+Given an input text (which could be a user prompt, system instruction, report topic, or task directive), optimize and expand it according to the requested mode:
+- 'enterprise': Comprehensive, unambiguous directive with clear requirements, output formats, negative constraints, and success criteria.
+- 'concise': Laser-focused, removing fluff while preserving essential directives and output formats.
+- 'bullet_points': Structured breakdown with explicit objectives, constraints, and validation checkpoints.
+- 'creative': High-impact, inspiring, visionary prompt with rich sensory detail and aesthetic direction.
+
+Return ONLY the enhanced text string directly. No conversational intro or quotes.`;
+
+    const promptBody = `Mode: ${mode}\nContext: ${contextType}\nInput Text to Enhance:\n"""\n${text}\n"""`;
+
+    const { response } = await callGeminiWithFallback(ai, "gemini-3.7-flash", {
+      contents: promptBody,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: mode === "creative" ? 0.4 : 0.15,
+      },
+    });
+
+    res.json({
+      success: true,
+      enhancedText: response.text?.trim() || text,
+    });
+  } catch (error: any) {
+    console.warn("AI Text enhance error:", error?.message || error);
+    res.json({
+      success: true,
+      isSimulated: true,
+      enhancedText: `[Enhanced Directive]: ${text.trim()}\n\nEnsure clear formatting, zero hallucinations, and high precision.`,
+    });
+  }
+});
+
+// API: Image Generation Studio Endpoint
+app.post("/api/gemini/generate-image", async (req, res) => {
+  const { prompt, aspectRatio = "1:1", style = "Cyberpunk Merch" } = req.body;
+  if (!prompt || !prompt.trim()) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+
+  try {
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const response = await ai.models.generateImages({
+          model: "imagen-3.0-generate-002",
+          prompt: `${prompt}. High commercial quality, ${style} aesthetic, professional rendering.`,
+          config: {
+            numberOfImages: 1,
+            outputMimeType: "image/jpeg",
+            aspectRatio: aspectRatio as any,
+          },
+        });
+
+        if (response.generatedImages && response.generatedImages.length > 0) {
+          const imgBase64 = response.generatedImages[0].image.imageBytes;
+          const imageUrl = `data:image/jpeg;base64,${imgBase64}`;
+          return res.json({
+            success: true,
+            imageUrl,
+            aspectRatio,
+            style,
+          });
+        }
+      } catch (imgErr: any) {
+        console.warn("Imagen 3.0 call failed or unsupported, using curated generative vector stock fallback:", imgErr?.message || imgErr);
+      }
+    }
+
+    // Curated high-res themed visual placeholders matched to prompt
+    const pLow = prompt.toLowerCase();
+    let sampleImg = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80";
+    if (pLow.includes("shirt") || pLow.includes("apparel") || pLow.includes("merch") || pLow.includes("jacket")) {
+      sampleImg = "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=1200&auto=format&fit=crop&q=80";
+    } else if (pLow.includes("logo") || pLow.includes("vector") || pLow.includes("minimal")) {
+      sampleImg = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80";
+    } else if (pLow.includes("city") || pLow.includes("architecture") || pLow.includes("building") || pLow.includes("solar")) {
+      sampleImg = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&auto=format&fit=crop&q=80";
+    } else if (pLow.includes("3d") || pLow.includes("product") || pLow.includes("bottle") || pLow.includes("device")) {
+      sampleImg = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=1200&auto=format&fit=crop&q=80";
+    }
+
+    res.json({
+      success: true,
+      imageUrl: sampleImg,
+      aspectRatio,
+      style,
+      isSimulated: true,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to generate image" });
+  }
+});
+
+// API: Context-Aware Automatic AI Model Selector
+app.post("/api/gemini/select-model-auto", async (req, res) => {
+  const { prompt = "", payload = "", taskType = "general" } = req.body;
+  const textLength = prompt.length + JSON.stringify(payload).length;
+  const pLow = prompt.toLowerCase();
+
+  let selectedModel = "gemini-3.7-flash";
+  let reasoning = "Balanced high speed & deep reasoning for standard enterprise workflows.";
+
+  if (pLow.includes("code") || pLow.includes("refactor") || pLow.includes("architecture") || pLow.includes("security") || pLow.includes("audit") || textLength > 4000) {
+    selectedModel = "gemini-3.1-pro-preview";
+    reasoning = "High complexity code synthesis and deep multi-step reasoning require Gemini Pro Tier.";
+  } else if (pLow.includes("quick") || pLow.includes("translate") || pLow.includes("format") || textLength < 300) {
+    selectedModel = "gemini-3.1-flash-lite";
+    reasoning = "Ultra-low latency micro-task optimized for maximum execution speed.";
+  } else if (pLow.includes("image") || pLow.includes("design") || pLow.includes("visual") || pLow.includes("mockup")) {
+    selectedModel = "gemini-3.7-flash";
+    reasoning = "Multimodal creative reasoning and structured styling specifications.";
+  }
+
+  res.json({
+    success: true,
+    recommendedModel: selectedModel,
+    reasoning,
+    contextTokensEstimated: Math.round(textLength / 4),
+  });
 });
 
 // API: Auto-generate / optimize workflow from natural language prompt

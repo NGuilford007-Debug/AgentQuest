@@ -35,11 +35,14 @@ import {
   Ban,
   Wrench,
   BookmarkCheck,
-  Bookmark
+  Bookmark,
+  Eraser,
+  Trash2
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { fireCelebration } from "../utils/confetti";
 import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
+import { AiTextEnhancer } from "./AiTextEnhancer";
 
 interface TaskDispatcherProps {
   agents: Agent[];
@@ -106,11 +109,10 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(
     workflows[0]?.id || ""
   );
-  const [promptText, setPromptText] = useState<string>(
-    "Analyze this Redis connection pool timeout error and generate root-cause analysis with actionable mitigation script."
-  );
-  const [extraContext, setExtraContext] = useState<string>(SAMPLE_TASK_PRESETS[0].payload);
+  const [promptText, setPromptText] = useState<string>("");
+  const [extraContext, setExtraContext] = useState<string>("");
   const [showExtraContext, setShowExtraContext] = useState<boolean>(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"prompt" | "graph" | "history">("prompt");
   
   const [isRunning, setIsRunning] = useState(false);
@@ -152,11 +154,24 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
     "Review system configurations and generate optimization steps."
   ];
 
+  const handleClearAll = () => {
+    setPromptText("");
+    setExtraContext("");
+    setShowExtraContext(false);
+    setActivePresetId(null);
+  };
+
+  const handleClearContext = () => {
+    setExtraContext("");
+    setActivePresetId(null);
+  };
+
   const handlePresetSelect = (preset: typeof SAMPLE_TASK_PRESETS[0]) => {
     setSelectedAgentId(preset.agentId);
     setPromptText(preset.title);
     setExtraContext(preset.payload);
     setShowExtraContext(true);
+    setActivePresetId(preset.id);
     const matchedWf = workflows.find((w) => w.agentId === preset.agentId) || workflows[0];
     if (matchedWf) setSelectedWorkflowId(matchedWf.id);
   };
@@ -236,6 +251,8 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
 
     const startTime = Date.now();
 
+    const effectiveContext = (showExtraContext && extraContext && extraContext.trim()) ? extraContext.trim() : undefined;
+
     try {
       // Use direct prompt-agent endpoint for fast, comprehensive generation
       const response = await fetch("/api/gemini/prompt-agent", {
@@ -246,7 +263,7 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
           agentId: currentAgent.id,
           agent: currentAgent,
           prompt: finalPrompt,
-          context: extraContext,
+          context: effectiveContext,
           temperature: currentAgent.temperature,
           permissions: currentAgent.permissions,
         }),
@@ -274,7 +291,7 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
         workflowName: currentWorkflow?.name || "Direct Prompt Task",
         title: finalPrompt.length > 65 ? `${finalPrompt.slice(0, 62)}...` : finalPrompt,
         department: currentAgent.department,
-        inputPayload: extraContext ? `${finalPrompt}\n\n[Context Data]:\n${extraContext}` : finalPrompt,
+        inputPayload: effectiveContext ? `${finalPrompt}\n\n[Context Data]:\n${effectiveContext}` : finalPrompt,
         status: currentAgent.autonomyLevel === "hitl" ? "needs_review" : "completed",
         summary: summaryText,
         generatedOutput: outputText,
@@ -471,6 +488,26 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
               <span>2. What do you need {currentAgent?.name} to do?</span>
             </label>
+
+            <div className="flex items-center gap-1.5">
+              <AiTextEnhancer
+                value={promptText}
+                onApply={(enhanced) => setPromptText(enhanced)}
+                contextType="prompt"
+              />
+
+              {(promptText || extraContext) && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-red-500 dark:hover:text-red-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40"
+                  title="Clear prompt & context for clean generation"
+                >
+                  <Eraser className="w-3 h-3" />
+                  <span>Clean Slate</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <textarea
@@ -485,14 +522,14 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                 handleRunExecution();
               }
             }}
-            placeholder={`Enter instructions for ${currentAgent?.name}...`}
+            placeholder={`Enter instructions for ${currentAgent?.name} (or choose a 1-click idea below)...`}
             className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-400"
           />
 
           {/* Quick Idea Pills */}
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              1-Click Prompt Ideas:
+              1-Click Clean Prompt Ideas:
             </span>
             <div className="flex flex-col gap-1">
               {quickIdeas.map((idea, idx) => (
@@ -513,14 +550,27 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
 
           {/* Optional Raw Context Accordion */}
           <div>
-            <button
-              type="button"
-              onClick={() => setShowExtraContext(!showExtraContext)}
-              className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline pt-1"
-            >
-              {showExtraContext ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              <span>{showExtraContext ? "Hide Context / Payload Data" : "+ Attach Raw Logs / Payload Data"}</span>
-            </button>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setShowExtraContext(!showExtraContext)}
+                className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline"
+              >
+                {showExtraContext ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                <span>{showExtraContext ? "Hide Raw Context / Payload" : "+ Attach Raw Logs / Payload Data (Optional)"}</span>
+              </button>
+
+              {showExtraContext && extraContext && (
+                <button
+                  type="button"
+                  onClick={handleClearContext}
+                  className="text-[10px] font-semibold text-slate-400 hover:text-red-500 flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Payload</span>
+                </button>
+              )}
+            </div>
 
             {showExtraContext && (
               <div className="mt-2 space-y-1.5 animate-in fade-in">
@@ -528,7 +578,7 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                   rows={3}
                   value={extraContext}
                   onChange={(e) => setExtraContext(e.target.value)}
-                  placeholder="Paste stack traces, JSON logs, or customer tickets..."
+                  placeholder="Paste stack traces, JSON logs, or customer tickets (leave empty for clean prompt)..."
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-200"
                 />
               </div>
@@ -537,15 +587,30 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
 
           {/* Preset Enterprise Scenarios */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Enterprise Benchmark Presets:
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Enterprise Benchmark Presets:
+              </label>
+              {activePresetId && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Reset to Clean</span>
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {SAMPLE_TASK_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
                   onClick={() => handlePresetSelect(preset)}
-                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-blue-400 text-left transition-all"
+                  className={`p-2 rounded-xl border text-left transition-all ${
+                    activePresetId === preset.id
+                      ? "border-blue-500 bg-blue-50/40 dark:bg-blue-950/40 shadow-xs"
+                      : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-blue-400"
+                  }`}
                 >
                   <div className="text-[9px] font-bold text-slate-400 truncate">
                     {preset.department}

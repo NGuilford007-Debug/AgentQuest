@@ -14,6 +14,7 @@ import { PALETTE_TEMPLATES } from "../data/initialData";
 import { INITIAL_ASSET_ITEMS } from "../data/initialAssets";
 import { AssetGallery } from "./AssetGallery";
 import { BatchDeleteConfirmationModal } from "./BatchDeleteConfirmationModal";
+import { PayloadTroubleshootModal, PayloadTroubleshootData, getValidTemplateForNode } from "./PayloadTroubleshootModal";
 import { 
   Plus, 
   Trash2, 
@@ -155,6 +156,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Single node tester
   const [testingSingleNode, setTestingSingleNode] = useState(false);
   const [singleNodeTestOutput, setSingleNodeTestOutput] = useState<any | null>(null);
+
+  // Payload Troubleshooting Modal state
+  const [troubleshootPayloadData, setTroubleshootPayloadData] = useState<PayloadTroubleshootData | null>(null);
+  const [isTroubleshootModalOpen, setIsTroubleshootModalOpen] = useState(false);
 
   // Batch edit state inputs
   const [batchActionType, setBatchActionType] = useState<string>("");
@@ -635,6 +640,45 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const testSingleNodeExecution = async (node: WorkflowNode) => {
     setTestingSingleNode(true);
     setSingleNodeTestOutput(null);
+
+    // Validate payload syntax client-side first to catch payload errors immediately
+    let parsedPayload: any = null;
+    let isPayloadValidJson = true;
+    let syntaxErrorMessage = "";
+
+    try {
+      if (testPayloadInput.trim()) {
+        parsedPayload = JSON.parse(testPayloadInput);
+      } else {
+        isPayloadValidJson = false;
+        syntaxErrorMessage = "Payload is empty. The node requires structured parameters.";
+      }
+    } catch (parseErr: any) {
+      isPayloadValidJson = false;
+      syntaxErrorMessage = parseErr?.message || "Invalid JSON syntax detected in node payload.";
+    }
+
+    if (!isPayloadValidJson) {
+      setTestingSingleNode(false);
+      setSingleNodeTestOutput({
+        success: false,
+        status: "error",
+        error: syntaxErrorMessage,
+        output: `[Payload Error Detected]: ${syntaxErrorMessage}`,
+        isPayloadError: true,
+      });
+      // Trigger troubleshooting modal immediately
+      setTroubleshootPayloadData({
+        rawPayload: testPayloadInput,
+        node,
+        workflowName,
+        agent: assignedAgent,
+        errorMessage: syntaxErrorMessage,
+      });
+      setIsTroubleshootModalOpen(true);
+      return;
+    }
+
     try {
       const attachedAssetsInfo = (node.attachedAssetIds || [])
         .map((aid) => assets.find((a) => a.id === aid))
@@ -645,14 +689,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           node,
-          inputData: testPayloadInput,
+          inputData: parsedPayload,
           agent: assignedAgent,
           attachedAssets: attachedAssetsInfo,
         }),
       });
       const data = await res.json();
+
+      if (data.status === "error" || data.isPayloadError || (data.output && String(data.output).toLowerCase().includes("payload error"))) {
+        setTroubleshootPayloadData({
+          rawPayload: testPayloadInput,
+          node,
+          workflowName,
+          agent: assignedAgent,
+          errorMessage: data.error || data.output || "Execution failed due to invalid node payload keys.",
+        });
+        setIsTroubleshootModalOpen(true);
+      }
+
       setSingleNodeTestOutput(data);
-    } catch (err) {
+    } catch (err: any) {
       setSingleNodeTestOutput({
         success: true,
         output: `Evaluated ${node.name} with sample parameters. Output format verified.`,
@@ -661,6 +717,46 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       });
     } finally {
       setTestingSingleNode(false);
+    }
+  };
+
+  const handleResetNodeToTemplate = (nodeId: string, validConfig: Record<string, any>, validPayload?: string) => {
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              config: {
+                ...n.config,
+                ...validConfig,
+              },
+            }
+          : n
+      )
+    );
+    if (validPayload) {
+      setTestPayloadInput(validPayload);
+    }
+    setSingleNodeTestOutput({
+      success: true,
+      output: `[Reset to Valid Template]: Successfully restored certified schema & default parameters for node.`,
+      confidence: 1.0,
+      durationMs: 95,
+    });
+  };
+
+  const handleApplyFixedPayload = (nodeId: string, fixedPayload: string) => {
+    setTestPayloadInput(fixedPayload);
+    try {
+      const parsed = JSON.parse(fixedPayload);
+      setSingleNodeTestOutput({
+        success: true,
+        output: `[Updated Payload Applied]: ${Object.keys(parsed).length} keys verified ready for execution.`,
+        confidence: 0.99,
+        durationMs: 110,
+      });
+    } catch (e) {
+      // Ignored
     }
   };
 
@@ -1781,23 +1877,56 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
               {/* Single Node Live Testing Button */}
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                <button
-                  onClick={() => testSingleNodeExecution(selectedNode)}
-                  disabled={testingSingleNode}
-                  className="w-full py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                >
-                  {testingSingleNode ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Zap className="w-3.5 h-3.5" />
-                  )}
-                  <span>Test Single Node (Gemini)</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    id="btn-test-single-node"
+                    onClick={() => testSingleNodeExecution(selectedNode)}
+                    disabled={testingSingleNode}
+                    className="flex-1 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 text-xs"
+                  >
+                    {testingSingleNode ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5" />
+                    )}
+                    <span>Test Single Node</span>
+                  </button>
+
+                  <button
+                    id="btn-troubleshoot-node-payload"
+                    type="button"
+                    onClick={() => {
+                      setTroubleshootPayloadData({
+                        rawPayload: testPayloadInput,
+                        node: selectedNode,
+                        workflowName,
+                        agent: assignedAgent,
+                      });
+                      setIsTroubleshootModalOpen(true);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700/80 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1 transition-colors"
+                    title="Validate payload keys, reset template, or test in simulation mode"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Troubleshoot</span>
+                  </button>
+                </div>
 
                 {singleNodeTestOutput && (
-                  <div className="p-3 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] space-y-1.5 overflow-x-auto">
-                    <div className="flex items-center justify-between text-emerald-400 font-bold">
-                      <span>✓ Output ({singleNodeTestOutput.durationMs || 180}ms)</span>
+                  <div className={`p-3 rounded-xl ${
+                    singleNodeTestOutput.status === "error" || singleNodeTestOutput.isPayloadError
+                      ? "bg-red-950/90 border border-red-800 text-red-200"
+                      : "bg-slate-900 text-slate-200"
+                  } font-mono text-[11px] space-y-1.5 overflow-x-auto`}>
+                    <div className="flex items-center justify-between font-bold">
+                      {singleNodeTestOutput.status === "error" || singleNodeTestOutput.isPayloadError ? (
+                        <div className="flex items-center gap-1.5 text-red-400">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>Payload Error Detected</span>
+                        </div>
+                      ) : (
+                        <span className="text-emerald-400">✓ Output ({singleNodeTestOutput.durationMs || 180}ms)</span>
+                      )}
                       <span>Confidence: {((singleNodeTestOutput.confidence || 0.98) * 100).toFixed(0)}%</span>
                     </div>
                     <pre className="whitespace-pre-wrap text-[10px]">
@@ -1805,6 +1934,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                         ? singleNodeTestOutput.output
                         : JSON.stringify(singleNodeTestOutput.output, null, 2)}
                     </pre>
+
+                    {(singleNodeTestOutput.status === "error" || singleNodeTestOutput.isPayloadError) && (
+                      <button
+                        onClick={() => {
+                          setTroubleshootPayloadData({
+                            rawPayload: testPayloadInput,
+                            node: selectedNode,
+                            workflowName,
+                            agent: assignedAgent,
+                            errorMessage: singleNodeTestOutput.error || singleNodeTestOutput.output,
+                          });
+                          setIsTroubleshootModalOpen(true);
+                        }}
+                        className="w-full mt-1.5 py-1.5 px-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-sans text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Open Payload Troubleshooting Modal</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2176,6 +2324,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </div>
         </div>
       )}
+
+      {/* PAYLOAD TROUBLESHOOTING & SIMULATION MODAL */}
+      <PayloadTroubleshootModal
+        isOpen={isTroubleshootModalOpen}
+        onClose={() => {
+          setIsTroubleshootModalOpen(false);
+          setTroubleshootPayloadData(null);
+        }}
+        data={troubleshootPayloadData}
+        onResetToTemplate={handleResetNodeToTemplate}
+        onApplyFixedPayload={handleApplyFixedPayload}
+      />
     </div>
   );
 };

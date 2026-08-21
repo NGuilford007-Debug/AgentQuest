@@ -178,6 +178,10 @@ export interface Agent {
     xpGenerated: number;
   };
   monetization?: AgentMonetizationConfig;
+  visibility?: "internal_only" | "client_visible" | "pending_client_review";
+  clientPageAllowed?: boolean;
+  clientRequested?: boolean;
+  clientRequestedNotes?: string;
   createdAt: string;
 }
 
