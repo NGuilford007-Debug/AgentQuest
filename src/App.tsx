@@ -21,7 +21,9 @@ import {
   TenantBillingRecord,
   FinancialMetricSnapshot,
   ApprovedAutomation,
-  GeneratedReportDocument
+  GeneratedReportDocument,
+  ClientAgentRequest,
+  AgentPrivacyPolicyConfig
 } from "./types";
 import { 
   INITIAL_AGENTS, 
@@ -33,7 +35,9 @@ import {
   AVAILABLE_PERMISSIONS,
   INITIAL_CONNECTED_APPS,
   INITIAL_API_AUDIT_LOGS,
-  INITIAL_APPROVED_AUTOMATIONS
+  INITIAL_APPROVED_AUTOMATIONS,
+  INITIAL_CLIENT_AGENT_REQUESTS,
+  DEFAULT_AGENT_PRIVACY_POLICY
 } from "./data/initialData";
 import { INITIAL_GENERATED_REPORTS } from "./data/initialReports";
 import { INITIAL_WORKPLACE_STAGES } from "./data/workplaceStages";
@@ -71,150 +75,133 @@ import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
 import { QuickTaskModal } from "./components/QuickTaskModal";
 import { ProfileModal } from "./components/ProfileModal";
 import { PricingCheckoutModal } from "./components/PricingCheckoutModal";
+import { AuthModal } from "./components/AuthModal";
 import { SmartChat } from "./components/SmartChat";
 import { ImageStudio } from "./components/ImageStudio";
 import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
+import { getStoredItem, setStoredItem, removeStoredItem } from "./utils/storage";
 
 export default function App() {
+  const [isHydrated, setIsHydrated] = useState(false);
+
   // Master Developer vs Client Access Gate State
-  const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>(() => {
-    const saved = localStorage.getItem("agentflow_master_access");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed.currentAccessLevel === "string") {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    const isGoogleEnvironment = 
-      typeof window !== "undefined" && 
-      (window.location.hostname.includes("google") || 
-       window.location.hostname.includes("aistudio") || 
-       window.location.hostname.includes("corp.google.com") ||
-       window.location.hostname.includes("localhost") ||
-       window.location.hostname.includes("run.app") ||
-       window.location.hostname.includes("127.0.0.1"));
-       
-    return {
-      currentAccessLevel: "master_developer",
-      founderEmail: "founder@agencyflow.io",
-      developerCompanyName: "AgentFlow Systems",
-      founderPin: "founder2026",
-      isSimulatingClientView: false,
-      clientLockEnforced: true,
-      detectedEnvironment: isGoogleEnvironment ? "google_ai_studio" : "standalone_web_app",
-    };
+  const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>({
+    currentAccessLevel: "client_tenant",
+    founderEmail: "founder@agencyflow.io",
+    developerCompanyName: "AgentFlow Systems",
+    founderPin: "founder2026",
+    isSimulatingClientView: false,
+    clientLockEnforced: true,
+    detectedEnvironment: "standalone_web_app",
   });
   const [isAccessGateOpen, setIsAccessGateOpen] = useState<boolean>(false);
 
   const isMasterDeveloper = masterAccess?.currentAccessLevel === "master_developer";
 
+  // Initial local state with static defaults (pure SSR-safe initializers)
+  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
+  const [workflows, setWorkflows] = useState<Workflow[]>(INITIAL_WORKFLOWS);
+  const [assets, setAssets] = useState<AssetItem[]>(INITIAL_ASSET_ITEMS);
+  const [userProfile, setUserProfile] = useState<EmployeeProfile>(INITIAL_USER_PROFILE);
+  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>(LEADERBOARD_USERS);
+  const [executionHistory, setExecutionHistory] = useState<TaskExecutionRecord[]>([]);
+  const [activeTaskSession, setActiveTaskSession] = useState<ActiveTaskSession | null>(null);
+  const [workplaceStages, setWorkplaceStages] = useState<WorkplaceStage[]>(INITIAL_WORKPLACE_STAGES);
+  const [models, setModels] = useState<AiModel[]>(INITIAL_MODELS);
+  const [permissions, setPermissions] = useState<PermissionScope[]>(AVAILABLE_PERMISSIONS);
+  const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>(INITIAL_CONNECTED_APPS);
+  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>(INITIAL_API_AUDIT_LOGS);
+  const [whiteLabelConfig, setWhiteLabelConfig] = useState<WhiteLabelConfig>(DEFAULT_WHITELABEL_CONFIG);
+  const [tenants, setTenants] = useState<TenantProfile[]>(WHITELABEL_PRESETS);
+  const [developerProfile, setDeveloperProfile] = useState<DeveloperCompanyProfile>(DEFAULT_DEVELOPER_PROFILE);
+  const [rateCard, setRateCard] = useState<RateCardConfig>(DEFAULT_RATE_CARD);
+  const [tenantsBilling, setTenantsBilling] = useState<TenantBillingRecord[]>(INITIAL_TENANT_BILLING_RECORDS);
+  const [financialHistory, setFinancialHistory] = useState<FinancialMetricSnapshot[]>(HISTORICAL_FINANCIAL_SNAPSHOTS);
+  const [approvedAutomations, setApprovedAutomations] = useState<ApprovedAutomation[]>(INITIAL_APPROVED_AUTOMATIONS);
+  const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>(INITIAL_GENERATED_REPORTS);
+  const [clientAgentRequests, setClientAgentRequests] = useState<ClientAgentRequest[]>(INITIAL_CLIENT_AGENT_REQUESTS);
+  const [agentPrivacyPolicy, setAgentPrivacyPolicy] = useState<AgentPrivacyPolicyConfig>(DEFAULT_AGENT_PRIVACY_POLICY);
+
+  // Hydrate persisted state from localStorage on client mount (SSR-safe hydration)
   useEffect(() => {
-    localStorage.setItem("agentflow_master_access", JSON.stringify(masterAccess));
-  }, [masterAccess]);
+    if (typeof window === "undefined") return;
 
-  // Local state initialized with fallback to localStorage
-  const [agents, setAgents] = useState<Agent[]>(() => {
-    const saved = localStorage.getItem("agentflow_agents");
-    return saved ? JSON.parse(saved) : INITIAL_AGENTS;
-  });
+    try {
+      const storedMasterAccess = getStoredItem<MasterAccessSettings | null>("agentflow_master_access", null);
+      if (storedMasterAccess) setMasterAccess(storedMasterAccess);
 
-  const [workflows, setWorkflows] = useState<Workflow[]>(() => {
-    const saved = localStorage.getItem("agentflow_workflows");
-    return saved ? JSON.parse(saved) : INITIAL_WORKFLOWS;
-  });
+      const storedAgents = getStoredItem<Agent[] | null>("agentflow_agents", null);
+      if (storedAgents) setAgents(storedAgents);
 
-  const [assets, setAssets] = useState<AssetItem[]>(() => {
-    const saved = localStorage.getItem("agentflow_assets");
-    return saved ? JSON.parse(saved) : INITIAL_ASSET_ITEMS;
-  });
+      const storedWorkflows = getStoredItem<Workflow[] | null>("agentflow_workflows", null);
+      if (storedWorkflows) setWorkflows(storedWorkflows);
 
-  const [userProfile, setUserProfile] = useState<EmployeeProfile>(() => {
-    const saved = localStorage.getItem("agentflow_profile");
-    return saved ? JSON.parse(saved) : INITIAL_USER_PROFILE;
-  });
+      const storedAssets = getStoredItem<AssetItem[] | null>("agentflow_assets", null);
+      if (storedAssets) setAssets(storedAssets);
 
-  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>(() => {
-    const saved = localStorage.getItem("agentflow_leaderboard");
-    return saved ? JSON.parse(saved) : LEADERBOARD_USERS;
-  });
+      const storedProfile = getStoredItem<EmployeeProfile | null>("agentflow_profile", null);
+      if (storedProfile) setUserProfile(storedProfile);
 
-  const [executionHistory, setExecutionHistory] = useState<TaskExecutionRecord[]>(() => {
-    const saved = localStorage.getItem("agentflow_executions");
-    return saved ? JSON.parse(saved) : [];
-  });
+      const storedLeaderboard = getStoredItem<LeaderboardUser[] | null>("agentflow_leaderboard", null);
+      if (storedLeaderboard) setLeaderboardUsers(storedLeaderboard);
 
-  const [activeTaskSession, setActiveTaskSession] = useState<ActiveTaskSession | null>(() => {
-    const saved = localStorage.getItem("agentflow_active_task");
-    return saved ? JSON.parse(saved) : null;
-  });
+      const storedExecutions = getStoredItem<TaskExecutionRecord[] | null>("agentflow_executions", null);
+      if (storedExecutions) setExecutionHistory(storedExecutions);
 
-  const [workplaceStages, setWorkplaceStages] = useState<WorkplaceStage[]>(() => {
-    const saved = localStorage.getItem("agentflow_workplace_stages");
-    return saved ? JSON.parse(saved) : INITIAL_WORKPLACE_STAGES;
-  });
+      const storedActiveTask = getStoredItem<ActiveTaskSession | null>("agentflow_active_task", null);
+      if (storedActiveTask) setActiveTaskSession(storedActiveTask);
 
-  const [models, setModels] = useState<AiModel[]>(() => {
-    const saved = localStorage.getItem("agentflow_models");
-    return saved ? JSON.parse(saved) : INITIAL_MODELS;
-  });
+      const storedStages = getStoredItem<WorkplaceStage[] | null>("agentflow_workplace_stages", null);
+      if (storedStages) setWorkplaceStages(storedStages);
 
-  const [permissions, setPermissions] = useState<PermissionScope[]>(() => {
-    const saved = localStorage.getItem("agentflow_permissions");
-    return saved ? JSON.parse(saved) : AVAILABLE_PERMISSIONS;
-  });
+      const storedModels = getStoredItem<AiModel[] | null>("agentflow_models", null);
+      if (storedModels) setModels(storedModels);
 
-  const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>(() => {
-    const saved = localStorage.getItem("agentflow_connected_apps");
-    return saved ? JSON.parse(saved) : INITIAL_CONNECTED_APPS;
-  });
+      const storedPermissions = getStoredItem<PermissionScope[] | null>("agentflow_permissions", null);
+      if (storedPermissions) setPermissions(storedPermissions);
 
-  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>(() => {
-    const saved = localStorage.getItem("agentflow_audit_logs");
-    return saved ? JSON.parse(saved) : INITIAL_API_AUDIT_LOGS;
-  });
+      const storedApps = getStoredItem<ConnectedApp[] | null>("agentflow_connected_apps", null);
+      if (storedApps) setConnectedApps(storedApps);
 
-  const [whiteLabelConfig, setWhiteLabelConfig] = useState<WhiteLabelConfig>(() => {
-    const saved = localStorage.getItem("agentflow_whitelabel_config");
-    return saved ? JSON.parse(saved) : DEFAULT_WHITELABEL_CONFIG;
-  });
+      const storedAuditLogs = getStoredItem<ApiAuditLog[] | null>("agentflow_audit_logs", null);
+      if (storedAuditLogs) setAuditLogs(storedAuditLogs);
 
-  const [tenants, setTenants] = useState<TenantProfile[]>(() => {
-    const saved = localStorage.getItem("agentflow_tenants");
-    return saved ? JSON.parse(saved) : WHITELABEL_PRESETS;
-  });
+      const storedWhiteLabel = getStoredItem<WhiteLabelConfig | null>("agentflow_whitelabel_config", null);
+      if (storedWhiteLabel) setWhiteLabelConfig(storedWhiteLabel);
 
-  const [developerProfile, setDeveloperProfile] = useState<DeveloperCompanyProfile>(() => {
-    const saved = localStorage.getItem("agentflow_developer_profile");
-    return saved ? JSON.parse(saved) : DEFAULT_DEVELOPER_PROFILE;
-  });
+      const storedTenants = getStoredItem<TenantProfile[] | null>("agentflow_tenants", null);
+      if (storedTenants) setTenants(storedTenants);
 
-  const [rateCard, setRateCard] = useState<RateCardConfig>(() => {
-    const saved = localStorage.getItem("agentflow_rate_card");
-    return saved ? JSON.parse(saved) : DEFAULT_RATE_CARD;
-  });
+      const storedDevProfile = getStoredItem<DeveloperCompanyProfile | null>("agentflow_developer_profile", null);
+      if (storedDevProfile) setDeveloperProfile(storedDevProfile);
 
-  const [tenantsBilling, setTenantsBilling] = useState<TenantBillingRecord[]>(() => {
-    const saved = localStorage.getItem("agentflow_tenants_billing");
-    return saved ? JSON.parse(saved) : INITIAL_TENANT_BILLING_RECORDS;
-  });
+      const storedRateCard = getStoredItem<RateCardConfig | null>("agentflow_rate_card", null);
+      if (storedRateCard) setRateCard(storedRateCard);
 
-  const [financialHistory, setFinancialHistory] = useState<FinancialMetricSnapshot[]>(() => {
-    const saved = localStorage.getItem("agentflow_financial_history");
-    return saved ? JSON.parse(saved) : HISTORICAL_FINANCIAL_SNAPSHOTS;
-  });
+      const storedTenantsBilling = getStoredItem<TenantBillingRecord[] | null>("agentflow_tenants_billing", null);
+      if (storedTenantsBilling) setTenantsBilling(storedTenantsBilling);
 
-  const [approvedAutomations, setApprovedAutomations] = useState<ApprovedAutomation[]>(() => {
-    const saved = localStorage.getItem("agentflow_approved_automations");
-    return saved ? JSON.parse(saved) : INITIAL_APPROVED_AUTOMATIONS;
-  });
+      const storedFinancialHistory = getStoredItem<FinancialMetricSnapshot[] | null>("agentflow_financial_history", null);
+      if (storedFinancialHistory) setFinancialHistory(storedFinancialHistory);
 
-  const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>(() => {
-    const saved = localStorage.getItem("agentflow_saved_reports");
-    return saved ? JSON.parse(saved) : INITIAL_GENERATED_REPORTS;
-  });
+      const storedApprovedAutomations = getStoredItem<ApprovedAutomation[] | null>("agentflow_approved_automations", null);
+      if (storedApprovedAutomations) setApprovedAutomations(storedApprovedAutomations);
+
+      const storedSavedReports = getStoredItem<GeneratedReportDocument[] | null>("agentflow_saved_reports", null);
+      if (storedSavedReports) setSavedReports(storedSavedReports);
+
+      const storedClientAgentRequests = getStoredItem<ClientAgentRequest[] | null>("agentflow_client_agent_requests", null);
+      if (storedClientAgentRequests) setClientAgentRequests(storedClientAgentRequests);
+
+      const storedAgentPrivacyPolicy = getStoredItem<AgentPrivacyPolicyConfig | null>("agentflow_agent_privacy_policy", null);
+      if (storedAgentPrivacyPolicy) setAgentPrivacyPolicy(storedAgentPrivacyPolicy);
+    } catch (error) {
+      console.warn("[App] Hydration error from localStorage:", error);
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
 
   const [currentTab, setCurrentTab] = useState<NavTab>("chat");
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>(
@@ -231,10 +218,13 @@ export default function App() {
   const [quickTaskAgentId, setQuickTaskAgentId] = useState<string | undefined>(undefined);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<string | undefined>("free");
   const [showFocusHUD, setShowFocusHUD] = useState(true);
 
-  // Auto-save feedback indicators
+  // Auto-save feedback indicators with useRef timer cleanup
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const autoSaveTimeoutRef = useRef<number | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<string>(() => {
     const d = new Date();
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -242,116 +232,166 @@ export default function App() {
 
   const triggerAutoSaveIndicator = () => {
     setIsAutoSaving(true);
-    const timeout = setTimeout(() => {
+    if (autoSaveTimeoutRef.current !== null) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    autoSaveTimeoutRef.current = window.setTimeout(() => {
       setIsAutoSaving(false);
       const d = new Date();
       setLastSavedTime(d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      autoSaveTimeoutRef.current = null;
     }, 450);
-    return () => clearTimeout(timeout);
   };
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current !== null) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setStoredItem("agentflow_master_access", masterAccess);
+  }, [masterAccess, isHydrated]);
 
   // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem("agentflow_agents", JSON.stringify(agents));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_agents", agents);
     triggerAutoSaveIndicator();
-  }, [agents]);
+  }, [agents, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_workflows", JSON.stringify(workflows));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_workflows", workflows);
     triggerAutoSaveIndicator();
-  }, [workflows]);
+  }, [workflows, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_assets", JSON.stringify(assets));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_assets", assets);
     triggerAutoSaveIndicator();
-  }, [assets]);
+  }, [assets, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_profile", JSON.stringify(userProfile));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_profile", userProfile);
     triggerAutoSaveIndicator();
-  }, [userProfile]);
+  }, [userProfile, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_leaderboard", JSON.stringify(leaderboardUsers));
-  }, [leaderboardUsers]);
+    if (!isHydrated) return;
+    setStoredItem("agentflow_leaderboard", leaderboardUsers);
+  }, [leaderboardUsers, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_executions", JSON.stringify(executionHistory));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_executions", executionHistory);
     triggerAutoSaveIndicator();
-  }, [executionHistory]);
+  }, [executionHistory, isHydrated]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (activeTaskSession) {
-      localStorage.setItem("agentflow_active_task", JSON.stringify(activeTaskSession));
+      setStoredItem("agentflow_active_task", activeTaskSession);
     }
-  }, [activeTaskSession]);
+  }, [activeTaskSession, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_workplace_stages", JSON.stringify(workplaceStages));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_workplace_stages", workplaceStages);
     triggerAutoSaveIndicator();
-  }, [workplaceStages]);
+  }, [workplaceStages, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_models", JSON.stringify(models));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_models", models);
     triggerAutoSaveIndicator();
-  }, [models]);
+  }, [models, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_permissions", JSON.stringify(permissions));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_permissions", permissions);
     triggerAutoSaveIndicator();
-  }, [permissions]);
+  }, [permissions, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_connected_apps", JSON.stringify(connectedApps));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_connected_apps", connectedApps);
     triggerAutoSaveIndicator();
-  }, [connectedApps]);
+  }, [connectedApps, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_audit_logs", JSON.stringify(auditLogs));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_audit_logs", auditLogs);
     triggerAutoSaveIndicator();
-  }, [auditLogs]);
+  }, [auditLogs, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_whitelabel_config", JSON.stringify(whiteLabelConfig));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_whitelabel_config", whiteLabelConfig);
     triggerAutoSaveIndicator();
-    // Dynamically update document title
-    document.title = `${whiteLabelConfig.brandName} - ${whiteLabelConfig.tagline}`;
-  }, [whiteLabelConfig]);
+    // Dynamically update document title if document is present
+    if (typeof document !== "undefined") {
+      document.title = `${whiteLabelConfig.brandName} - ${whiteLabelConfig.tagline}`;
+    }
+  }, [whiteLabelConfig, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_tenants", JSON.stringify(tenants));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_tenants", tenants);
     triggerAutoSaveIndicator();
-  }, [tenants]);
+  }, [tenants, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_developer_profile", JSON.stringify(developerProfile));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_developer_profile", developerProfile);
     triggerAutoSaveIndicator();
-  }, [developerProfile]);
+  }, [developerProfile, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_rate_card", JSON.stringify(rateCard));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_rate_card", rateCard);
     triggerAutoSaveIndicator();
-  }, [rateCard]);
+  }, [rateCard, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_tenants_billing", JSON.stringify(tenantsBilling));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_tenants_billing", tenantsBilling);
     triggerAutoSaveIndicator();
-  }, [tenantsBilling]);
+  }, [tenantsBilling, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_financial_history", JSON.stringify(financialHistory));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_financial_history", financialHistory);
     triggerAutoSaveIndicator();
-  }, [financialHistory]);
+  }, [financialHistory, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_approved_automations", JSON.stringify(approvedAutomations));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_approved_automations", approvedAutomations);
     triggerAutoSaveIndicator();
-  }, [approvedAutomations]);
+  }, [approvedAutomations, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem("agentflow_saved_reports", JSON.stringify(savedReports));
+    if (!isHydrated) return;
+    setStoredItem("agentflow_saved_reports", savedReports);
     triggerAutoSaveIndicator();
-  }, [savedReports]);
+  }, [savedReports, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setStoredItem("agentflow_client_agent_requests", clientAgentRequests);
+    triggerAutoSaveIndicator();
+  }, [clientAgentRequests, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setStoredItem("agentflow_agent_privacy_policy", agentPrivacyPolicy);
+    triggerAutoSaveIndicator();
+  }, [agentPrivacyPolicy, isHydrated]);
 
   // Keyboard shortcut Ctrl+S / Cmd+S to open save state manager
   useEffect(() => {
@@ -958,34 +998,34 @@ export default function App() {
     setAuditLogs([]);
     setActiveTaskSession(null);
     setActiveWorkflowId(INITIAL_WORKFLOWS[0]?.id || "wf-1");
-    localStorage.removeItem("agentflow_agents");
-    localStorage.removeItem("agentflow_workflows");
-    localStorage.removeItem("agentflow_profile");
-    localStorage.removeItem("agentflow_leaderboard");
-    localStorage.removeItem("agentflow_executions");
-    localStorage.removeItem("agentflow_active_task");
-    localStorage.removeItem("agentflow_audit_logs");
+    removeStoredItem("agentflow_agents");
+    removeStoredItem("agentflow_workflows");
+    removeStoredItem("agentflow_profile");
+    removeStoredItem("agentflow_leaderboard");
+    removeStoredItem("agentflow_executions");
+    removeStoredItem("agentflow_active_task");
+    removeStoredItem("agentflow_audit_logs");
   };
 
   // Profile Identity & Clean Slate Handlers
   const handleUpdateUserProfile = (updated: Partial<EmployeeProfile>) => {
     setUserProfile((prev) => {
       const next = { ...prev, ...updated };
+      setLeaderboardUsers((lbPrev) =>
+        lbPrev.map((u) =>
+          u.isCurrentUser || u.id === prev.id
+            ? {
+                ...u,
+                name: updated.name ?? u.name,
+                role: updated.role ?? u.role,
+                department: updated.department ?? u.department,
+                avatar: updated.avatar ?? u.avatar,
+              }
+            : u
+        )
+      );
       return next;
     });
-    setLeaderboardUsers((prev) =>
-      prev.map((u) =>
-        u.isCurrentUser || u.id === userProfile.id
-          ? {
-              ...u,
-              name: updated.name || u.name,
-              role: updated.role || u.role,
-              department: updated.department || u.department,
-              avatar: updated.avatar || u.avatar,
-            }
-          : u
-      )
-    );
   };
 
   const handleResetToCleanSlate = () => {
@@ -994,15 +1034,15 @@ export default function App() {
     setAuditLogs([]);
     setActiveTaskSession(null);
     setLeaderboardUsers(LEADERBOARD_USERS);
-    localStorage.removeItem("agentflow_profile");
-    localStorage.removeItem("agentflow_executions");
-    localStorage.removeItem("agentflow_active_task");
-    localStorage.removeItem("agentflow_audit_logs");
+    removeStoredItem("agentflow_profile");
+    removeStoredItem("agentflow_executions");
+    removeStoredItem("agentflow_active_task");
+    removeStoredItem("agentflow_audit_logs");
   };
 
   const handleClearExecutionHistory = () => {
     setExecutionHistory([]);
-    localStorage.removeItem("agentflow_executions");
+    removeStoredItem("agentflow_executions");
   };
 
   // Dispatch focus task directly to dispatcher
@@ -1119,12 +1159,17 @@ export default function App() {
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenWhiteLabel={() => setCurrentTab("whitelabel")}
         onOpenMonetization={() => setCurrentTab("monetization")}
-        onOpenPricing={() => setIsPricingModalOpen(true)}
+        onOpenPricing={() => {
+          setSelectedPlanForPricing(userProfile.subscriptionPlan || "free");
+          setIsPricingModalOpen(true);
+        }}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
         isAutoSaving={isAutoSaving}
         lastSavedTime={lastSavedTime}
         whiteLabelConfig={whiteLabelConfig}
         isMasterDeveloper={isMasterDeveloper}
+        accessLevel={masterAccess?.currentAccessLevel}
         onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
         onToggleClientPreview={() =>
           setWhiteLabelConfig((prev) => ({
@@ -1154,7 +1199,14 @@ export default function App() {
           savedReportsCount={savedReports.length}
           whiteLabelConfig={whiteLabelConfig}
           isMasterDeveloper={isMasterDeveloper}
+          accessLevel={masterAccess?.currentAccessLevel}
           onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
+          onOpenPricing={() => {
+            setSelectedPlanForPricing(userProfile.subscriptionPlan || "free");
+            setIsPricingModalOpen(true);
+          }}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          userSubscriptionPlan={userProfile.subscriptionPlan}
         />
 
         {/* Dynamic Tab Body */}
@@ -1231,6 +1283,35 @@ export default function App() {
             isMasterDeveloper={isMasterDeveloper}
             developerCompanyName={developerProfile.companyName}
             onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
+            onOpenProfilePrivacy={() => {
+              setStoredItem("agentflow_settings_active_tab", "privacy");
+              setIsProfileModalOpen(true);
+            }}
+            onUpdateAgentVisibility={(agentId, visibility, clientPageAllowed) => {
+              setAgents((prev) =>
+                prev.map((a) =>
+                  a.id === agentId ? { ...a, visibility, clientPageAllowed } : a
+                )
+              );
+            }}
+            onRequestClientAccess={(agent) => {
+              const newReq: ClientAgentRequest = {
+                id: `req-${Date.now()}`,
+                agentId: agent.id,
+                agentName: agent.name,
+                agentAvatar: agent.avatar,
+                department: agent.department,
+                tenantId: (whiteLabelConfig.companyName || "client-tenant").toLowerCase().replace(/\s+/g, '-'),
+                tenantName: whiteLabelConfig.companyName || "Client Tenant Organization",
+                requestedByEmail: "client-lead@tenant.io",
+                requesterName: "Client Operations Lead",
+                requestedAt: new Date().toISOString(),
+                status: "pending",
+                clientNotes: `Requesting to activate ${agent.name} on our client dashboard portal.`,
+                intendedClientPage: "Client Portal & Workflow Operations"
+              };
+              setClientAgentRequests((prev) => [newReq, ...prev]);
+            }}
           />
         )}
 
@@ -1512,22 +1593,78 @@ export default function App() {
         onClose={() => setIsProfileModalOpen(false)}
         userProfile={userProfile}
         agents={agents}
+        clientAgentRequests={clientAgentRequests}
+        agentPrivacyPolicy={agentPrivacyPolicy}
         onUpdateProfile={handleUpdateUserProfile}
         onUpdateAgents={(updatedAgents) => {
           setAgents(updatedAgents);
-          localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
+          setStoredItem("agentflow_agents", updatedAgents);
+        }}
+        onUpdateClientAgentRequests={(updatedRequests) => {
+          setClientAgentRequests(updatedRequests);
+          setStoredItem("agentflow_client_agent_requests", updatedRequests);
+        }}
+        onUpdateAgentPrivacyPolicy={(policy) => {
+          setAgentPrivacyPolicy(policy);
+          setStoredItem("agentflow_agent_privacy_policy", policy);
         }}
         onResetToCleanSlate={handleResetToCleanSlate}
         onClearExecutionHistory={handleClearExecutionHistory}
+        onOpenPricing={() => {
+          setSelectedPlanForPricing(userProfile.subscriptionPlan || "free");
+          setIsPricingModalOpen(true);
+        }}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+      />
+
+      {/* Modal: Sign Up & User Registration (Free Tier Explorer + Tier Selection) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        userProfile={userProfile}
+        onAuthSuccess={(newProfile, planId) => {
+          setUserProfile((prev) => {
+            const updated: EmployeeProfile = {
+              ...prev,
+              ...newProfile,
+              subscriptionPlan: planId || (newProfile.subscriptionPlan as any) || "free",
+              isAuthenticated: true,
+            };
+            setStoredItem("agentflow_profile", updated);
+            return updated;
+          });
+          setIsAuthModalOpen(false);
+          if (planId && planId !== "free") {
+            setSelectedPlanForPricing(planId);
+            setIsPricingModalOpen(true);
+          } else {
+            fireCelebration();
+          }
+        }}
+        onOpenPricingPlans={() => {
+          setIsAuthModalOpen(false);
+          setIsPricingModalOpen(true);
+        }}
+        initialPlan={(userProfile.subscriptionPlan as any) || "free"}
       />
 
       {/* Modal: Pricing & Stripe Subscription Checkout */}
       <PricingCheckoutModal
         isOpen={isPricingModalOpen}
         onClose={() => setIsPricingModalOpen(false)}
-        customerEmail={developerProfile?.developerEmail || "customer@enterprise.com"}
-        tenantName={whiteLabelConfig?.companyName || "Enterprise Team"}
+        customerEmail={userProfile.email || developerProfile?.developerEmail || "customer@enterprise.com"}
+        tenantName={userProfile.organizationName || whiteLabelConfig?.companyName || "Enterprise Team"}
+        initialPlanId={selectedPlanForPricing || userProfile.subscriptionPlan || "free"}
         onSuccessUpgrade={(planId) => {
+          setUserProfile((prev) => {
+            const updated: EmployeeProfile = {
+              ...prev,
+              subscriptionPlan: planId as "free" | "starter" | "pro" | "enterprise",
+              isAuthenticated: true,
+            };
+            setStoredItem("agentflow_profile", updated);
+            return updated;
+          });
           addXpAndCheckLevel(500, 1.5);
           fireCelebration();
         }}

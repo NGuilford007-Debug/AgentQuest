@@ -312,6 +312,10 @@ export interface EmployeeProfile {
   role: string;
   department: Department;
   avatar: string;
+  email?: string;
+  organizationName?: string;
+  subscriptionPlan?: "free" | "starter" | "pro" | "enterprise";
+  isAuthenticated?: boolean;
   xp: number;
   level: number;
   levelTitle: string;
@@ -869,7 +873,7 @@ export interface WebAppDeploymentConfig {
 // Master Developer vs. Client Access Gate
 // ----------------------------------------------------
 
-export type AccessLevel = "master_developer" | "client_tenant";
+export type AccessLevel = "master_developer" | "client_tenant" | "team_operator";
 
 export interface MasterAccessSettings {
   currentAccessLevel: AccessLevel;
@@ -912,6 +916,30 @@ export interface ApprovedAutomation {
   estimatedHoursSaved: number;
   tags: string[];
   isBookmarked?: boolean;
+}
+
+export interface ClientAgentRequest {
+  id: string;
+  agentId: string;
+  agentName: string;
+  agentAvatar?: string;
+  tenantId: string;
+  tenantName: string;
+  tenantLogo?: string;
+  requestedByEmail: string;
+  requesterName: string;
+  requestedAt: string;
+  intendedClientPage: string; // e.g. "Apex Cloud Client Support Portal"
+  clientNotes: string;
+  status: "pending" | "approved" | "rejected";
+  department: Department;
+}
+
+export interface AgentPrivacyPolicyConfig {
+  defaultVisibilityForNewAgents: "internal_only" | "client_visible" | "pending_client_review";
+  requireExplicitClientRequest: boolean;
+  notifyOnClientAgentRequest: boolean;
+  clientDisclaimerAgreement: string;
 }
 
 // ----------------------------------------------------

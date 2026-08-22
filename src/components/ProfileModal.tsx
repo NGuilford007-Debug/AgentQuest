@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { EmployeeProfile, Department, Agent } from "../types";
+import React, { useState, useEffect, useMemo } from "react";
+import { EmployeeProfile, Department, Agent, ClientAgentRequest, AgentPrivacyPolicyConfig } from "../types";
 import { 
   User, 
   RotateCcw, 
@@ -29,7 +29,19 @@ import {
   Globe,
   Settings,
   HelpCircle,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  Inbox,
+  Send,
+  Share2,
+  CheckSquare,
+  XCircle,
+  Search,
+  Filter,
+  CheckCircle
 } from "lucide-react";
 
 interface ProfileModalProps {
@@ -37,11 +49,17 @@ interface ProfileModalProps {
   onClose: () => void;
   userProfile: EmployeeProfile;
   agents?: Agent[];
+  clientAgentRequests?: ClientAgentRequest[];
+  agentPrivacyPolicy?: AgentPrivacyPolicyConfig;
   onUpdateProfile: (updated: Partial<EmployeeProfile>) => void;
   onUpdateAgents?: (agents: Agent[]) => void;
+  onUpdateClientAgentRequests?: (requests: ClientAgentRequest[]) => void;
+  onUpdateAgentPrivacyPolicy?: (policy: AgentPrivacyPolicyConfig) => void;
   onResetToCleanSlate: () => void;
   onClearExecutionHistory: () => void;
   onResetAgentsToDefault?: () => void;
+  onOpenPricing?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 const DEPARTMENTS: Department[] = [
@@ -142,41 +160,74 @@ const BENCHMARK_PRESETS: BenchmarkPreset[] = [
   },
 ];
 
+function safeGet(key: string, fallback: string = ""): string {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return fallback;
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
   onClose,
   userProfile,
   agents = [],
+  clientAgentRequests = [],
+  agentPrivacyPolicy,
   onUpdateProfile,
   onUpdateAgents,
+  onUpdateClientAgentRequests,
+  onUpdateAgentPrivacyPolicy,
   onResetToCleanSlate,
   onClearExecutionHistory,
   onResetAgentsToDefault,
+  onOpenPricing,
+  onOpenAuthModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<"settings" | "benchmarks" | "behavior" | "cleanslate">(() => {
-    return (localStorage.getItem("agentflow_settings_active_tab") as any) || "settings";
+  const [activeTab, setActiveTab] = useState<"settings" | "privacy" | "benchmarks" | "behavior" | "cleanslate">(() => {
+    return (safeGet("agentflow_settings_active_tab", "settings") as any) || "settings";
   });
+  
+  // Profile fields
   const [name, setName] = useState(userProfile.name);
+  const [email, setEmail] = useState(userProfile.email || "alex.mercer@enterprise.io");
   const [role, setRole] = useState(userProfile.role);
   const [department, setDepartment] = useState<Department>(userProfile.department);
   const [avatar, setAvatar] = useState(userProfile.avatar);
   const [companyName, setCompanyName] = useState<string>(() => {
-    return localStorage.getItem("agentflow_workspace_name") || "Acme Enterprise Corp";
+    return safeGet("agentflow_workspace_name", "Acme Enterprise Corp");
   });
   const [preferredTone, setPreferredTone] = useState<string>(() => {
-    return localStorage.getItem("agentflow_pref_tone") || "executive";
+    return safeGet("agentflow_pref_tone", "executive");
   });
   const [portalMode, setPortalMode] = useState<string>(() => {
-    return localStorage.getItem("agentflow_portal_mode") || "generalist";
+    return safeGet("agentflow_portal_mode", "generalist");
   });
   const [globalTemperature, setGlobalTemperature] = useState<number>(() => {
-    const savedTemp = localStorage.getItem("agentflow_global_temp");
+    const savedTemp = safeGet("agentflow_global_temp");
     return savedTemp ? parseFloat(savedTemp) : 0.35;
   });
   const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string>(() => {
-    return localStorage.getItem("agentflow_selected_benchmark") || "balanced-fleet";
+    return safeGet("agentflow_selected_benchmark", "balanced-fleet");
   });
   
+  // Privacy & Client Visibility fields
+  const [agentFilterQuery, setAgentFilterQuery] = useState("");
+  const [agentFilterDept, setAgentFilterDept] = useState<string>("all");
+  const [agentFilterVisibility, setAgentFilterVisibility] = useState<string>("all");
+  const [requestFilterStatus, setRequestFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [activeReplyRequestId, setActiveReplyRequestId] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState("");
+
   const [confirmCleanSlate, setConfirmCleanSlate] = useState(false);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
@@ -188,26 +239,60 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setRole(userProfile.role);
       setDepartment(userProfile.department);
       setAvatar(userProfile.avatar);
-      setCompanyName(localStorage.getItem("agentflow_workspace_name") || "Acme Enterprise Corp");
-      setPreferredTone(localStorage.getItem("agentflow_pref_tone") || "executive");
-      setPortalMode(localStorage.getItem("agentflow_portal_mode") || "generalist");
-      const savedTemp = localStorage.getItem("agentflow_global_temp");
+      setCompanyName(safeGet("agentflow_workspace_name", "Acme Enterprise Corp"));
+      setPreferredTone(safeGet("agentflow_pref_tone", "executive"));
+      setPortalMode(safeGet("agentflow_portal_mode", "generalist"));
+      const savedTemp = safeGet("agentflow_global_temp");
       if (savedTemp) setGlobalTemperature(parseFloat(savedTemp));
-      const savedBenchmark = localStorage.getItem("agentflow_selected_benchmark");
+      const savedBenchmark = safeGet("agentflow_selected_benchmark");
       if (savedBenchmark) setSelectedBenchmarkId(savedBenchmark);
     }
   }, [isOpen, userProfile]);
+
+  const pendingRequestsCount = useMemo(() => {
+    return clientAgentRequests.filter((r) => r.status === "pending").length;
+  }, [clientAgentRequests]);
+
+  const filteredAgents = useMemo(() => {
+    return agents.filter((agent) => {
+      const matchesSearch = 
+        agent.name.toLowerCase().includes(agentFilterQuery.toLowerCase()) ||
+        agent.role.toLowerCase().includes(agentFilterQuery.toLowerCase()) ||
+        agent.description.toLowerCase().includes(agentFilterQuery.toLowerCase());
+      
+      const matchesDept = agentFilterDept === "all" || agent.department === agentFilterDept;
+
+      const isInternal = agent.visibility === "internal_only" || agent.clientPageAllowed === false;
+      const isClientAllowed = agent.clientPageAllowed === true || agent.visibility === "client_visible";
+      const isRequiresReview = agent.visibility === "pending_client_review";
+
+      const matchesVisibility = 
+        agentFilterVisibility === "all" ||
+        (agentFilterVisibility === "internal" && isInternal) ||
+        (agentFilterVisibility === "client_allowed" && isClientAllowed) ||
+        (agentFilterVisibility === "requires_review" && isRequiresReview);
+
+      return matchesSearch && matchesDept && matchesVisibility;
+    });
+  }, [agents, agentFilterQuery, agentFilterDept, agentFilterVisibility]);
+
+  const filteredRequests = useMemo(() => {
+    return clientAgentRequests.filter((req) => {
+      if (requestFilterStatus === "all") return true;
+      return req.status === requestFilterStatus;
+    });
+  }, [clientAgentRequests, requestFilterStatus]);
 
   if (!isOpen) return null;
 
   const showToast = (msg: string) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 3200);
   };
 
-  const handleTabChange = (tab: "settings" | "benchmarks" | "behavior" | "cleanslate") => {
+  const handleTabChange = (tab: "settings" | "privacy" | "benchmarks" | "behavior" | "cleanslate") => {
     setActiveTab(tab);
-    localStorage.setItem("agentflow_settings_active_tab", tab);
+    safeSet("agentflow_settings_active_tab", tab);
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -219,35 +304,113 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
     onUpdateProfile({
       name: cleanName,
+      email: email.trim(),
+      organizationName: cleanCompany,
       role: cleanRole,
       department,
       avatar: cleanAvatar,
     });
-    localStorage.setItem("agentflow_workspace_name", cleanCompany);
-    localStorage.setItem("agentflow_pref_tone", preferredTone);
-    localStorage.setItem("agentflow_avatar_url", cleanAvatar);
+    safeSet("agentflow_workspace_name", cleanCompany);
+    safeSet("agentflow_pref_tone", preferredTone);
+    safeSet("agentflow_avatar_url", cleanAvatar);
     showToast("Profile identity & personalization preferences saved across sessions!");
   };
 
   const handleToneChange = (toneId: string) => {
     setPreferredTone(toneId);
-    localStorage.setItem("agentflow_pref_tone", toneId);
+    safeSet("agentflow_pref_tone", toneId);
     showToast(`Work product delivery tone set to "${toneId}".`);
   };
 
   const handleAvatarSelect = (avatarUrl: string) => {
     setAvatar(avatarUrl);
-    localStorage.setItem("agentflow_avatar_url", avatarUrl);
+    safeSet("agentflow_avatar_url", avatarUrl);
+  };
+
+  // Agent Privacy & Client Visibility Handlers
+  const handleUpdateAgentVisibility = (
+    agentId: string, 
+    visibility: "internal_only" | "client_visible" | "pending_client_review", 
+    clientPageAllowed: boolean
+  ) => {
+    if (!onUpdateAgents) return;
+    const updated = agents.map((a) => {
+      if (a.id === agentId) {
+        return {
+          ...a,
+          visibility,
+          clientPageAllowed,
+        };
+      }
+      return a;
+    });
+    onUpdateAgents(updated);
+    safeSet("agentflow_agents", JSON.stringify(updated));
+
+    const target = agents.find((a) => a.id === agentId);
+    if (visibility === "internal_only") {
+      showToast(`🔒 "${target?.name || 'Agent'}" is now Internal Only (Hidden from client pages).`);
+    } else if (visibility === "client_visible") {
+      showToast(`🌐 "${target?.name || 'Agent'}" authorized for Client Page visibility.`);
+    } else {
+      showToast(`📩 "${target?.name || 'Agent'}" now requires formal Client Request.`);
+    }
+  };
+
+  const handleApproveClientRequest = (request: ClientAgentRequest) => {
+    // 1. Update request status
+    if (onUpdateClientAgentRequests) {
+      const updatedReqs = clientAgentRequests.map((r) => 
+        r.id === request.id ? { ...r, status: "approved" as const } : r
+      );
+      onUpdateClientAgentRequests(updatedReqs);
+      safeSet("agentflow_client_agent_requests", JSON.stringify(updatedReqs));
+    }
+
+    // 2. Update agent to allowed
+    if (onUpdateAgents) {
+      const updatedAgents = agents.map((a) => {
+        if (a.id === request.agentId) {
+          return {
+            ...a,
+            clientPageAllowed: true,
+            visibility: "client_visible" as const,
+          };
+        }
+        return a;
+      });
+      onUpdateAgents(updatedAgents);
+      safeSet("agentflow_agents", JSON.stringify(updatedAgents));
+    }
+
+    showToast(`✅ Approved! "${request.agentName}" is now active on ${request.tenantName}'s client page.`);
+  };
+
+  const handleRejectClientRequest = (request: ClientAgentRequest) => {
+    if (onUpdateClientAgentRequests) {
+      const updatedReqs = clientAgentRequests.map((r) => 
+        r.id === request.id ? { ...r, status: "rejected" as const } : r
+      );
+      onUpdateClientAgentRequests(updatedReqs);
+      safeSet("agentflow_client_agent_requests", JSON.stringify(updatedReqs));
+    }
+    showToast(`Declined request from ${request.tenantName}. Agent remains internal.`);
+  };
+
+  const handleSendClarification = (request: ClientAgentRequest) => {
+    if (!replyMessage.trim()) return;
+    showToast(`Scoping response sent to ${request.requestedByEmail}: "${replyMessage.slice(0, 40)}..."`);
+    setActiveReplyRequestId(null);
+    setReplyMessage("");
   };
 
   const handleApplyBenchmarkPreset = (preset: BenchmarkPreset) => {
     setSelectedBenchmarkId(preset.id);
     setGlobalTemperature(preset.temperature);
     
-    // Persist benchmark preset selections to localStorage
-    localStorage.setItem("agentflow_selected_benchmark", preset.id);
-    localStorage.setItem("agentflow_global_temp", preset.temperature.toString());
-    localStorage.setItem("agentflow_benchmark_model", preset.model);
+    safeSet("agentflow_selected_benchmark", preset.id);
+    safeSet("agentflow_global_temp", preset.temperature.toString());
+    safeSet("agentflow_benchmark_model", preset.model);
     
     if (onUpdateAgents && agents.length > 0) {
       const updatedAgents = agents.map((agent) => ({
@@ -256,7 +419,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         temperature: preset.temperature,
       }));
       onUpdateAgents(updatedAgents);
-      localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
+      safeSet("agentflow_agents", JSON.stringify(updatedAgents));
       showToast(`Applied & persisted "${preset.name}" across all ${agents.length} fleet agents!`);
     } else {
       showToast(`Selected & persisted "${preset.name}" benchmark preset!`);
@@ -264,14 +427,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   };
 
   const handleApplyCustomFleetSettings = () => {
-    localStorage.setItem("agentflow_global_temp", globalTemperature.toString());
+    safeSet("agentflow_global_temp", globalTemperature.toString());
     if (onUpdateAgents && agents.length > 0) {
       const updatedAgents = agents.map((agent) => ({
         ...agent,
         temperature: globalTemperature,
       }));
       onUpdateAgents(updatedAgents);
-      localStorage.setItem("agentflow_agents", JSON.stringify(updatedAgents));
+      safeSet("agentflow_agents", JSON.stringify(updatedAgents));
       showToast(`Persisted global fleet temperature (${globalTemperature}) across all agents!`);
     } else {
       showToast(`Persisted temperature setting: ${globalTemperature}`);
@@ -280,7 +443,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   const handleTogglePortalMode = (mode: string) => {
     setPortalMode(mode);
-    localStorage.setItem("agentflow_portal_mode", mode);
+    safeSet("agentflow_portal_mode", mode);
     showToast(mode === "generalist" 
       ? "Universal Model Portal Mode active: Agents will execute all cross-department tasks freely." 
       : "Domain-Anchored Mode active: Agents prioritize core department focus."
@@ -314,7 +477,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     >
       <div 
         id="profile-clean-slate-modal"
-        className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]"
+        className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Toast Notification */}
         {notification && (
@@ -338,7 +501,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize your profile, configure enterprise benchmark presets, tune agent parameters, or initialize baseline telemetry.
+                Personalize profile identity, govern agent client-page visibility, review client permission requests, or configure benchmark presets.
               </p>
             </div>
           </div>
@@ -363,7 +526,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Profile & Personalization</span>
+            <span>Profile & Identity</span>
+          </button>
+
+          {/* NEW: Agent Privacy & Client Requests Tab */}
+          <button
+            id="tab-profile-privacy"
+            onClick={() => handleTabChange("privacy")}
+            className={`pb-2.5 px-3.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === "privacy"
+                ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-400 font-bold"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Agent Visibility & Client Requests</span>
+            {pendingRequestsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold animate-pulse">
+                {pendingRequestsCount} pending
+              </span>
+            )}
           </button>
 
           <button
@@ -411,6 +593,49 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           {/* TAB 1: Profile & Identity */}
           {activeTab === "settings" && (
             <form onSubmit={handleSaveProfile} className="space-y-5">
+              {/* Account & Subscription Status Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        {userProfile.organizationName || "Enterprise Workspace"}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold uppercase tracking-wide border border-emerald-500/30 whitespace-nowrap">
+                        {userProfile.subscriptionPlan ? `${userProfile.subscriptionPlan} Tier` : "Free Explorer"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      {userProfile.email || "Free tier account • Standard API quota"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  {onOpenPricing && (
+                    <button
+                      type="button"
+                      onClick={onOpenPricing}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-xs active:scale-95 transition-all whitespace-nowrap"
+                    >
+                      {userProfile.subscriptionPlan === "free" || !userProfile.subscriptionPlan ? "Upgrade Plan" : "Manage Plans"}
+                    </button>
+                  )}
+                  {onOpenAuthModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenAuthModal}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-semibold shadow-2xs active:scale-95 transition-all whitespace-nowrap"
+                    >
+                      {userProfile.isAuthenticated ? "Account Switch" : "Sign Up"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Profile Avatar Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
@@ -456,7 +681,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-blue-500" />
-                    Full Name
+                    Display Name
                   </label>
                   <input
                     id="input-profile-name"
@@ -465,37 +690,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Alex Mercer"
                     className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Briefcase className="w-3.5 h-3.5 text-blue-500" />
-                    Role & Job Title
+                    Job Title / Role
                   </label>
                   <input
                     id="input-profile-role"
                     type="text"
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    placeholder="e.g. Automation Lead / SRE"
+                    placeholder="e.g. Lead AI Systems Architect"
                     className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
               </div>
 
-              {/* Department & Workspace Company */}
+              {/* Department & Workspace Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                    Department Affiliation
+                    <Layers className="w-3.5 h-3.5 text-purple-500" />
+                    Department Focus
                   </label>
                   <select
-                    id="select-profile-dept"
+                    id="select-profile-department"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value as Department)}
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   >
                     {DEPARTMENTS.map((dept) => (
                       <option key={dept} value={dept}>
@@ -579,7 +806,411 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </form>
           )}
 
-          {/* TAB 2: Enterprise Benchmark Presets */}
+          {/* TAB 2: Agent Visibility & Client Requests (PROMINENT USER FOCUS) */}
+          {activeTab === "privacy" && (
+            <div className="space-y-6">
+              {/* Explainer Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800/60">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                        Creator Authority & Client Page Visibility Control
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 text-[10px] font-bold">
+                        Privacy Enforced
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 dark:text-emerald-300 mt-1 leading-relaxed">
+                      Your custom AI agents weren't built for a client's page specifically. Here you have full autonomy to decide which agents appear on client white-label portals, keep proprietary models internal, or require clients to submit a formal scoping request before they can activate an agent.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 1: Inbound Client Access Requests Queue */}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Inbox className="w-4 h-4 text-amber-500" />
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Inbound Client Access Petitions ({clientAgentRequests.length})
+                    </h4>
+                    {pendingRequestsCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold">
+                        {pendingRequestsCount} Awaiting Review
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Filter tabs for requests */}
+                  <div className="flex items-center gap-1">
+                    {(["all", "pending", "approved", "rejected"] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setRequestFilterStatus(st)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer capitalize ${
+                          requestFilterStatus === st
+                            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {filteredRequests.length === 0 ? (
+                  <div className="p-6 text-center rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                    <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-1.5 opacity-80" />
+                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">No Pending Requests Matching Filter</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Client organizations will appear here when they request permission to add your agents to their white-label dashboard.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredRequests.map((req) => {
+                      const isPending = req.status === "pending";
+                      const isApproved = req.status === "approved";
+                      const isRejected = req.status === "rejected";
+
+                      return (
+                        <div
+                          key={req.id}
+                          className={`p-4 rounded-2xl border transition-all ${
+                            isPending 
+                              ? "bg-amber-50/40 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/80 shadow-sm"
+                              : isApproved
+                              ? "bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/60"
+                              : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-75"
+                          }`}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                            <div className="space-y-2 flex-1">
+                              {/* Client Organization & Requester */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {req.tenantLogo && (
+                                  <img 
+                                    src={req.tenantLogo} 
+                                    alt={req.tenantName} 
+                                    className="w-5 h-5 rounded-md object-cover border border-slate-300 dark:border-slate-700" 
+                                  />
+                                )}
+                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                  {req.tenantName}
+                                </span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  • requested by <strong className="text-slate-700 dark:text-slate-300">{req.requesterName}</strong> ({req.requestedByEmail})
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  • {new Date(req.requestedAt).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+
+                              {/* Target Agent & Target Client Page */}
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold">
+                                  {req.agentAvatar && (
+                                    <img src={req.agentAvatar} alt={req.agentName} className="w-3.5 h-3.5 rounded-full object-cover" />
+                                  )}
+                                  <span>Agent: {req.agentName}</span>
+                                </div>
+                                <span className="text-[11px] text-slate-500">→</span>
+                                <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                  <Globe className="w-3 h-3 text-slate-400" />
+                                  <span>Target Client Page: <strong>{req.intendedClientPage}</strong></span>
+                                </div>
+                              </div>
+
+                              {/* Client Message / Note */}
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 italic relative">
+                                <MessageSquare className="w-3.5 h-3.5 text-slate-400 absolute top-3 left-3" />
+                                <div className="pl-5">
+                                  "{req.clientNotes}"
+                                </div>
+                              </div>
+
+                              {/* Active Clarification Reply Box */}
+                              {activeReplyRequestId === req.id && (
+                                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 space-y-2 mt-2">
+                                  <div className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>Send Scoping Requirements or Rejection Context to {req.requesterName}</span>
+                                  </div>
+                                  <textarea
+                                    value={replyMessage}
+                                    onChange={(e) => setReplyMessage(e.target.value)}
+                                    placeholder="e.g. This agent requires custom API credentials and Redis cluster access. Please confirm your webhook infrastructure before activation..."
+                                    rows={2}
+                                    className="w-full p-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveReplyRequestId(null)}
+                                      className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendClarification(req)}
+                                      className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      <span>Dispatch Scoping Note</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Status and Action Buttons */}
+                            <div className="flex flex-row md:flex-col items-end justify-between md:justify-start gap-2 shrink-0">
+                              {isPending ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveClientRequest(req)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-600/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Approve for Client Page</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectClientRequest(req)}
+                                    className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/60 dark:hover:text-red-400 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                                  >
+                                    Decline
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveReplyRequestId(activeReplyRequestId === req.id ? null : req.id);
+                                      setReplyMessage("");
+                                    }}
+                                    className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-all cursor-pointer"
+                                    title="Send Scoping Feedback"
+                                  >
+                                    <MessageSquare className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : isApproved ? (
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-300 dark:border-emerald-800">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                  <span>Active on Client Page</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold">
+                                  <XCircle className="w-4 h-4 text-slate-400" />
+                                  <span>Declined by Creator</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Agent Fleet Privacy & Client Page Visibility Matrix */}
+              <div className="space-y-4 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-600" />
+                      <span>My Created Agents & Client Exposure Matrix ({agents.length})</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Toggle whether each individual agent is internal-only or authorized for client accounts.
+                    </p>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={agentFilterQuery}
+                        onChange={(e) => setAgentFilterQuery(e.target.value)}
+                        placeholder="Search agents..."
+                        className="pl-8 pr-3 py-1 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none w-36 focus:w-48 transition-all"
+                      />
+                    </div>
+
+                    <select
+                      value={agentFilterDept}
+                      onChange={(e) => setAgentFilterDept(e.target.value)}
+                      className="px-2.5 py-1 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none"
+                    >
+                      <option value="all">All Departments</option>
+                      {DEPARTMENTS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={agentFilterVisibility}
+                      onChange={(e) => setAgentFilterVisibility(e.target.value)}
+                      className="px-2.5 py-1 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none"
+                    >
+                      <option value="all">All Visibility</option>
+                      <option value="internal">🔒 Internal Only</option>
+                      <option value="client_allowed">🌐 Client Allowed</option>
+                      <option value="requires_review">📩 Requires Review</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Agents Matrix List */}
+                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  {filteredAgents.map((agent) => {
+                    const isInternal = agent.visibility === "internal_only" || agent.clientPageAllowed === false;
+                    const isClientAllowed = agent.clientPageAllowed === true || agent.visibility === "client_visible";
+                    const isRequiresReview = agent.visibility === "pending_client_review";
+
+                    return (
+                      <div
+                        key={agent.id}
+                        className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isInternal
+                            ? "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-800"
+                            : isClientAllowed
+                            ? "bg-emerald-50/20 dark:bg-emerald-950/10 border-emerald-300/60 dark:border-emerald-800/60"
+                            : "bg-amber-50/20 dark:bg-amber-950/10 border-amber-300/60 dark:border-amber-800/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={agent.avatar}
+                            alt={agent.name}
+                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                {agent.name}
+                              </h5>
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold">
+                                {agent.department}
+                              </span>
+                              {isInternal && (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1">
+                                  <Lock className="w-3 h-3 text-slate-500" />
+                                  <span>Internal Only</span>
+                                </span>
+                              )}
+                              {isClientAllowed && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1">
+                                  <Globe className="w-3 h-3 text-emerald-500" />
+                                  <span>Client Page Allowed</span>
+                                </span>
+                              )}
+                              {isRequiresReview && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold flex items-center gap-1">
+                                  <Inbox className="w-3 h-3 text-amber-500" />
+                                  <span>Requires Request</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                              {agent.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 3-Way Segmented Visibility Selector */}
+                        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0 self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAgentVisibility(agent.id, "internal_only", false)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              isInternal
+                                ? "bg-slate-800 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                            }`}
+                            title="Keep strictly private to creator workspace"
+                          >
+                            <Lock className="w-3 h-3" />
+                            <span>Internal</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAgentVisibility(agent.id, "pending_client_review", false)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              isRequiresReview
+                                ? "bg-amber-500 text-white shadow-xs"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                            }`}
+                            title="Client must submit scoping brief and wait for your approval"
+                          >
+                            <Inbox className="w-3 h-3" />
+                            <span>Require Request</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAgentVisibility(agent.id, "client_visible", true)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              isClientAllowed
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                            }`}
+                            title="Expose on client portal"
+                          >
+                            <Globe className="w-3 h-3" />
+                            <span>Client Allowed</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 3: Global Creator Privacy Policies */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <span>Global Workspace Privacy Rules</span>
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">Default New Agents to 'Internal Only'</div>
+                      <div className="text-[10px] text-slate-500">Newly constructed agents are never published to client portals without explicit confirmation.</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
+                      Active
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">Real-Time Inbound Request Alerts</div>
+                      <div className="text-[10px] text-slate-500">Receive immediate badge indicators whenever a client tenant submits an access petition.</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">
+                      Enabled
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Enterprise Benchmark Presets */}
           {activeTab === "benchmarks" && (
             <div className="space-y-5">
               <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 border border-purple-200 dark:border-purple-800/60">
@@ -701,100 +1332,88 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: Model Portal & Behavior */}
+          {/* TAB 4: Model Portal & Behavior */}
           {activeTab === "behavior" && (
             <div className="space-y-5">
-              <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/40 border border-indigo-200 dark:border-indigo-800/60">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                     <Compass className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                      Universal Model Portal Philosophy
+                      Model Routing & Operational Execution Strategy
                     </h3>
                     <p className="text-[11px] text-indigo-700 dark:text-indigo-300 mt-1 leading-relaxed">
-                      Agent personas provide stylistic flavor, tone, and domain expertise. Under the hood, each agent is an unconstrained gateway to the full foundational model, capable of handling any cross-department task without artificial limitations.
+                      Configure how autonomous agents route requests between domain specialists, how execution audits are formatted, and how human-in-the-loop approvals are triggered.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Portal Mode Selection */}
+              {/* Portal Mode Switcher */}
               <div className="space-y-3">
-                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Agent Execution Capability Mode:
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Execution Orchestration Mode
                 </label>
-
-                <div 
-                  onClick={() => handleTogglePortalMode("generalist")}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                    portalMode === "generalist"
-                      ? "bg-indigo-50/50 dark:bg-indigo-950/50 border-indigo-500 ring-2 ring-indigo-500/20"
-                      : "bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                          Universal Generalist Portal (Recommended)
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
-                            Maximum Flexibility
-                          </span>
-                        </h4>
-                        {portalMode === "generalist" && <Check className="w-4 h-4 text-indigo-600" />}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePortalMode("generalist")}
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      portalMode === "generalist"
+                        ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 ring-2 ring-indigo-500/20"
+                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-indigo-500" />
+                        Universal Model Portal (Recommended)
                       </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                        Agents carry their specialized character/tone, but will eagerly solve ANY problem (code, marketing, video titles, finance, HR, support) without declining or restricting capabilities.
-                      </p>
+                      {portalMode === "generalist" && (
+                        <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      )}
                     </div>
-                  </div>
-                </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1.5 leading-normal">
+                      Agents freely execute tasks across engineering, sales, and operations by analyzing context dynamically.
+                    </p>
+                  </button>
 
-                <div 
-                  onClick={() => handleTogglePortalMode("specialist")}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                    portalMode === "specialist"
-                      ? "bg-indigo-50/50 dark:bg-indigo-950/50 border-indigo-500 ring-2 ring-indigo-500/20"
-                      : "bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-0.5">
-                      <ShieldCheck className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                          Domain-Anchored Specialist
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                            Strict Role Focus
-                          </span>
-                        </h4>
-                        {portalMode === "specialist" && <Check className="w-4 h-4 text-indigo-600" />}
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePortalMode("anchored")}
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      portalMode === "anchored"
+                        ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 ring-2 ring-indigo-500/20"
+                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-blue-500" />
+                        Domain-Anchored Specialist
                       </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                        Agents strongly filter all questions through their dedicated department lens (e.g. SRE focuses exclusively on technical reliability).
-                      </p>
+                      {portalMode === "anchored" && (
+                        <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      )}
                     </div>
-                  </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1.5 leading-normal">
+                      Agents enforce strict departmental boundaries and require Human-in-the-Loop review for cross-domain queries.
+                    </p>
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 4: Clean Slate & Data Integrity */}
+          {/* TAB 5: Clean Slate & Reset */}
           {activeTab === "cleanslate" && (
-            <div className="space-y-6">
-              {/* Baseline Info Box */}
-              <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+            <div className="space-y-5">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border border-amber-200 dark:border-amber-800/60">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <AlertCircle className="w-5 h-5" />
+                    <RotateCcw className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200">

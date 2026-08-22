@@ -51,10 +51,12 @@ export const SaveStateManager: React.FC<SaveStateManagerProps> = ({
   onResetToDefaults,
 }) => {
   const [snapshots, setSnapshots] = useState<SaveStateSnapshot[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
       try {
-        return JSON.parse(saved);
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          return JSON.parse(saved);
+        }
       } catch (e) {
         console.error("Failed to parse save states", e);
       }
@@ -88,7 +90,13 @@ export const SaveStateManager: React.FC<SaveStateManagerProps> = ({
 
   // Sync snapshots to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshots));
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshots));
+      } catch (e) {
+        console.warn("Failed to persist save states", e);
+      }
+    }
   }, [snapshots]);
 
   const showNotification = (msg: string) => {

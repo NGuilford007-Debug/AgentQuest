@@ -24,9 +24,11 @@ import {
   FileText,
   MessageSquareCode,
   Image as ImageIcon,
-  Wand2
+  Wand2,
+  CreditCard,
+  Gift
 } from "lucide-react";
-import { WhiteLabelConfig } from "../types";
+import { AccessLevel, WhiteLabelConfig } from "../types";
 
 export type NavTab = 
   | "chat"
@@ -57,7 +59,11 @@ interface SidebarProps {
   savedReportsCount?: number;
   whiteLabelConfig?: WhiteLabelConfig;
   isMasterDeveloper?: boolean;
+  accessLevel?: AccessLevel;
   onOpenMasterAccessGate?: () => void;
+  onOpenPricing?: () => void;
+  onOpenAuthModal?: () => void;
+  userSubscriptionPlan?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -84,7 +90,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   automationsCount = 0,
   whiteLabelConfig,
   isMasterDeveloper = true,
+  accessLevel = "client_tenant",
   onOpenMasterAccessGate,
+  onOpenPricing,
+  onOpenAuthModal,
+  userSubscriptionPlan = "free",
   isCollapsed: controlledCollapsed,
   onToggleCollapse,
 }) => {
@@ -100,11 +110,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // FLAGSHIP CHAT & IMAGE STUDIO
     {
       id: "chat",
-      label: "Smart Agent Chat",
-      shortLabel: "AI Chat",
+      label: "Agent Stack Chat",
+      shortLabel: "Stack Chat",
       category: "core",
       icon: MessageSquareCode,
-      badge: "Main View",
+      badge: "Main",
       badgeColor: "bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-bold",
       description: "Auto & manual multi-agent conversational workspace",
       enabled: true,
@@ -150,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: "core",
       icon: PlayCircle,
       badge: pendingReviewsCount > 0 ? `${pendingReviewsCount} HITL` : null,
-      badgeColor: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 animate-pulse",
+      badgeColor: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 animate-pulse font-bold",
       description: "Execute workflows with Gemini",
       enabled: true,
     },
@@ -172,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: "core",
       icon: WorkflowIcon,
       badge: isMasterDeveloper ? "Canvas" : "Active",
-      badgeColor: "bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300",
+      badgeColor: "bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold",
       description: isMasterDeveloper ? "Visual drag-and-drop & logic branches" : "Pipeline inspection & test execution",
       enabled: true,
     },
@@ -184,10 +194,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: "Health",
       category: "tools",
       icon: Activity,
-      badge: unhealthyAgentsCount > 0 ? `${unhealthyAgentsCount} Alert${unhealthyAgentsCount > 1 ? "s" : ""}` : null,
+      badge: unhealthyAgentsCount > 0 ? `${unhealthyAgentsCount} Alerts` : null,
       badgeColor: unhealthyAgentsCount > 0 
         ? "bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-bold border border-rose-300 dark:border-rose-800 animate-pulse" 
-        : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300",
+        : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold",
       description: "Failure rate & prompt diagnostics",
       enabled: toggles ? toggles.enableHealthDiagnostics : true,
     },
@@ -198,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: "tools",
       icon: Coffee,
       badge: "6 Spots",
-      badgeColor: "bg-cyan-100 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300",
+      badgeColor: "bg-cyan-100 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 font-bold",
       description: "Digital workspaces & chill lounges",
       enabled: toggles ? toggles.enableWorkplaceStages : true,
     },
@@ -307,21 +317,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Top Header / Collapse Controller */}
       <div className="p-2.5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
         {!isCollapsed && (
-          <div className="flex items-center gap-1.5 px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <div className="flex items-center gap-1.5 px-1 min-w-0">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">
               Workspace Tabs
             </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono font-semibold">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono font-semibold whitespace-nowrap shrink-0">
               {filteredItems.length}
             </span>
           </div>
         )}
         <button
           onClick={toggleCollapse}
-          className={`p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${
+          className={`p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors shrink-0 ${
             isCollapsed ? "mx-auto" : ""
           }`}
-          title={isCollapsed ? "Expand Sidebar (View All Labels)" : "Collapse Sidebar (Compact Icon Mode)"}
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
@@ -351,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* Scrollable Navigation Items Container - Guaranteed Web Page Bounds */}
+      {/* Scrollable Navigation Items Container */}
       <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 space-y-3">
         {categories.map((cat) => {
           const itemsInCat = filteredItems.filter((i) => i.category === cat.key);
@@ -360,7 +370,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <div key={cat.key} className="space-y-1">
               {!isCollapsed && (
-                <div className="px-2 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                <div className="px-2 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">
                   {cat.title}
                 </div>
               )}
@@ -379,7 +389,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         isCollapsed ? "justify-center px-1.5 py-2.5" : "justify-between px-2.5 py-2"
                       } rounded-xl text-left text-xs font-semibold transition-all group ${
                         isActive
-                          ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700/80"
+                          ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs border border-slate-200/80 dark:border-slate-700/80"
                           : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
                       }`}
                     >
@@ -391,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               : "bg-slate-200/60 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-200"
                           }`}
                         >
-                          <Icon className="w-4 h-4" />
+                          <Icon className="w-4 h-4 shrink-0" />
                         </div>
                         {!isCollapsed && (
                           <div className="truncate">
@@ -402,7 +412,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                       {!isCollapsed && item.badge && (
                         <span
-                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tight shrink-0 ml-1.5 ${
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tight shrink-0 ml-1.5 whitespace-nowrap ${
                             item.badgeColor || "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                           }`}
                         >
@@ -418,8 +428,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Access Mode Footer */}
+      {/* Access Mode & Subscription Tier Footer */}
       <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+        
+        {/* Tier Upgrade / Free Access Widget */}
+        {!isCollapsed && onOpenPricing && (
+          <div 
+            onClick={onOpenPricing}
+            className="p-2 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 hover:from-emerald-500/20 hover:to-indigo-500/20 border border-emerald-500/30 cursor-pointer transition-all flex items-center justify-between group shadow-2xs"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Gift className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <div className="truncate">
+                <div className="text-[10px] font-extrabold text-slate-800 dark:text-slate-100 truncate leading-tight uppercase">
+                  {userSubscriptionPlan ? `${userSubscriptionPlan} Plan` : "Free Explorer"}
+                </div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                  {userSubscriptionPlan === "free" || !userSubscriptionPlan ? "2 Agent slots active" : "Fleet unlocked"}
+                </div>
+              </div>
+            </div>
+
+            <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider shrink-0 whitespace-nowrap shadow-2xs group-hover:scale-105 transition-transform">
+              {userSubscriptionPlan === "free" || !userSubscriptionPlan ? "Upgrade" : "Manage"}
+            </span>
+          </div>
+        )}
+
+        {/* Master Access Switch Button */}
         <button
           onClick={onOpenMasterAccessGate}
           className={`w-full p-2 rounded-xl border text-left flex items-center ${
@@ -427,30 +463,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
           } transition-all ${
             isMasterDeveloper
               ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 hover:bg-purple-100"
-              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
+              : accessLevel === "team_operator"
+              ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 hover:bg-blue-100"
+              : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100"
           }`}
-          title={isMasterDeveloper ? "Master Owner Mode (Click to manage)" : "Client Portal Mode (Click to manage)"}
+          title={isMasterDeveloper ? "Master Founder Mode (Click to manage)" : accessLevel === "team_operator" ? "Team Operator Mode" : "Client Portal Mode (Click for Founder Login)"}
         >
           <div className="flex items-center gap-2 min-w-0">
             <div
               className={`w-2 h-2 rounded-full shrink-0 ${
-                isMasterDeveloper ? "bg-purple-500 animate-pulse" : "bg-amber-500"
+                isMasterDeveloper
+                  ? "bg-purple-500 animate-pulse"
+                  : accessLevel === "team_operator"
+                  ? "bg-blue-500"
+                  : "bg-amber-500"
               }`}
             />
             {!isCollapsed && (
               <div className="truncate">
                 <div className="text-[11px] font-bold leading-tight truncate">
-                  {isMasterDeveloper ? "Master Owner" : "Client Portal"}
+                  {isMasterDeveloper ? "Master Founder" : accessLevel === "team_operator" ? "Team Operator" : "Client Portal"}
                 </div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
-                  {isMasterDeveloper ? "Full Admin Access" : "Execution Mode"}
+                  {isMasterDeveloper ? "Full Admin Access" : accessLevel === "team_operator" ? "Operational Mode" : "Locked Client Mode"}
                 </div>
               </div>
             )}
           </div>
           {!isCollapsed && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shrink-0">
-              {isMasterDeveloper ? "OWNER" : "CLIENT"}
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
+              {isMasterDeveloper ? "FOUNDER" : accessLevel === "team_operator" ? "STAFF" : "CLIENT"}
             </span>
           )}
         </button>

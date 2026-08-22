@@ -1,4 +1,4 @@
-import { Agent, AiModel, ApiAuditLog, Badge, ConnectedApp, EmployeeProfile, LeaderboardUser, PermissionScope, Quest, Workflow, WorkflowNode, ClientStripeConnectProfile, ClientAgentTransaction, ClientPayoutRecord } from "../types";
+import { Agent, AiModel, ApiAuditLog, Badge, ConnectedApp, EmployeeProfile, LeaderboardUser, PermissionScope, Quest, Workflow, WorkflowNode, ClientStripeConnectProfile, ClientAgentTransaction, ClientPayoutRecord, ClientAgentRequest, AgentPrivacyPolicyConfig } from "../types";
 
 export const AVAILABLE_PERMISSIONS: PermissionScope[] = [
   // Google Workspace & Productivity
@@ -2010,6 +2010,50 @@ export const INITIAL_CLIENT_PAYOUTS: ClientPayoutRecord[] = [
     stripeTransferReference: "STRIPE-DAILY-ACH-NEXUS-02"
   }
 ];
+
+export const INITIAL_CLIENT_AGENT_REQUESTS: ClientAgentRequest[] = [
+  {
+    id: "req-001",
+    agentId: "agent-1",
+    agentName: "SentryOps Incident Sentinel",
+    agentAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+    tenantId: "ten-2",
+    tenantName: "Apex Cloud Enterprise",
+    tenantLogo: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=100&auto=format&fit=crop&q=80",
+    requestedByEmail: "devops-lead@apexcloud.io",
+    requesterName: "Marcus Vance (VP of Eng)",
+    requestedAt: "2026-08-20T14:22:00.000Z",
+    intendedClientPage: "Apex Cloud Tier-1 SRE & Incident Command Hub",
+    clientNotes: "We love your SentryOps telemetry triage model and would like to embed it directly into our client-facing incident portal for our Enterprise Tier customers.",
+    status: "pending",
+    department: "DevOps & SecOps",
+  },
+  {
+    id: "req-002",
+    agentId: "agent-2",
+    agentName: "RevPulse Inbound SDR",
+    agentAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    tenantId: "ten-3",
+    tenantName: "Nexus Financial Group",
+    tenantLogo: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&auto=format&fit=crop&q=80",
+    requestedByEmail: "growth-dir@nexusfin.com",
+    requesterName: "Sarah Chen (Head of Growth)",
+    requestedAt: "2026-08-21T09:45:00.000Z",
+    intendedClientPage: "Nexus Wealth Lead Qualification Portal",
+    clientNotes: "Requesting permission to activate RevPulse for our accredited investor inbound demo calendar. We will handle custom prompt fine-tuning if permitted.",
+    status: "pending",
+    department: "Sales & CRM",
+  }
+];
+
+export const DEFAULT_AGENT_PRIVACY_POLICY: AgentPrivacyPolicyConfig = {
+  defaultVisibilityForNewAgents: "internal_only",
+  requireExplicitClientRequest: true,
+  notifyOnClientAgentRequest: true,
+  clientDisclaimerAgreement: "By requesting and activating this agent on your client portal, your organization agrees that prompt outputs are subject to your master service agreement with AgentFlow.",
+};
+
+
 
 
 

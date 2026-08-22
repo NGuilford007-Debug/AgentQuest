@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { EmployeeProfile, WhiteLabelConfig } from "../types";
+import { AccessLevel, EmployeeProfile, WhiteLabelConfig } from "../types";
 import { 
   Flame, 
   Sparkles, 
@@ -25,8 +25,11 @@ import {
   Coins,
   CreditCard,
   User,
+  Users,
   RotateCcw,
-  Settings
+  Settings,
+  Gift,
+  UserPlus
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -44,11 +47,13 @@ interface HeaderProps {
   onOpenMonetization?: () => void;
   onOpenPricing?: () => void;
   onOpenProfileModal?: () => void;
+  onOpenAuthModal?: () => void;
   isAutoSaving?: boolean;
   lastSavedTime?: string;
   whiteLabelConfig?: WhiteLabelConfig;
   onToggleClientPreview?: () => void;
   isMasterDeveloper?: boolean;
+  accessLevel?: AccessLevel;
   onOpenMasterAccessGate?: () => void;
 }
 
@@ -65,11 +70,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMonetization,
   onOpenPricing,
   onOpenProfileModal,
+  onOpenAuthModal,
   isAutoSaving = false,
   lastSavedTime,
   whiteLabelConfig,
   onToggleClientPreview,
   isMasterDeveloper = true,
+  accessLevel = "client_tenant",
   onOpenMasterAccessGate,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -78,13 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
   const companyName = whiteLabelConfig?.companyName || "Autonomous Multi-Agent Workspace";
   const primaryColor = whiteLabelConfig?.primaryColor || "#3b82f6";
   const enableGamification = whiteLabelConfig?.featureToggles.enableGamification !== false;
-
-  const xpProgressPercent = Math.min(
-    100,
-    Math.round(
-      ((userProfile.xp - (userProfile.nextLevelXp - 5500)) / 5500) * 100
-    )
-  );
+  const currentPlan = userProfile.subscriptionPlan || "free";
 
   const recentAlerts = [
     {
@@ -120,14 +121,14 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="bg-amber-500 text-slate-900 px-4 py-1 text-xs font-semibold flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-slate-900 animate-ping" />
-            <span>
+            <span className="truncate">
               <strong>Client Preview Mode Active:</strong> Viewing white-labeled portal as <em>{brandName}</em> ({whiteLabelConfig.customDomain})
             </span>
           </div>
           {onToggleClientPreview && (
             <button
               onClick={onToggleClientPreview}
-              className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800 flex items-center gap-1"
+              className="px-2.5 py-0.5 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800 flex items-center gap-1 shrink-0 whitespace-nowrap"
             >
               <EyeOff className="w-3 h-3" />
               <span>Exit Preview</span>
@@ -136,12 +137,13 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 md:px-6 flex items-center justify-between transition-colors">
+      <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 md:px-6 flex items-center justify-between transition-colors gap-2">
+        
         {/* Brand & Active status */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2.5">
             <div 
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm overflow-hidden"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm overflow-hidden shrink-0"
               style={{ backgroundColor: primaryColor }}
             >
               {whiteLabelConfig?.logoUrl ? (
@@ -152,44 +154,44 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base text-slate-900 dark:text-white tracking-tight">
+                <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white tracking-tight whitespace-nowrap">
                   {brandName}
                 </span>
                 <span 
-                  className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded text-white"
+                  className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded text-white whitespace-nowrap shrink-0"
                   style={{ backgroundColor: primaryColor }}
                 >
                   Enterprise
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block truncate max-w-xs">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px] lg:max-w-xs">
                 {companyName}
               </p>
             </div>
           </div>
 
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden lg:block shrink-0" />
 
           {/* Live Health Badge */}
-          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-medium whitespace-nowrap shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <span>{activeAgentsCount} Agents Operational</span>
           </div>
 
           {/* Auto-Save Status Indicator */}
           <div 
             onClick={onOpenSaveStates}
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
             title="Continuous local auto-save is active. Click to manage checkpoints."
           >
             {isAutoSaving ? (
               <>
-                <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />
+                <RefreshCw className="w-3 h-3 text-blue-500 animate-spin shrink-0" />
                 <span className="text-blue-600 dark:text-blue-400 font-semibold">Auto-saving...</span>
               </>
             ) : (
               <>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shrink-0" />
                 <span className="text-slate-500 dark:text-slate-400">
                   {lastSavedTime ? `Saved at ${lastSavedTime}` : "Auto-saved"}
                 </span>
@@ -199,55 +201,92 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Executive Telemetry & Operator Hub */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1">
+          
           {/* Autonomy Operational Index */}
           <div 
             onClick={onOpenGamification}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shadow-xs"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shadow-xs whitespace-nowrap shrink-0"
             title="Operational Autonomy Index: Percentage of tasks executed 100% autonomously without human bottleneck"
           >
-            <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
-            <span>{userProfile.autonomousRunRatio ?? 72}% Autonomous</span>
+            <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500 shrink-0" />
+            <span>{userProfile.autonomousRunRatio ?? 72}% Autonomy</span>
           </div>
 
           {/* OpEx Value Created */}
           <div 
             onClick={onOpenMonetization}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-xs"
+            className="hidden md:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-xs whitespace-nowrap shrink-0"
             title="Total Operating Expense (OpEx) saved by autonomous agent workflows"
           >
-            <DollarSign className="w-3.5 h-3.5 text-blue-500" />
-            <span>${(userProfile.costSavedUsd || 15600).toLocaleString()} OpEx Saved</span>
+            <DollarSign className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span>${(userProfile.costSavedUsd || 15600).toLocaleString()} Saved</span>
           </div>
 
-          {/* Credits Balance Pill */}
-          <div 
-            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold shadow-xs"
-            title={`${(userProfile.creditsBalance ?? 5000).toLocaleString()} Execution Credits Allocated`}
-          >
-            <Coins className="w-3.5 h-3.5 text-amber-500" />
-            <span>{(userProfile.creditsBalance ?? 5000).toLocaleString()}</span>
-            <span className="text-[10px] text-slate-500 font-normal">Credits</span>
-          </div>
+          {/* Sign Up / Free Access Tier CTA Button */}
+          {onOpenAuthModal && (
+            <button
+              id="btn-header-signup-free"
+              onClick={onOpenAuthModal}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95 whitespace-nowrap shrink-0 ${
+                userProfile.isAuthenticated
+                  ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200"
+                  : "bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white shadow-blue-500/20"
+              }`}
+              title={userProfile.isAuthenticated ? "Manage User Profile & Workspace" : "Create Free Account or Connect Subscription"}
+            >
+              {userProfile.isAuthenticated ? (
+                <>
+                  <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span className="hidden sm:inline">Account</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[9px] uppercase font-extrabold">
+                    {currentPlan}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Gift className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                  <span>Free Sign Up</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Pricing & Subscription Plans Quick Button */}
+          {onOpenPricing && (
+            <button
+              id="btn-header-pricing"
+              onClick={onOpenPricing}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-all shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
+              title="View Subscription Plans, Fleet Tiers & Stripe Checkout"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">Pricing & Plans</span>
+              <span className="sm:hidden">Plans</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-extrabold uppercase">
+                {currentPlan === "free" ? "Free" : currentPlan}
+              </span>
+            </button>
+          )}
 
           {/* Executive Operator Profile Pill */}
           <div 
             id="header-user-profile-pill"
             onClick={onOpenProfileModal || onOpenGamification}
-            className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+            className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-all group whitespace-nowrap shrink-0"
             title="Click to view Operator Profile, Company Milestones, or Workspace Settings"
           >
             <img
               src={userProfile.avatar}
               alt={userProfile.name}
-              className="w-7 h-7 rounded-full border border-blue-500/30 object-cover"
+              className="w-6 h-6 rounded-full border border-blue-500/30 object-cover shrink-0"
             />
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight truncate max-w-[100px]">
                 {userProfile.name}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight truncate max-w-[120px]">
-                {userProfile.role}
+              <span className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate max-w-[100px]">
+                {userProfile.organizationName || userProfile.role}
               </span>
             </div>
           </div>
@@ -257,11 +296,11 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-header-profile-cleanslate"
               onClick={onOpenProfileModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors whitespace-nowrap shrink-0"
               title="Settings, Benchmark Presets & Clean Slate"
             >
-              <Settings className="w-3.5 h-3.5 text-blue-500" />
-              <span className="hidden xl:inline">Settings & Presets</span>
+              <Settings className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="hidden xl:inline">Settings</span>
             </button>
           )}
 
@@ -270,22 +309,29 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-header-access-gate"
               onClick={onOpenMasterAccessGate}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border transition-all whitespace-nowrap shrink-0 ${
                 isMasterDeveloper
-                  ? "bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100"
-                  : "bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
+                  ? "bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 shadow-2xs"
+                  : accessLevel === "team_operator"
+                  ? "bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 shadow-2xs"
+                  : "bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 shadow-2xs"
               }`}
-              title="Access & Governance Gate (Master Developer vs Client Tenant)"
+              title="Access & Role Switcher (Founder Passkey Authentication)"
             >
               {isMasterDeveloper ? (
                 <>
-                  <Shield className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span className="hidden sm:inline">👑 Master Admin</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span className="hidden sm:inline">Founder</span>
+                </>
+              ) : accessLevel === "team_operator" ? (
+                <>
+                  <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="hidden sm:inline">Operator</span>
                 </>
               ) : (
                 <>
-                  <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span className="hidden sm:inline">🏢 Client Portal</span>
+                  <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="hidden sm:inline">Client</span>
                 </>
               )}
             </button>
@@ -296,11 +342,11 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-header-whitelabel"
               onClick={onOpenWhiteLabel}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-xs font-semibold border border-purple-200 dark:border-purple-800/60 transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-xs font-semibold border border-purple-200 dark:border-purple-800/60 transition-colors whitespace-nowrap shrink-0"
               title="Open White-Label & Custom Branding Studio"
             >
-              <Palette className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span className="hidden md:inline">White-Label</span>
+              <Palette className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+              <span>White-Label</span>
             </button>
           )}
 
@@ -309,36 +355,93 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-header-monetization"
               onClick={onOpenMonetization}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-xs font-semibold border border-emerald-200 dark:border-emerald-800/60 transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-xs font-semibold border border-emerald-200 dark:border-emerald-800/60 transition-colors whitespace-nowrap shrink-0"
               title="Open Developer Monetization & Profit Engine"
             >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden md:inline">Monetization</span>
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Monetization</span>
             </button>
           )}
 
-          {/* Pricing & Subscription Plans Quick Button */}
-          {onOpenPricing && (
+          {/* Export Data Button */}
+          {onOpenExport && (
             <button
-              id="btn-header-pricing"
-              onClick={onOpenPricing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-all shadow-xs active:scale-95"
-              title="View Subscription Plans, Fleet Tiers & Stripe Checkout"
+              id="btn-header-export"
+              onClick={onOpenExport}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors whitespace-nowrap shrink-0"
+              title="Export workspace, audit logs CSV, and executive reports"
             >
-              <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Pricing & Plans</span>
+              <Download className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span className="hidden md:inline">Export</span>
             </button>
+          )}
+
+          {/* Save States & Workspace Snapshot button */}
+          {onOpenSaveStates && (
+            <button
+              id="btn-header-save-states"
+              onClick={onOpenSaveStates}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors whitespace-nowrap shrink-0"
+              title="Manage save states, snapshots, and backups"
+            >
+              <FolderArchive className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span>Snapshots</span>
+            </button>
+          )}
+
+          {/* Focus Task HUD toggle button */}
+          {onToggleFocusHUD && (
+            <button
+              id="btn-header-focus-hud"
+              onClick={onToggleFocusHUD}
+              className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors whitespace-nowrap shrink-0"
+              title="Toggle Focus Task Checklist HUD"
+            >
+              <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>Task HUD</span>
+            </button>
+          )}
+
+          {/* Quick Task Agent button - Direct prompt-to-generation UX */}
+          <button
+            id="btn-quick-task"
+            onClick={onQuickTask}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold border border-amber-500/30 transition-all shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
+            title="Type a natural language prompt and get an instant generation from any agent"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+            <span className="hidden sm:inline">Prompt Agent</span>
+            <span className="sm:hidden">Prompt</span>
+          </button>
+
+          {/* Create Agent CTA (Master Developer Only) or Client Fleet Mode Badge */}
+          {isMasterDeveloper ? (
+            <button
+              id="btn-create-agent"
+              onClick={onCreateAgent}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-bold shadow-sm transition-all active:scale-95 hover:opacity-95 whitespace-nowrap shrink-0"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Build Agent</span>
+              <span className="sm:hidden">Build</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold whitespace-nowrap shrink-0">
+              <Bot className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>{activeAgentsCount} Agents</span>
+            </div>
           )}
 
           {/* Notifications */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               id="btn-header-notifications"
               onClick={() => setShowNotifications(!showNotifications)}
-              className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative shrink-0"
               aria-label="Notifications"
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-4 h-4 shrink-0" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
             </button>
 
@@ -357,14 +460,14 @@ export const Header: React.FC<HeaderProps> = ({
                     const Icon = alert.icon;
                     return (
                       <div key={alert.id} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 flex gap-2.5 items-start">
-                        <div className={`p-1.5 rounded-md ${alert.color}`}>
+                        <div className={`p-1.5 rounded-md ${alert.color} shrink-0`}>
                           <Icon className="w-3.5 h-3.5" />
                         </div>
-                        <div className="flex-1 text-xs">
-                          <div className="font-medium text-slate-800 dark:text-slate-200">
+                        <div className="flex-1 text-xs min-w-0">
+                          <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
                             {alert.title}
                           </div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                             {alert.desc}
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">
@@ -381,87 +484,18 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowNotifications(false);
                       onOpenGamification();
                     }}
-                    className="w-full mt-2 py-1.5 text-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                    className="w-full mt-2 py-1.5 text-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
                   >
                     <span>View All Quests & Rewards</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Export Data Button */}
-          {onOpenExport && (
-            <button
-              id="btn-header-export"
-              onClick={onOpenExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
-              title="Export workspace, audit logs CSV, and executive reports"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-500" />
-              <span className="hidden md:inline">Export</span>
-            </button>
-          )}
-
-          {/* Save States & Workspace Snapshot button */}
-          {onOpenSaveStates && (
-            <button
-              id="btn-header-save-states"
-              onClick={onOpenSaveStates}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
-              title="Manage save states, snapshots, and backups (Ctrl+S)"
-            >
-              <FolderArchive className="w-3.5 h-3.5 text-blue-500" />
-              <span className="hidden lg:inline">Save States</span>
-            </button>
-          )}
-
-          {/* Focus Task HUD toggle button */}
-          {onToggleFocusHUD && (
-            <button
-              id="btn-header-focus-hud"
-              onClick={onToggleFocusHUD}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors"
-              title="Toggle Focus Task Checklist HUD"
-            >
-              <Target className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Task HUD</span>
-            </button>
-          )}
-
-          {/* Quick Task Agent button - Direct prompt-to-generation UX */}
-          <button
-            id="btn-quick-task"
-            onClick={onQuickTask}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold border border-amber-500/30 transition-all shadow-sm active:scale-95"
-            title="Type a natural language prompt and get an instant generation from any agent"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span>Prompt Agent</span>
-          </button>
-
-          {/* Create Agent CTA (Master Developer Only) or Client Fleet Mode Badge */}
-          {isMasterDeveloper ? (
-            <button
-              id="btn-create-agent"
-              onClick={onCreateAgent}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold shadow-sm transition-all active:scale-95 hover:opacity-95"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Build Agent</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
-              <Bot className="w-3.5 h-3.5 text-blue-600" />
-              <span>{activeAgentsCount} Agents Active</span>
-            </div>
-          )}
         </div>
       </header>
     </div>
   );
 };
-
-

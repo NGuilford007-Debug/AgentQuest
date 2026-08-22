@@ -16,15 +16,18 @@ import {
   X,
   Layers,
   FileText,
-  BadgeCheck
+  BadgeCheck,
+  Gift,
+  Flame,
+  UserPlus
 } from "lucide-react";
-import { TenantProfile } from "../types";
 
 export interface PricingPlan {
-  id: "starter" | "pro" | "enterprise";
+  id: "free" | "starter" | "pro" | "enterprise";
   name: string;
   badge?: string;
   isPopular?: boolean;
+  isFree?: boolean;
   monthlyPrice: number;
   annualPricePerMonth: number;
   description: string;
@@ -39,20 +42,43 @@ interface PricingCheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentPlanId?: string;
+  initialPlanId?: string;
   customerEmail?: string;
   tenantName?: string;
-  onSuccessUpgrade?: (newPlanId: string) => void;
+  onSuccessUpgrade?: (newPlanId: "free" | "starter" | "pro" | "enterprise" | string) => void;
+  onOpenAuthModal?: () => void;
 }
 
 const PRICING_PLANS: PricingPlan[] = [
   {
+    id: "free",
+    name: "Free Explorer",
+    badge: "Zero Cost",
+    isFree: true,
+    monthlyPrice: 0,
+    annualPricePerMonth: 0,
+    description: "Instant access to test autonomous assistants and explore agent workflows.",
+    agentLimit: "2 Autonomous Agents",
+    tokenAllocation: "500k Tokens / mo free",
+    supportSla: "Community Forum & Docs",
+    features: [
+      "2 Autonomous Agent Slots",
+      "Interactive Workflow Canvas",
+      "Gemini 3.7 Flash & 3.1 Lite",
+      "Task Dispatcher & Execution Logs",
+      "Community Templates Access",
+      "No Credit Card Required",
+    ],
+    stripePriceIdTest: "price_free_tier",
+  },
+  {
     id: "starter",
-    name: "Starter / Individual",
+    name: "Starter Builder",
     monthlyPrice: 49,
     annualPricePerMonth: 39,
     description: "For individual builders and single-operator agencies launching autonomous assistants.",
     agentLimit: "Up to 5 Specialized Agents",
-    tokenAllocation: "5 Million Tokens / mo included",
+    tokenAllocation: "5 Million Tokens / mo",
     supportSla: "Community & Email Support",
     features: [
       "5 Autonomous Agent Slots",
@@ -73,7 +99,7 @@ const PRICING_PLANS: PricingPlan[] = [
     annualPricePerMonth: 159,
     description: "For scaling consulting teams and businesses deploying fleets with dedicated ROI reporting.",
     agentLimit: "Up to 25 Specialized Agents",
-    tokenAllocation: "25 Million Tokens / mo included",
+    tokenAllocation: "25 Million Tokens / mo",
     supportSla: "Priority 24/7 Slack & Email (< 2h)",
     features: [
       "25 Autonomous Agent Slots",
@@ -82,7 +108,6 @@ const PRICING_PLANS: PricingPlan[] = [
       "White-Label Client Brand Customization",
       "Human-in-the-Loop Verification Gates",
       "Automated Stripe Billing & Invoice Engine",
-      "Unlimited Execution History & Telemetry",
     ],
     stripePriceIdTest: "price_growth_pro_199",
   },
@@ -94,15 +119,14 @@ const PRICING_PLANS: PricingPlan[] = [
     annualPricePerMonth: 399,
     description: "For corporate enterprises requiring custom white-label portals, high SLA, and custom models.",
     agentLimit: "Unlimited Agent Fleets",
-    tokenAllocation: "100 Million+ Metered Tokens",
-    supportSla: "Dedicated Technical Account Lead & 99.9% SLA",
+    tokenAllocation: "100M+ Metered Tokens",
+    supportSla: "Technical Lead & 99.9% SLA",
     features: [
       "Unlimited Agent Fleets & Pipelines",
       "Custom Fine-Tuned Models & Self-Hosted Endpoints",
       "Full Multi-Tenant Client Portal Access",
       "Digital Signature & Immutable Audit Logs",
       "Dedicated Stripe Connect Sub-Account Payouts",
-      "Custom Master Access Role-Based Security",
       "Custom Enterprise SLA & BAA Compliance",
     ],
     stripePriceIdTest: "price_enterprise_499",
@@ -112,16 +136,22 @@ const PRICING_PLANS: PricingPlan[] = [
 export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
   isOpen,
   onClose,
-  currentPlanId = "starter",
-  customerEmail = "customer@enterprise.com",
-  tenantName = "Enterprise Team",
+  currentPlanId = "free",
+  initialPlanId,
+  customerEmail = "alex.mercer@enterprise.io",
+  tenantName = "AgentFlow Enterprise",
   onSuccessUpgrade,
+  onOpenAuthModal,
 }) => {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
-  const [selectedPlan, setSelectedPlan] = useState<PricingPlan>(PRICING_PLANS[1]);
+  const targetId = initialPlanId || currentPlanId;
+  const [selectedPlan, setSelectedPlan] = useState<PricingPlan>(
+    PRICING_PLANS.find((p) => p.id === targetId) || PRICING_PLANS[0]
+  );
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [userEmailInput, setUserEmailInput] = useState<string>(customerEmail);
 
   if (!isOpen) return null;
@@ -130,6 +160,19 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     setIsProcessing(true);
     setCheckoutUrl(null);
     setPaymentSuccess(false);
+
+    // Free Plan 1-click activation
+    if (plan.id === "free") {
+      setTimeout(() => {
+        setIsProcessing(false);
+        setPaymentSuccess(true);
+        setStatusMessage("🎉 Free Explorer Tier activated! You have 2 agent slots and 500k monthly tokens.");
+        if (onSuccessUpgrade) {
+          onSuccessUpgrade("free");
+        }
+      }, 500);
+      return;
+    }
 
     const effectivePrice = billingCycle === "annual" ? plan.annualPricePerMonth * 12 : plan.monthlyPrice;
 
@@ -152,6 +195,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
       } else {
         // Fallback simulate direct settlement
         setPaymentSuccess(true);
+        setStatusMessage(`🎉 Subscription activated for ${plan.name}!`);
         if (onSuccessUpgrade) {
           onSuccessUpgrade(plan.id);
         }
@@ -159,6 +203,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     } catch (err) {
       console.warn("Failed to create Stripe session, using mock confirmation:", err);
       setPaymentSuccess(true);
+      setStatusMessage(`🎉 Subscription activated for ${plan.name}!`);
       if (onSuccessUpgrade) {
         onSuccessUpgrade(plan.id);
       }
@@ -172,6 +217,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     setTimeout(() => {
       setIsProcessing(false);
       setPaymentSuccess(true);
+      setStatusMessage(`🎉 Upgraded to ${selectedPlan.name} successfully!`);
       if (onSuccessUpgrade) {
         onSuccessUpgrade(selectedPlan.id);
       }
@@ -180,48 +226,65 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
+      <div className="w-full max-w-6xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
         
         {/* MODAL HEADER */}
         <div className="p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between border-b border-slate-800 relative overflow-hidden">
           <div className="flex items-center gap-3.5 relative z-10">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-indigo-500 text-slate-950 flex items-center justify-center shadow-lg font-bold">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-indigo-500 text-slate-950 flex items-center justify-center shadow-lg font-bold shrink-0">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white">
+                <h2 className="text-base sm:text-lg font-bold text-white whitespace-nowrap">
                   Pricing & Subscription Plans
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
-                  Stripe Enabled
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold whitespace-nowrap">
+                  Stripe Gateway
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Unlock higher fleet limits, executive PDF/CSV exports, white-label branding, and dedicated AI models.
+                Choose the right plan for your fleet. Free tier included with seamless upgrade paths.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAuthModal();
+                }}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all whitespace-nowrap shrink-0"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Account Setup</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              aria-label="Close dialog"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* BILLING CYCLE SELECTOR */}
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
               Billing Interval:
             </span>
             <div className="flex items-center p-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setBillingCycle("monthly")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   billingCycle === "monthly"
                     ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -232,22 +295,22 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={() => setBillingCycle("annual")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                   billingCycle === "annual"
                     ? "bg-emerald-600 text-white shadow-xs"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <span>Annual</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-slate-950 text-[9px] font-black">
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-slate-950 text-[9px] font-black whitespace-nowrap">
                   Save 20%
                 </span>
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
             <span>256-bit SSL Encrypted • Cancel Anytime • Instant Activation</span>
           </div>
         </div>
@@ -259,25 +322,25 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex items-start gap-3 animate-in fade-in">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-bold text-sm">Subscription Activated!</h4>
+                <h4 className="font-bold text-sm">Plan Updated Successfully!</h4>
                 <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
-                  Your organization is now upgraded to <strong>{selectedPlan.name}</strong>. All fleet limits, executive report exports, and custom tools are instantly available.
+                  {statusMessage || `Your workspace is now operating on the ${selectedPlan.name}.`}
                 </p>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {PRICING_PLANS.map((plan) => {
               const isSelected = selectedPlan.id === plan.id;
               const isCurrent = currentPlanId === plan.id;
-              const displayPrice = billingCycle === "annual" ? plan.annualPricePerMonth : plan.monthlyPrice;
+              const displayPrice = plan.isFree ? 0 : billingCycle === "annual" ? plan.annualPricePerMonth : plan.monthlyPrice;
 
               return (
                 <div
                   key={plan.id}
                   onClick={() => setSelectedPlan(plan)}
-                  className={`relative p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  className={`relative p-4 sm:p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
                     plan.isPopular
                       ? isSelected
                         ? "border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xl"
@@ -289,69 +352,69 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                 >
                   {/* Badge */}
                   {plan.badge && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-sm whitespace-nowrap">
                       {plan.badge}
                     </div>
                   )}
 
                   <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                    <div className="flex items-center justify-between gap-1">
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base truncate">
                         {plan.name}
                       </h3>
                       {isCurrent && (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
-                          Current Plan
+                        <span className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[9px] font-bold whitespace-nowrap shrink-0">
+                          Active Plan
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
                       {plan.description}
                     </p>
 
                     {/* Price Block */}
-                    <div className="mt-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="mt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono whitespace-nowrap">
                           ${displayPrice}
                         </span>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          / month
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {plan.isFree ? "/ forever" : "/ month"}
                         </span>
                       </div>
-                      {billingCycle === "annual" && (
-                        <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                      {!plan.isFree && billingCycle === "annual" && (
+                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 whitespace-nowrap">
                           Billed annually (${displayPrice * 12}/yr)
                         </div>
                       )}
                     </div>
 
                     {/* Fleet & Specs */}
-                    <div className="py-3 space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                        <Bot className="w-3.5 h-3.5 text-blue-500" />
-                        <span>{plan.agentLimit}</span>
+                    <div className="py-2.5 space-y-1 text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-semibold">
+                        <Bot className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span className="truncate">{plan.agentLimit}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                        <Zap className="w-3.5 h-3.5 text-amber-500" />
-                        <span>{plan.tokenAllocation}</span>
+                      <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-semibold">
+                        <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span className="truncate">{plan.tokenAllocation}</span>
                       </div>
                     </div>
 
                     {/* Feature List */}
-                    <div className="pt-2 space-y-2 text-xs">
+                    <div className="pt-1.5 space-y-1.5 text-[11px]">
                       {plan.features.map((feat, idx) => (
-                        <div key={idx} className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
-                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                          <span>{feat}</span>
+                        <div key={idx} className="flex items-start gap-1.5 text-slate-600 dark:text-slate-300">
+                          <Check className="w-3 h-3 text-emerald-500 shrink-0 mt-0.5" />
+                          <span className="leading-tight">{feat}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* Plan Button */}
-                  <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -360,8 +423,10 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                         handleInitiateCheckout(plan);
                       }}
                       disabled={isProcessing}
-                      className={`w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm ${
-                        plan.isPopular
+                      className={`w-full py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm whitespace-nowrap ${
+                        isCurrent
+                          ? "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-default"
+                          : plan.isPopular
                           ? "bg-emerald-600 hover:bg-emerald-500 text-white"
                           : isSelected
                           ? "bg-blue-600 hover:bg-blue-500 text-white"
@@ -370,13 +435,23 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                     >
                       {isProcessing && selectedPlan.id === plan.id ? (
                         <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
                           <span>Processing...</span>
+                        </>
+                      ) : isCurrent ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Active Plan</span>
+                        </>
+                      ) : plan.isFree ? (
+                        <>
+                          <Gift className="w-3.5 h-3.5 shrink-0" />
+                          <span>Use Free Tier</span>
                         </>
                       ) : (
                         <>
                           <span>Select {plan.name.split(" ")[0]}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
+                          <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                         </>
                       )}
                     </button>
@@ -391,12 +466,12 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <h4 className="font-bold text-xs text-indigo-900 dark:text-indigo-200">
-                    Stripe Checkout Session Ready
+                  <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <h4 className="font-bold text-xs text-indigo-900 dark:text-indigo-200 whitespace-nowrap">
+                    Stripe Checkout Gateway Ready
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-indigo-500">Live Secure Gateway</span>
+                <span className="text-[10px] font-mono text-indigo-500 whitespace-nowrap">Live Secure Gateway</span>
               </div>
               <p className="text-xs text-indigo-700 dark:text-indigo-300">
                 You can complete your checkout on the official Stripe hosted portal, or simulate instant completion for testing.
@@ -406,18 +481,18 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                   href={checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap shrink-0"
                 >
                   <span>Open Stripe Checkout</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 </a>
 
                 <button
                   type="button"
                   onClick={handleDirectSimulatePayment}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap shrink-0"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   <span>Simulate Instant Upgrade</span>
                 </button>
               </div>
@@ -436,7 +511,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             </div>
             <a
               href="mailto:sales@agentflow.io?subject=Enterprise%20License%20Inquiry"
-              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-center shrink-0"
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-center shrink-0 whitespace-nowrap"
             >
               Contact Sales
             </a>
@@ -445,15 +520,15 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
 
         {/* MODAL FOOTER */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-emerald-500" />
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
+            <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span>Encrypted payment processing via Stripe</span>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold transition-all"
+            className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold transition-all whitespace-nowrap shrink-0"
           >
             Close
           </button>

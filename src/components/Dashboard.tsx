@@ -172,13 +172,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   // Layout Toggle State: 'expanded' (full coverage, charts, reports) vs 'condensed' (top-line metrics only)
   const [dashboardLayout, setDashboardLayout] = useState<"condensed" | "expanded">(() => {
-    const saved = localStorage.getItem("agentflow_dashboard_layout");
-    return (saved === "condensed" || saved === "expanded") ? saved : "expanded";
+    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      return "expanded";
+    }
+    try {
+      const saved = localStorage.getItem("agentflow_dashboard_layout");
+      return saved === "condensed" || saved === "expanded" ? saved : "expanded";
+    } catch {
+      return "expanded";
+    }
   });
 
   const handleLayoutChange = (layout: "condensed" | "expanded") => {
     setDashboardLayout(layout);
-    localStorage.setItem("agentflow_dashboard_layout", layout);
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem("agentflow_dashboard_layout", layout);
+      } catch (e) {
+        console.warn("Could not save dashboard layout preference", e);
+      }
+    }
   };
 
   // Navigation & Filter states
