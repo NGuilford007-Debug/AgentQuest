@@ -220,7 +220,9 @@ export default function App() {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<string | undefined>("free");
-  const [showFocusHUD, setShowFocusHUD] = useState(true);
+  const [showFocusHUD, setShowFocusHUD] = useState<boolean>(() => {
+    return getStoredItem<boolean>("agentflow_show_focus_hud", false);
+  });
 
   // Auto-save feedback indicators with useRef timer cleanup
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1155,7 +1157,11 @@ export default function App() {
           setIsQuickTaskOpen(true);
         }}
         onOpenSaveStates={() => setIsSaveStateModalOpen(true)}
-        onToggleFocusHUD={() => setShowFocusHUD(!showFocusHUD)}
+        onToggleFocusHUD={() => {
+          const nextVal = !showFocusHUD;
+          setShowFocusHUD(nextVal);
+          setStoredItem("agentflow_show_focus_hud", nextVal);
+        }}
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenWhiteLabel={() => setCurrentTab("whitelabel")}
         onOpenMonetization={() => setCurrentTab("monetization")}
@@ -1478,6 +1484,10 @@ export default function App() {
             agents={agents}
             onUpdateSession={(updated) => setActiveTaskSession(updated)}
             onDispatchTaskWithAgent={handleDispatchTaskWithAgent}
+            onClose={() => {
+              setShowFocusHUD(false);
+              setStoredItem("agentflow_show_focus_hud", false);
+            }}
           />
         )}
       </div>

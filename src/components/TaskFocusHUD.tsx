@@ -18,7 +18,8 @@ import {
   Target,
   Sparkles,
   Maximize2,
-  Minimize2
+  Minimize2,
+  X
 } from "lucide-react";
 
 interface TaskFocusHUDProps {
@@ -26,6 +27,7 @@ interface TaskFocusHUDProps {
   agents: Agent[];
   onUpdateSession: (updated: ActiveTaskSession) => void;
   onDispatchTaskWithAgent: (taskTitle: string, taskDesc: string, agentId: string) => void;
+  onClose?: () => void;
 }
 
 export const TaskFocusHUD: React.FC<TaskFocusHUDProps> = ({
@@ -33,6 +35,7 @@ export const TaskFocusHUD: React.FC<TaskFocusHUDProps> = ({
   agents,
   onUpdateSession,
   onDispatchTaskWithAgent,
+  onClose,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState("");
@@ -173,10 +176,29 @@ export const TaskFocusHUD: React.FC<TaskFocusHUDProps> = ({
 
           <button
             id="toggle-task-hud"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title={isExpanded ? "Minimize Task HUD" : "Expand Task HUD"}
           >
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
+
+          {onClose && (
+            <button
+              id="close-task-hud"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 transition-colors"
+              title="Close Task HUD (can re-open from Header Task HUD button)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
