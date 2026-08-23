@@ -29,6 +29,7 @@ import {
   Gift
 } from "lucide-react";
 import { AccessLevel, WhiteLabelConfig } from "../types";
+import { getWorkplaceTheme } from "../utils/workplaceThemes";
 
 export type NavTab = 
   | "chat"
@@ -66,6 +67,7 @@ interface SidebarProps {
   userSubscriptionPlan?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  activeWorkplaceThemeId?: string;
 }
 
 interface NavItemConfig {
@@ -97,9 +99,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userSubscriptionPlan = "free",
   isCollapsed: controlledCollapsed,
   onToggleCollapse,
+  activeWorkplaceThemeId = "stage-war-room",
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const activeTheme = getWorkplaceTheme(activeWorkplaceThemeId);
 
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
   const toggleCollapse = onToggleCollapse || (() => setInternalCollapsed((prev) => !prev));
@@ -389,7 +394,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         isCollapsed ? "justify-center px-1.5 py-2.5" : "justify-between px-2.5 py-2"
                       } rounded-xl text-left text-xs font-semibold transition-all group ${
                         isActive
-                          ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs border border-slate-200/80 dark:border-slate-700/80"
+                          ? `${activeTheme.colors.cardBg} ${activeTheme.colors.sidebarActiveText} shadow-xs border ${activeTheme.colors.sidebarActiveBorder}`
                           : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
                       }`}
                     >
@@ -397,7 +402,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div
                           className={`p-1.5 rounded-lg transition-colors shrink-0 ${
                             isActive
-                              ? "bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400"
+                              ? `${activeTheme.colors.accentBgSoft} ${activeTheme.colors.accentText}`
                               : "bg-slate-200/60 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-200"
                           }`}
                         >

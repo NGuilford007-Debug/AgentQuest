@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { AccessLevel, EmployeeProfile, WhiteLabelConfig } from "../types";
 import { 
   Flame, 
@@ -6,6 +6,7 @@ import {
   Plus, 
   Bell, 
   ChevronRight, 
+  ChevronDown,
   Bot, 
   CheckCircle2, 
   Zap, 
@@ -29,9 +30,13 @@ import {
   RotateCcw,
   Settings,
   Gift,
-  UserPlus
+  UserPlus,
+  Volume2,
+  VolumeX,
+  Radio
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
+import { ALL_WORKPLACE_THEMES, WorkplaceZoneTheme, getWorkplaceTheme } from "../utils/workplaceThemes";
 
 interface HeaderProps {
   userProfile: EmployeeProfile;
@@ -55,6 +60,10 @@ interface HeaderProps {
   isMasterDeveloper?: boolean;
   accessLevel?: AccessLevel;
   onOpenMasterAccessGate?: () => void;
+  activeWorkplaceThemeId?: string;
+  onSelectWorkplaceTheme?: (themeId: string) => void;
+  isPlayingZoneAudio?: boolean;
+  onToggleZoneAudio?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -78,8 +87,27 @@ export const Header: React.FC<HeaderProps> = ({
   isMasterDeveloper = true,
   accessLevel = "client_tenant",
   onOpenMasterAccessGate,
+  activeWorkplaceThemeId = "stage-war-room",
+  onSelectWorkplaceTheme,
+  isPlayingZoneAudio = false,
+  onToggleZoneAudio,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const themePickerRef = useRef<HTMLDivElement>(null);
+
+  const activeTheme = getWorkplaceTheme(activeWorkplaceThemeId);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themePickerRef.current && !themePickerRef.current.contains(e.target as Node)) {
+        setShowThemePicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const brandName = whiteLabelConfig?.brandName || "AgentFlow";
   const companyName = whiteLabelConfig?.companyName || "Autonomous Multi-Agent Workspace";
@@ -362,6 +390,150 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Monetization</span>
             </button>
           )}
+
+          {/* Workplace Zone Global Theme Switcher */}
+          <div className="relative shrink-0" ref={themePickerRef}>
+            <button
+              id="btn-header-workplace-theme"
+              onClick={() => setShowThemePicker(!showThemePicker)}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs active:scale-95 whitespace-nowrap shrink-0 ${activeTheme.colors.accentBorder} bg-slate-900/80 hover:bg-slate-800 text-slate-100`}
+              title={`Active Zone Theme: ${activeTheme.name}. Click to change global app theme.`}
+            >
+              <span className="text-sm">{activeTheme.emoji}</span>
+              <span 
+                className="w-2 h-2 rounded-full animate-pulse shrink-0" 
+                style={{ backgroundColor: activeTheme.colors.primary }}
+              />
+              <span className={`hidden md:inline font-bold ${activeTheme.colors.accentText}`}>
+                {activeTheme.shortName}
+              </span>
+              <span className="md:hidden font-bold">Theme</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${showThemePicker ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* Theme Picker Dropdown Menu */}
+            {showThemePicker && (
+              <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-80 sm:w-96 bg-slate-950 border border-slate-700/80 rounded-2xl shadow-2xl p-3.5 z-50 animate-in fade-in slide-in-from-top-2 backdrop-blur-xl">
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-cyan-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white leading-tight">Workplace Zone Themes</h4>
+                      <p className="text-[10px] text-slate-400">Atmospheric theme, glows & ambient buffs for entire app</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
+                    {ALL_WORKPLACE_THEMES.length} Zones
+                  </span>
+                </div>
+
+                {/* Theme Cards List */}
+                <div className="py-2.5 space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                  {ALL_WORKPLACE_THEMES.map((theme) => {
+                    const isSelected = theme.id === activeWorkplaceThemeId;
+                    return (
+                      <button
+                        key={theme.id}
+                        id={`btn-theme-select-${theme.id}`}
+                        onClick={() => {
+                          onSelectWorkplaceTheme?.(theme.id);
+                          setShowThemePicker(false);
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-start gap-2.5 group ${
+                          isSelected
+                            ? `${theme.colors.accentBorderStrong} ${theme.colors.cardBg} ${theme.colors.accentGlow}`
+                            : "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900/80 hover:border-slate-700"
+                        }`}
+                      >
+                        <div 
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 border border-white/10"
+                          style={{
+                            background: `linear-gradient(135deg, ${theme.colors.primary}25, ${theme.colors.secondary}15)`,
+                          }}
+                        >
+                          {theme.emoji}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`text-xs font-bold truncate ${isSelected ? theme.colors.accentText : "text-slate-200 group-hover:text-white"}`}>
+                                {theme.name}
+                              </span>
+                            </div>
+                            {isSelected ? (
+                              <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-1 ${theme.colors.badgeBg} ${theme.colors.badgeText} border ${theme.colors.badgeBorder} shrink-0`}>
+                                <Check className="w-2.5 h-2.5" />
+                                Active
+                              </span>
+                            ) : (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 shrink-0">
+                                {theme.category === "workplace" ? "Workplace" : "Chill Spot"}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                            {theme.tagline}
+                          </p>
+
+                          <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-800/60">
+                            <span className="text-[9px] font-medium text-slate-400">
+                              ⚡ <strong className="text-slate-300">{theme.buffMultiplier}</strong>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full shadow-xs" 
+                                style={{ backgroundColor: theme.colors.primary }}
+                                title="Primary"
+                              />
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full shadow-xs" 
+                                style={{ backgroundColor: theme.colors.secondary }}
+                                title="Secondary"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Ambient Soundscape Quick Controller */}
+                {onToggleZoneAudio && (
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between px-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Radio className={`w-3.5 h-3.5 ${isPlayingZoneAudio ? "text-cyan-400 animate-pulse" : "text-slate-500"}`} />
+                      <span className="text-[11px] text-slate-300 truncate">
+                        {activeTheme.ambientTrackTitle}
+                      </span>
+                    </div>
+                    <button
+                      onClick={onToggleZoneAudio}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-colors ${
+                        isPlayingZoneAudio 
+                          ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700"
+                      }`}
+                    >
+                      {isPlayingZoneAudio ? (
+                        <>
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>Mute</span>
+                        </>
+                      ) : (
+                        <>
+                          <VolumeX className="w-3.5 h-3.5" />
+                          <span>Soundscape</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Export Data Button */}
           {onOpenExport && (

@@ -27,7 +27,9 @@ import {
   MessageSquare,
   ArrowRight,
   RefreshCw,
-  Cpu
+  Cpu,
+  Palette,
+  Check
 } from "lucide-react";
 import { 
   startAmbientSound, 
@@ -36,6 +38,7 @@ import {
   AmbientSoundType 
 } from "../utils/audioSynth";
 import { fireCelebration } from "../utils/confetti";
+import { getWorkplaceTheme } from "../utils/workplaceThemes";
 
 interface DigitalWorkspacesProps {
   stages: WorkplaceStage[];
@@ -43,6 +46,8 @@ interface DigitalWorkspacesProps {
   onUpdateStages: (stages: WorkplaceStage[]) => void;
   onDispatchWithAgent: (agentId: string) => void;
   onRewardXP: (amount: number, hours?: number) => void;
+  activeWorkplaceThemeId?: string;
+  onSelectWorkplaceTheme?: (themeId: string) => void;
 }
 
 export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
@@ -51,8 +56,10 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
   onUpdateStages,
   onDispatchWithAgent,
   onRewardXP,
+  activeWorkplaceThemeId = "stage-war-room",
+  onSelectWorkplaceTheme,
 }) => {
-  const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id || "stage-war-room");
+  const [selectedStageId, setSelectedStageId] = useState<string>(activeWorkplaceThemeId || stages[0]?.id || "stage-war-room");
   const [filterCategory, setFilterCategory] = useState<"all" | "workplace" | "chill_spot">("all");
   
   // Ambient Sound State
@@ -68,6 +75,8 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
+  const isGlobalAppTheme = activeWorkplaceThemeId === currentStage?.id;
+  const currentTheme = getWorkplaceTheme(currentStage?.id);
 
   // Sync ambient sound when switching stages or toggling play
   useEffect(() => {
@@ -290,9 +299,16 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                   >
                     {stage.category === "workplace" ? "Workplace" : "Chill Spot"}
                   </span>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-                    <Users className="w-3 h-3" />
-                    <span>{count}</span>
+                  <div className="flex items-center gap-1.5">
+                    {stage.id === activeWorkplaceThemeId && (
+                      <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+                        Theme
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                      <Users className="w-3 h-3" />
+                      <span>{count}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -360,7 +376,29 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
               </div>
 
               {/* Stage Quick Actions */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                {/* Global Theme Button */}
+                <button
+                  id="btn-apply-zone-app-theme"
+                  onClick={() => {
+                    if (onSelectWorkplaceTheme) {
+                      onSelectWorkplaceTheme(currentStage.id);
+                      playInteractiveSound("success");
+                      fireCelebration();
+                      setActiveNotification(`✨ Activated "${currentStage.name}" as the Global App Theme! Header, sidebar & workspaces now reflect this zone's theme palette.`);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                    isGlobalAppTheme
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : "bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-slate-600"
+                  }`}
+                  title="Apply this workplace zone as the application-wide theme"
+                >
+                  <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{isGlobalAppTheme ? "✓ Active App Theme" : "Set as App Theme"}</span>
+                </button>
+
                 <button
                   onClick={() => setIsAssignModalOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-all"
