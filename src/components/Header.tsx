@@ -33,7 +33,8 @@ import {
   UserPlus,
   Volume2,
   VolumeX,
-  Radio
+  Radio,
+  Scale
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { ALL_WORKPLACE_THEMES, WorkplaceZoneTheme, getWorkplaceTheme } from "../utils/workplaceThemes";
@@ -64,6 +65,7 @@ interface HeaderProps {
   onSelectWorkplaceTheme?: (themeId: string) => void;
   isPlayingZoneAudio?: boolean;
   onToggleZoneAudio?: () => void;
+  onOpenLegal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -91,6 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectWorkplaceTheme,
   isPlayingZoneAudio = false,
   onToggleZoneAudio,
+  onOpenLegal,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -388,6 +391,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Monetization</span>
+            </button>
+          )}
+
+          {/* Legal Governance & Terms Button */}
+          {onOpenLegal && (
+            <button
+              id="btn-header-legal"
+              onClick={onOpenLegal}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-semibold border border-indigo-200 dark:border-indigo-800/60 transition-colors whitespace-nowrap shrink-0"
+              title="Open Terms of Service & Enterprise Legal Governance Center"
+            >
+              <Scale className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Terms & Legal</span>
             </button>
           )}
 

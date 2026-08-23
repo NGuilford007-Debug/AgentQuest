@@ -498,7 +498,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className="rounded text-blue-600 focus:ring-blue-500 mt-0.5"
                 />
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                  I agree to the Terms of Service, Privacy Policy, and 256-bit SOC-2 compliant autonomous governance rules.
+                  I agree to the{" "}
+                  <a 
+                    href="https://drive.google.com/drive/folders/10dW5JZ1xdTZqWYOhqF3RDxBlJdJzIiVW" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-500"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Terms of Service & Legalities
+                  </a>{" "}
+                  and 256-bit SOC-2 compliant autonomous agent governance rules.
                 </span>
               </label>
             )}

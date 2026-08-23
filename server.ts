@@ -1930,6 +1930,31 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req,
   res.json({ received: true });
 });
 
+// GET /api/google/drive-assets - Fetch images, vectors, documents, and media from Google Drive folder
+app.get("/api/google/drive-assets", async (req, res) => {
+  const folderId = (req.query.folderId as string) || "10dW5JZ1xdTZqWYOhqF3RDxBlJdJzIiVW";
+  try {
+    const { getDriveFolderAssets } = await import("./server/googleDriveAssets.js");
+    const assets = await getDriveFolderAssets(folderId);
+    res.json({
+      success: true,
+      folderId,
+      assets,
+      syncedAt: new Date().toISOString(),
+      source: "Google Drive API"
+    });
+  } catch (error: any) {
+    console.warn("Google Drive Asset sync failed (fallback):", error.message);
+    res.json({
+      success: false,
+      folderId,
+      error: error.message || "Failed to fetch Drive assets",
+      fallbackAvailable: true
+    });
+  }
+});
+
+
 // Production and dev routing
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

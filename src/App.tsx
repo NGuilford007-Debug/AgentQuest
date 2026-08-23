@@ -23,12 +23,13 @@ import {
   ApprovedAutomation,
   GeneratedReportDocument,
   ClientAgentRequest,
-  AgentPrivacyPolicyConfig
+  AgentPrivacyPolicyConfig,
+  LegalDocumentItem
 } from "./types";
 import { 
   INITIAL_AGENTS, 
   INITIAL_USER_PROFILE, 
-  CLEAN_SLATE_USER_PROFILE,
+  CLEAN_SLATE_USER_PROFILE, 
   INITIAL_WORKFLOWS, 
   LEADERBOARD_USERS,
   INITIAL_MODELS,
@@ -39,6 +40,7 @@ import {
   INITIAL_CLIENT_AGENT_REQUESTS,
   DEFAULT_AGENT_PRIVACY_POLICY
 } from "./data/initialData";
+import { INITIAL_LEGAL_DOCUMENTS } from "./data/initialLegalDocs";
 import { INITIAL_GENERATED_REPORTS } from "./data/initialReports";
 import { INITIAL_WORKPLACE_STAGES } from "./data/workplaceStages";
 import { INITIAL_ASSET_ITEMS, INITIAL_ASSET_DIRECTORIES } from "./data/initialAssets";
@@ -78,6 +80,8 @@ import { PricingCheckoutModal } from "./components/PricingCheckoutModal";
 import { AuthModal } from "./components/AuthModal";
 import { SmartChat } from "./components/SmartChat";
 import { ImageStudio } from "./components/ImageStudio";
+import { LegalGovernanceCenter } from "./components/LegalGovernanceCenter";
+import { TermsAgreementGateModal } from "./components/TermsAgreementGateModal";
 import { MasterAccessSettings } from "./types";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 import { getStoredItem, setStoredItem, removeStoredItem } from "./utils/storage";
@@ -122,6 +126,7 @@ export default function App() {
   const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>(INITIAL_GENERATED_REPORTS);
   const [clientAgentRequests, setClientAgentRequests] = useState<ClientAgentRequest[]>(INITIAL_CLIENT_AGENT_REQUESTS);
   const [agentPrivacyPolicy, setAgentPrivacyPolicy] = useState<AgentPrivacyPolicyConfig>(DEFAULT_AGENT_PRIVACY_POLICY);
+  const [legalDocs, setLegalDocs] = useState<LegalDocumentItem[]>(INITIAL_LEGAL_DOCUMENTS);
 
   // Hydrate persisted state from localStorage on client mount (SSR-safe hydration)
   useEffect(() => {
@@ -196,6 +201,9 @@ export default function App() {
 
       const storedAgentPrivacyPolicy = getStoredItem<AgentPrivacyPolicyConfig | null>("agentflow_agent_privacy_policy", null);
       if (storedAgentPrivacyPolicy) setAgentPrivacyPolicy(storedAgentPrivacyPolicy);
+
+      const storedLegalDocs = getStoredItem<LegalDocumentItem[] | null>("agentflow_legal_docs", null);
+      if (storedLegalDocs) setLegalDocs(storedLegalDocs);
     } catch (error) {
       console.warn("[App] Hydration error from localStorage:", error);
     } finally {
@@ -203,6 +211,13 @@ export default function App() {
     }
   }, []);
 
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("agentflow_terms_accepted_session") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [currentTab, setCurrentTab] = useState<NavTab>("chat");
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>(
     workflows[0]?.id || "wf-1"
@@ -1165,6 +1180,7 @@ export default function App() {
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenWhiteLabel={() => setCurrentTab("whitelabel")}
         onOpenMonetization={() => setCurrentTab("monetization")}
+        onOpenLegal={() => setCurrentTab("legal")}
         onOpenPricing={() => {
           setSelectedPlanForPricing(userProfile.subscriptionPlan || "free");
           setIsPricingModalOpen(true);
@@ -1444,6 +1460,32 @@ export default function App() {
           />
         )}
 
+        {currentTab === "legal" && (
+          <LegalGovernanceCenter
+            documents={legalDocs}
+            userProfile={userProfile}
+            onOpenPricing={(planId) => {
+              setSelectedPlanForPricing(planId || "enterprise");
+              setIsPricingModalOpen(true);
+            }}
+            onOpenTermsGate={() => setHasAcceptedTerms(false)}
+            onUpdateDocuments={(updated) => {
+              setLegalDocs(updated);
+              setStoredItem("agentflow_legal_docs", updated);
+              triggerAutoSaveIndicator();
+            }}
+            onAcceptDocument={(docId) => {
+              const updated = legalDocs.map(d => d.id === docId ? { ...d, isAcceptedByCurrentUser: true, acceptedAt: new Date().toISOString() } : d);
+              setLegalDocs(updated);
+              setStoredItem("agentflow_legal_docs", updated);
+              triggerAutoSaveIndicator();
+            }}
+            companyName={whiteLabelConfig.companyName || "AgentFlow Enterprise"}
+            brandName={whiteLabelConfig.brandName || "AgentFlow"}
+            isMasterDeveloper={isMasterDeveloper}
+          />
+        )}
+
         {currentTab === "analytics" && (
           <ROIAnalytics
             agents={agents}
@@ -1678,6 +1720,22 @@ export default function App() {
           addXpAndCheckLevel(500, 1.5);
           fireCelebration();
         }}
+      />
+      {/* Modal: Enterprise Terms of Service & Agreements Gate */}
+      <TermsAgreementGateModal
+        isOpen={!hasAcceptedTerms}
+        onAcceptTerms={(signerInfo) => {
+          setHasAcceptedTerms(true);
+          try {
+            sessionStorage.setItem("agentflow_terms_accepted_session", "true");
+            localStorage.setItem("agentflow_tos_accepted", JSON.stringify(signerInfo));
+          } catch (e) {
+            console.warn("Could not save terms acceptance:", e);
+          }
+        }}
+        legalDocuments={legalDocs}
+        userEmail={userProfile.email || "enterprise@client.com"}
+        userName={userProfile.name || "Enterprise User"}
       />
     </div>
   );

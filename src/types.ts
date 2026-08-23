@@ -1019,6 +1019,28 @@ export type ReportCategory =
 
 export type ReportClassification = "Confidential" | "Internal" | "Executive Board" | "Client Facing";
 
+export interface LegalDocumentItem {
+  id: string;
+  name: string;
+  category: "terms_of_service" | "privacy_policy" | "acceptable_use" | "compliance" | "sla" | "general_legal" | "ai_ethics";
+  title: string;
+  version: string;
+  effectiveDate: string;
+  lastReviewed: string;
+  status: "active" | "draft" | "under_review" | "archived";
+  content: string;
+  summary: string;
+  keyClauses: {
+    heading: string;
+    description: string;
+    importance: "critical" | "high" | "standard";
+  }[];
+  webViewLink?: string;
+  sourceType: "native_template" | "custom_imported";
+  isAcceptedByCurrentUser?: boolean;
+  acceptedAt?: string;
+}
+
 export interface GeneratedReportDocument {
   id: string;
   title: string;

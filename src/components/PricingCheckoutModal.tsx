@@ -19,8 +19,15 @@ import {
   BadgeCheck,
   Gift,
   Flame,
-  UserPlus
+  UserPlus,
+  Eye,
+  Download,
+  Copy,
+  Scale
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { INITIAL_LEGAL_DOCUMENTS } from "../data/initialLegalDocs";
+import { LegalDocumentItem } from "../types";
 
 export interface PricingPlan {
   id: "free" | "starter" | "pro" | "enterprise";
@@ -48,6 +55,7 @@ interface PricingCheckoutModalProps {
   onSuccessUpgrade?: (newPlanId: "free" | "starter" | "pro" | "enterprise" | string) => void;
   onOpenAuthModal?: () => void;
 }
+
 
 const PRICING_PLANS: PricingPlan[] = [
   {
@@ -153,8 +161,32 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [userEmailInput, setUserEmailInput] = useState<string>(customerEmail);
+  const [hasAgreedToLegalTerms, setHasAgreedToLegalTerms] = useState<boolean>(true);
+  const [showLegalDetails, setShowLegalDetails] = useState<boolean>(false);
+  const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
+  const [copiedReviewDocId, setCopiedReviewDocId] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const currentReviewDoc = reviewingDocId 
+    ? INITIAL_LEGAL_DOCUMENTS.find(d => d.id === reviewingDocId || d.id.includes(reviewingDocId)) || INITIAL_LEGAL_DOCUMENTS[0]
+    : null;
+
+  const handleDownloadDoc = (doc: LegalDocumentItem) => {
+    const element = document.createElement("a");
+    const file = new Blob([doc.content], { type: "text/markdown" });
+    element.href = URL.createObjectURL(file);
+    element.download = `${doc.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}-guilford-industries.md`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const handleCopyDoc = (doc: LegalDocumentItem) => {
+    navigator.clipboard.writeText(doc.content);
+    setCopiedReviewDocId(doc.id);
+    setTimeout(() => setCopiedReviewDocId(null), 2000);
+  };
 
   const handleInitiateCheckout = async (plan: PricingPlan) => {
     setIsProcessing(true);
@@ -499,6 +531,85 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             </div>
           )}
 
+          {/* CUSTOMER & RESELLER CONTRACT AGREEMENT NOTICE */}
+          <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Customer & Reseller Terms of Service Binding Agreement
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                  Reviewable at Gate
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewingDocId("doc-enterprise-reseller")}
+                  className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-indigo-100/70 dark:bg-indigo-900/50 px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Review Contracts</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLegalDetails(!showLegalDetails)}
+                  className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:underline"
+                >
+                  {showLegalDetails ? "Collapse List" : "Show All 8 Contracts"}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              By subscribing to paid tiers or provisioning tenants under Guilford Industries, Customer agrees to the <strong>Master EULA</strong>, <strong>Enterprise Distribution Agreement</strong>, <strong>Acceptable Use Policy</strong>, <strong>AI Safety & Responsible Autonomy Agreement</strong>, and <strong>Data Processing Addendum (DPA)</strong>.
+            </p>
+
+            {showLegalDetails && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1 text-[11px]">
+                {INITIAL_LEGAL_DOCUMENTS.map((doc) => (
+                  <button
+                    key={doc.id}
+                    type="button"
+                    onClick={() => setReviewingDocId(doc.id)}
+                    className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 hover:border-indigo-400 dark:hover:border-indigo-600 text-indigo-700 dark:text-indigo-300 font-semibold flex items-center justify-between text-left group transition-all shadow-xs"
+                  >
+                    <span className="truncate mr-1 text-[11px] group-hover:text-indigo-600 dark:group-hover:text-white">
+                      {doc.name}
+                    </span>
+                    <span className="p-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-500 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                      <Eye className="w-3 h-3" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+              <label className="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasAgreedToLegalTerms}
+                  onChange={(e) => setHasAgreedToLegalTerms(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 shrink-0"
+                />
+                <span>
+                  I confirm on behalf of my organization that I accept the <strong>Enterprise Terms of Service</strong>, <strong>AI Safety Policy</strong>, and <strong>Data Processing Addendum</strong>.
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setReviewingDocId("doc-enterprise-reseller")}
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 self-start sm:self-auto"
+              >
+                Read Full Terms →
+              </button>
+            </div>
+          </div>
+
+
           {/* ENTERPRISE CONTACT & FAQ ACCORDION */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div>
@@ -520,9 +631,13 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
 
         {/* MODAL FOOTER */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
-            <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>Encrypted payment processing via Stripe</span>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>Encrypted processing via Stripe</span>
+            </div>
+            <span>•</span>
+            <span className="text-slate-400">Binding Enterprise Terms & Legal Governance applied</span>
           </div>
 
           <button
@@ -533,6 +648,120 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             Close
           </button>
         </div>
+
+        {/* IN-GATE CONTRACT REVIEW DRAWER / MODAL */}
+        {currentReviewDoc && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-700/90 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+              {/* Header */}
+              <div className="p-4 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/40">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold flex items-center gap-2">
+                      <span>{currentReviewDoc.title}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">
+                        {currentReviewDoc.version}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Provider: Guilford Industries • Effective: {currentReviewDoc.effectiveDate}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopyDoc(currentReviewDoc)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+                    title="Copy Markdown"
+                  >
+                    {copiedReviewDocId === currentReviewDoc.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadDoc(currentReviewDoc)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download .MD</span>
+                  </button>
+
+                  <button
+                    onClick={() => setReviewingDocId(null)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-1"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Contract Selector Tabs */}
+              <div className="bg-slate-950 px-4 py-2 border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+                {INITIAL_LEGAL_DOCUMENTS.map((doc) => (
+                  <button
+                    key={doc.id}
+                    onClick={() => setReviewingDocId(doc.id)}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all ${
+                      doc.id === currentReviewDoc.id
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-900 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {doc.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Body: Key Clauses & Full Markdown Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-900/60 text-slate-200 text-xs">
+                {currentReviewDoc.keyClauses && currentReviewDoc.keyClauses.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 space-y-2">
+                    <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider block">
+                      Enforceable Key Clauses Summary
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {currentReviewDoc.keyClauses.map((clause, idx) => (
+                        <div key={idx} className="p-2.5 rounded-xl bg-slate-950/80 border border-indigo-900/50">
+                          <span className="font-bold text-slate-200 block text-[11px] mb-0.5">
+                            {clause.heading}
+                          </span>
+                          <span className="text-[11px] text-slate-400 leading-snug block">
+                            {clause.description}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-slate-300 leading-relaxed font-sans prose prose-invert max-w-none prose-headings:text-slate-100 prose-a:text-indigo-400 prose-code:text-indigo-300 prose-code:bg-slate-900">
+                  <ReactMarkdown>{currentReviewDoc.content}</ReactMarkdown>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-400">
+                  Reviewed directly at the Subscription & Licensing Gate
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReviewingDocId(null)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-xs"
+                >
+                  Return to Checkout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

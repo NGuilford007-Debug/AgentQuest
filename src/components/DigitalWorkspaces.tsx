@@ -383,7 +383,7 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                   onClick={() => {
                     if (onSelectWorkplaceTheme) {
                       onSelectWorkplaceTheme(currentStage.id);
-                      playInteractiveSound("success");
+                      playInteractiveSound("chime");
                       fireCelebration();
                       setActiveNotification(`✨ Activated "${currentStage.name}" as the Global App Theme! Header, sidebar & workspaces now reflect this zone's theme palette.`);
                     }

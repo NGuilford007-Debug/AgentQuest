@@ -26,7 +26,8 @@ import {
   Image as ImageIcon,
   Wand2,
   CreditCard,
-  Gift
+  Gift,
+  Scale
 } from "lucide-react";
 import { AccessLevel, WhiteLabelConfig } from "../types";
 import { getWorkplaceTheme } from "../utils/workplaceThemes";
@@ -45,9 +46,11 @@ export type NavTab =
   | "gamification" 
   | "leaderboard" 
   | "permissions" 
+  | "legal"
   | "analytics"
   | "whitelabel"
   | "monetization";
+
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -237,6 +240,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: "Active",
       badgeColor: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold",
       description: "Google, SaaS, REST APIs & RBAC",
+      enabled: true,
+    },
+    {
+      id: "legal",
+      label: "Terms & Legalities",
+      shortLabel: "Legal",
+      category: "tools",
+      icon: Scale,
+      badge: "Compliance",
+      badgeColor: "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold",
+      description: "Terms of Service, Privacy & Legal Governance",
       enabled: true,
     },
 
