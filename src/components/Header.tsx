@@ -347,7 +347,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? "bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 shadow-2xs"
                   : "bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 shadow-2xs"
               }`}
-              title="Access & Role Switcher (Founder Passkey Authentication)"
+              title="Workspace Role & View Switcher (Direct Access)"
             >
               {isMasterDeveloper ? (
                 <>

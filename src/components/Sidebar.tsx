@@ -486,7 +486,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 hover:bg-blue-100"
               : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100"
           }`}
-          title={isMasterDeveloper ? "Master Founder Mode (Click to manage)" : accessLevel === "team_operator" ? "Team Operator Mode" : "Client Portal Mode (Click for Founder Login)"}
+          title={isMasterDeveloper ? "Master Founder Mode (Click to switch view)" : accessLevel === "team_operator" ? "Team Operator Mode (Click to switch view)" : "Client Portal Mode (Click to switch view)"}
         >
           <div className="flex items-center gap-2 min-w-0">
             <div

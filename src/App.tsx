@@ -89,14 +89,13 @@ import { getStoredItem, setStoredItem, removeStoredItem } from "./utils/storage"
 export default function App() {
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Master Developer vs Client Access Gate State
+  // Master Developer vs Client Access Gate State (Direct account authentication, no PIN)
   const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>({
-    currentAccessLevel: "client_tenant",
-    founderEmail: "founder@agencyflow.io",
-    developerCompanyName: "AgentFlow Systems",
-    founderPin: "founder2026",
+    currentAccessLevel: "master_developer",
+    founderEmail: "toppgunn321@gmail.com",
+    developerCompanyName: "Guilford Industries",
     isSimulatingClientView: false,
-    clientLockEnforced: true,
+    clientLockEnforced: false,
     detectedEnvironment: "standalone_web_app",
   });
   const [isAccessGateOpen, setIsAccessGateOpen] = useState<boolean>(false);
@@ -134,7 +133,14 @@ export default function App() {
 
     try {
       const storedMasterAccess = getStoredItem<MasterAccessSettings | null>("agentflow_master_access", null);
-      if (storedMasterAccess) setMasterAccess(storedMasterAccess);
+      if (storedMasterAccess) {
+        setMasterAccess({
+          ...storedMasterAccess,
+          founderEmail: storedMasterAccess.founderEmail || "toppgunn321@gmail.com",
+          developerCompanyName: storedMasterAccess.developerCompanyName || "Guilford Industries",
+          currentAccessLevel: storedMasterAccess.currentAccessLevel || "master_developer",
+        });
+      }
 
       const storedAgents = getStoredItem<Agent[] | null>("agentflow_agents", null);
       if (storedAgents) setAgents(storedAgents);
