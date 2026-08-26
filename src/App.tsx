@@ -83,6 +83,7 @@ import { ImageStudio } from "./components/ImageStudio";
 import { LegalGovernanceCenter } from "./components/LegalGovernanceCenter";
 import { TermsAgreementGateModal } from "./components/TermsAgreementGateModal";
 import { MasterAccessSettings } from "./types";
+import { initRevenueCat, checkHasEntitlement } from "./services/revenuecat";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 import { getStoredItem, setStoredItem, removeStoredItem } from "./utils/storage";
 
@@ -210,6 +211,28 @@ export default function App() {
 
       const storedLegalDocs = getStoredItem<LegalDocumentItem[] | null>("agentflow_legal_docs", null);
       if (storedLegalDocs) setLegalDocs(storedLegalDocs);
+
+      // Initialize RevenueCat Purchases SDK with API Key test_aLsBHkgmNobJrZHUXrAefSAQdHc
+      try {
+        const userEmail = storedProfile?.email || "toppgunn321@gmail.com";
+        initRevenueCat(userEmail);
+        // Check if user has active RevenueCat entitlement ("SyncSchedule Pro")
+        checkHasEntitlement("SyncSchedule Pro").then((hasPro) => {
+          if (hasPro) {
+            console.log("[RevenueCat] Active 'SyncSchedule Pro' entitlement detected! Granting Pro access.");
+            setUserProfile((prev) => {
+              const updated: EmployeeProfile = {
+                ...prev,
+                subscriptionPlan: prev.subscriptionPlan === "enterprise" ? "enterprise" : "pro",
+              };
+              setStoredItem("agentflow_profile", updated);
+              return updated;
+            });
+          }
+        });
+      } catch (rcError) {
+        console.warn("[RevenueCat] Initialization check skipped:", rcError);
+      }
     } catch (error) {
       console.warn("[App] Hydration error from localStorage:", error);
     } finally {

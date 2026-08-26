@@ -28,6 +28,16 @@ import {
 import ReactMarkdown from "react-markdown";
 import { INITIAL_LEGAL_DOCUMENTS } from "../data/initialLegalDocs";
 import { LegalDocumentItem } from "../types";
+import { 
+  initRevenueCat, 
+  getRevenueCatCustomerInfo, 
+  getRevenueCatOfferings, 
+  presentRevenueCatPaywall,
+  checkHasEntitlement,
+  REVENUECAT_API_KEY,
+  getRevenueCatUserId
+} from "../services/revenuecat";
+import type { CustomerInfo, Offerings } from "@revenuecat/purchases-js";
 
 export interface PricingPlan {
   id: "free" | "starter" | "pro" | "enterprise";
@@ -165,6 +175,110 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
   const [showLegalDetails, setShowLegalDetails] = useState<boolean>(false);
   const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
   const [copiedReviewDocId, setCopiedReviewDocId] = useState<string | null>(null);
+
+  // RevenueCat Purchases Integration State
+  const [rcCustomerInfo, setRcCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [rcOfferings, setRcOfferings] = useState<Offerings | null>(null);
+  const [isRcLoading, setIsRcLoading] = useState<boolean>(false);
+  const [rcStatusNotice, setRcStatusNotice] = useState<string | null>(null);
+  const [rcUserId, setRcUserId] = useState<string>(() => getRevenueCatUserId());
+
+  // Load RevenueCat status on modal opening
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const fetchRcData = async () => {
+      try {
+        setIsRcLoading(true);
+        initRevenueCat(userEmailInput || customerEmail);
+        setRcUserId(getRevenueCatUserId());
+        
+        const [info, offs] = await Promise.all([
+          getRevenueCatCustomerInfo(),
+          getRevenueCatOfferings(),
+        ]);
+
+        if (isMounted) {
+          setRcCustomerInfo(info);
+          setRcOfferings(offs);
+          
+          if (info && "SyncSchedule Pro" in info.entitlements.active) {
+            setRcStatusNotice("👑 'SyncSchedule Pro' active entitlement detected from RevenueCat!");
+          }
+        }
+      } catch (err) {
+        console.warn("RevenueCat load error:", err);
+      } finally {
+        if (isMounted) setIsRcLoading(false);
+      }
+    };
+
+    fetchRcData();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, userEmailInput, customerEmail]);
+
+  // Handle RevenueCat Paywall Launch
+  const handleLaunchRevenueCatPaywall = async () => {
+    setIsProcessing(true);
+    setRcStatusNotice(null);
+    try {
+      initRevenueCat(userEmailInput || customerEmail);
+      const result = await presentRevenueCatPaywall(rcOfferings?.current || undefined);
+      
+      if (result.customerInfo) {
+        setRcCustomerInfo(result.customerInfo);
+      }
+
+      if (result.success) {
+        setPaymentSuccess(true);
+        setStatusMessage("🎉 RevenueCat purchase successful! 'SyncSchedule Pro' entitlement unlocked.");
+        if (onSuccessUpgrade) {
+          onSuccessUpgrade("pro");
+        }
+      } else if (result.error) {
+        setRcStatusNotice(`RevenueCat Paywall note: ${result.error}`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Paywall presentation failed";
+      setRcStatusNotice(`RevenueCat notice: ${msg}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle Manual Entitlement Refresh
+  const handleRefreshRevenueCatEntitlements = async () => {
+    setIsRcLoading(true);
+    setRcStatusNotice(null);
+    try {
+      const info = await getRevenueCatCustomerInfo();
+      setRcCustomerInfo(info);
+      const hasSyncSchedulePro = await checkHasEntitlement("SyncSchedule Pro");
+      
+      if (hasSyncSchedulePro) {
+        setRcStatusNotice("✅ 'SyncSchedule Pro' Entitlement is ACTIVE!");
+        setPaymentSuccess(true);
+        setStatusMessage("🎉 'SyncSchedule Pro' verified active via RevenueCat!");
+        if (onSuccessUpgrade) {
+          onSuccessUpgrade("pro");
+        }
+      } else {
+        const activeKeys = info?.entitlements?.active ? Object.keys(info.entitlements.active) : [];
+        if (activeKeys.length > 0) {
+          setRcStatusNotice(`Active Entitlements: ${activeKeys.join(", ")}`);
+        } else {
+          setRcStatusNotice("No active entitlements found yet for this RevenueCat App User ID.");
+        }
+      }
+    } catch (err) {
+      setRcStatusNotice("Error contacting RevenueCat API.");
+    } finally {
+      setIsRcLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -491,6 +605,125 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* REVENUECAT PURCHASES INTEGRATION CARD */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-indigo-950/30 border-2 border-amber-300 dark:border-amber-700/60 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-md font-bold shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      RevenueCat Web Paywall & Entitlements
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40">
+                      @revenuecat/purchases-js
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+                      API: {REVENUECAT_API_KEY.slice(0, 10)}...
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    Universal in-app subscriptions, web paywalls, and cross-platform entitlement verification for <strong>SyncSchedule Pro</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Status / App User ID */}
+              <div className="text-left sm:text-right shrink-0">
+                <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">RevenueCat App User</div>
+                <div className="text-xs font-mono font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]" title={rcUserId}>
+                  {rcUserId}
+                </div>
+              </div>
+            </div>
+
+            {/* Status notice if any */}
+            {rcStatusNotice && (
+              <div className="p-3 rounded-2xl bg-amber-100/70 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>{rcStatusNotice}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRcStatusNotice(null)}
+                  className="text-amber-700 dark:text-amber-400 hover:underline text-[11px]"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Active Entitlements Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Entitlement Target</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white">SyncSchedule Pro</span>
+                  {rcCustomerInfo && "SyncSchedule Pro" in rcCustomerInfo.entitlements.active ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      ACTIVE
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      Ready to Unlock
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Active Entitlements</span>
+                <div className="font-bold text-slate-900 dark:text-white truncate">
+                  {rcCustomerInfo?.entitlements?.active && Object.keys(rcCustomerInfo.entitlements.active).length > 0
+                    ? Object.keys(rcCustomerInfo.entitlements.active).join(", ")
+                    : "None active"}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Offering</span>
+                <div className="font-bold text-slate-900 dark:text-white truncate">
+                  {rcOfferings?.current ? rcOfferings.current.identifier : "Default Project Offering"}
+                </div>
+              </div>
+            </div>
+
+            {/* RevenueCat Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleLaunchRevenueCatPaywall}
+                disabled={isProcessing}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 shrink-0"
+              >
+                <Sparkles className="w-4 h-4 text-slate-950 fill-current" />
+                <span>Present RevenueCat Paywall</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRefreshRevenueCatEntitlements}
+                disabled={isRcLoading}
+                className="px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-300 dark:border-slate-700 flex items-center gap-2 transition-all shrink-0 shadow-2xs"
+              >
+                {isRcLoading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                )}
+                <span>Check Entitlements</span>
+              </button>
+
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 ml-auto flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
+                <span>RevenueCat SDK v1.53 Initialized</span>
+              </div>
+            </div>
           </div>
 
           {/* CHECKOUT URL PANEL (IF STRIPE SESSION CREATED) */}
