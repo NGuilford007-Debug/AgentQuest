@@ -342,6 +342,8 @@ export default function App() {
     if (!isHydrated) return;
     if (activeTaskSession) {
       setStoredItem("agentflow_active_task", activeTaskSession);
+    } else {
+      removeStoredItem("agentflow_active_task");
     }
   }, [activeTaskSession, isHydrated]);
 
@@ -1091,6 +1093,49 @@ export default function App() {
     removeStoredItem("agentflow_executions");
   };
 
+  const handleClearAuditLogs = () => {
+    setAuditLogs([]);
+    removeStoredItem("agentflow_audit_logs");
+  };
+
+  const handleClearTenantsBilling = () => {
+    setTenantsBilling([]);
+    setFinancialHistory([]);
+    removeStoredItem("agentflow_tenants_billing");
+    removeStoredItem("agentflow_financial_history");
+  };
+
+  const handleClearApprovedAutomations = () => {
+    setApprovedAutomations([]);
+    removeStoredItem("agentflow_approved_automations");
+  };
+
+  const handleClearSavedReports = () => {
+    setSavedReports([]);
+    removeStoredItem("agentflow_saved_reports");
+  };
+
+  const handleClearAllMockData = () => {
+    setUserProfile(CLEAN_SLATE_USER_PROFILE);
+    setExecutionHistory([]);
+    setAuditLogs([]);
+    setActiveTaskSession(null);
+    setApprovedAutomations([]);
+    setSavedReports([]);
+    setClientAgentRequests([]);
+    setTenantsBilling([]);
+    setFinancialHistory([]);
+    removeStoredItem("agentflow_profile");
+    removeStoredItem("agentflow_executions");
+    removeStoredItem("agentflow_active_task");
+    removeStoredItem("agentflow_audit_logs");
+    removeStoredItem("agentflow_approved_automations");
+    removeStoredItem("agentflow_saved_reports");
+    removeStoredItem("agentflow_client_agent_requests");
+    removeStoredItem("agentflow_tenants_billing");
+    removeStoredItem("agentflow_financial_history");
+  };
+
   // Dispatch focus task directly to dispatcher
   const handleDispatchTaskWithAgent = (title: string, desc: string, agentId: string) => {
     setCurrentTab("dispatcher");
@@ -1606,9 +1651,21 @@ export default function App() {
           userProfile,
           executionHistory,
           activeTaskSession,
+          auditLogsCount: auditLogs.length,
+          tenantsBillingCount: tenantsBilling.length,
+          approvedAutomationsCount: approvedAutomations.length,
+          savedReportsCount: savedReports.length,
+          clientAgentRequestsCount: clientAgentRequests.length,
         }}
         onRestoreState={handleRestoreState}
         onResetToDefaults={handleResetToDefaults}
+        onResetToCleanSlate={handleResetToCleanSlate}
+        onClearExecutionHistory={handleClearExecutionHistory}
+        onClearAuditLogs={handleClearAuditLogs}
+        onClearTenantsBilling={handleClearTenantsBilling}
+        onClearApprovedAutomations={handleClearApprovedAutomations}
+        onClearSavedReports={handleClearSavedReports}
+        onClearAllMockData={handleClearAllMockData}
       />
 
       {/* Modal: Export & Audit Center */}
