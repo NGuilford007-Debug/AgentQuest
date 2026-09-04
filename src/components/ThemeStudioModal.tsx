@@ -307,10 +307,12 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
                 return (
                   <div
                     key={theme.id}
+                    id={`theme-card-${theme.id}`}
                     onClick={() => {
                       setSelectedPreviewId(theme.id);
                       playInteractiveSound("click");
                     }}
+                    onDoubleClick={() => handleApplyTheme(theme.id)}
                     className={`relative p-3.5 rounded-2xl border transition-all cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                       isCurrentlyPreviewed
                         ? `bg-slate-900/90 ${theme.colors.accentBorderStrong} ${theme.colors.accentGlow}`
@@ -381,17 +383,18 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
                         </button>
                       ) : (
                         <button
+                          id={`btn-set-theme-${theme.id}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleApplyTheme(theme.id);
                           }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 text-white ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 text-white cursor-pointer ${
                             isCurrentlyPreviewed
                               ? `bg-gradient-to-r ${theme.colors.buttonGradient}`
                               : "bg-slate-800 hover:bg-slate-700 border border-slate-700"
                           }`}
                         >
-                          Apply
+                          Set Theme
                         </button>
                       )}
                     </div>
@@ -518,12 +521,13 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
                 </div>
               ) : (
                 <button
-                  id="btn-confirm-apply-theme"
+                  id="btn-confirm-set-theme"
+                  data-action="set-theme-globally"
                   onClick={() => handleApplyTheme(previewTheme.id)}
-                  className={`w-full py-2.5 px-4 rounded-2xl text-xs font-extrabold text-white shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 bg-gradient-to-r ${previewTheme.colors.buttonGradient}`}
+                  className={`w-full py-2.5 px-4 rounded-2xl text-xs font-extrabold text-white shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer bg-gradient-to-r ${previewTheme.colors.buttonGradient}`}
                 >
                   <Palette className="w-4 h-4" />
-                  <span>Apply "{previewTheme.shortName}" Globally</span>
+                  <span>Set Theme: Apply "{previewTheme.shortName}" Globally</span>
                 </button>
               )}
             </div>

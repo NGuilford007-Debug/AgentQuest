@@ -22,14 +22,29 @@ function getAudioContext(): AudioContext | null {
 
 export type AmbientSoundType = "cyber_hum" | "zen_rain" | "lofi_beats" | "binaural_432" | "cafe_chatter" | "vault_pulse" | "off";
 
-export function playInteractiveSound(type: "coffee" | "gong" | "terminal" | "chime" | "laser" | "sip" | "click" | "level_up") {
+export function playInteractiveSound(type: "coffee" | "gong" | "terminal" | "chime" | "laser" | "sip" | "click" | "level_up" | "alert") {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
 
-    if (type === "click") {
+    if (type === "alert") {
+      // Dual-tone high-tech warning alert (D5 -> A4)
+      const freqs = [587.33, 440];
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        gain.gain.setValueAtTime(0.12, now + idx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (idx + 1) * 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.12);
+        osc.stop(now + (idx + 1) * 0.2);
+      });
+    } else if (type === "click") {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";

@@ -755,11 +755,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "Write outreach emails for companies and update salesforce quickly. Make it catchy.", // Vague prompt causing high failure rate
     status: "active",
     stats: {
-      tasksCompleted: 0,
-      hoursSaved: 0,
-      successRate: 100,
+      tasksCompleted: 38,
+      hoursSaved: 4.8,
+      successRate: 79.4, // Breaches 85% SLA due to high temperature & prompt ambiguity
       avgLatencySec: 4.8,
-      xpGenerated: 0,
+      xpGenerated: 1950,
     },
     monetization: {
       isMonetized: false,

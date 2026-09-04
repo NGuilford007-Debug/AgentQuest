@@ -116,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const brandName = whiteLabelConfig?.brandName || "AgentFlow";
   const companyName = whiteLabelConfig?.companyName || "Autonomous Multi-Agent Workspace";
-  const primaryColor = whiteLabelConfig?.primaryColor || "#3b82f6";
+  const primaryColor = whiteLabelConfig?.primaryColor || activeTheme.colors.primary || "#3b82f6";
   const enableGamification = whiteLabelConfig?.featureToggles.enableGamification !== false;
   const currentPlan = userProfile.subscriptionPlan || "free";
 
@@ -170,7 +170,13 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 md:px-6 flex items-center justify-between transition-colors gap-2">
+      <header 
+        className={`h-16 border-b px-3 sm:px-4 md:px-6 flex items-center justify-between transition-all duration-300 gap-2 backdrop-blur-md bg-gradient-to-r ${activeTheme.colors.headerGradient}`}
+        style={{
+          borderBottomColor: `${activeTheme.colors.primary}33`,
+          boxShadow: `0 4px 20px -5px ${activeTheme.colors.primary}18`,
+        }}
+      >
         
         {/* Brand & Active status */}
         <div className="flex items-center gap-3 shrink-0">

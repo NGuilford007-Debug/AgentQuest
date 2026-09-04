@@ -73,6 +73,7 @@ import { TaskFocusHUD } from "./components/TaskFocusHUD";
 import { DigitalWorkspaces } from "./components/DigitalWorkspaces";
 import { ExportModal } from "./components/ExportModal";
 import { AgentHealthMonitor } from "./components/AgentHealthMonitor";
+import { AgentHealthToastSystem } from "./components/AgentHealthToastSystem";
 import { AgentTemplateModal } from "./components/AgentTemplateModal";
 import { MasterAccessGateModal } from "./components/MasterAccessGateModal";
 import { QuickTaskModal } from "./components/QuickTaskModal";
@@ -151,7 +152,29 @@ export default function App() {
       }
 
       const storedAgents = getStoredItem<Agent[] | null>("agentflow_agents", null);
-      if (storedAgents) setAgents(storedAgents);
+      if (storedAgents) {
+        // If all stored agents were saved with default 100% from previous template runs,
+        // ensure agent-5 reflects the realistic prompt drift (<85%) so health monitoring alerts properly
+        const hasSub85 = storedAgents.some((a) => (a.stats?.successRate ?? 100) < 85);
+        if (!hasSub85 && storedAgents.some((a) => a.id === "agent-5" && (a.stats?.successRate ?? 100) === 100)) {
+          setAgents(
+            storedAgents.map((a) =>
+              a.id === "agent-5"
+                ? {
+                    ...a,
+                    stats: {
+                      ...a.stats,
+                      successRate: 79.4,
+                      tasksCompleted: Math.max(a.stats?.tasksCompleted || 0, 38),
+                    },
+                  }
+                : a
+            )
+          );
+        } else {
+          setAgents(storedAgents);
+        }
+      }
 
       const storedWorkflows = getStoredItem<Workflow[] | null>("agentflow_workflows", null);
       if (storedWorkflows) setWorkflows(storedWorkflows);
@@ -172,7 +195,25 @@ export default function App() {
       if (storedActiveTask) setActiveTaskSession(storedActiveTask);
 
       const storedStages = getStoredItem<WorkplaceStage[] | null>("agentflow_workplace_stages", null);
-      if (storedStages) setWorkplaceStages(storedStages);
+      if (storedStages && Array.isArray(storedStages)) {
+        const mergedStages = INITIAL_WORKPLACE_STAGES.map((initialStage) => {
+          const existing = storedStages.find((s) => s.id === initialStage.id);
+          if (!existing) return initialStage;
+          return {
+            ...initialStage,
+            ...existing,
+            assignedAgentIds:
+              existing.assignedAgentIds && existing.assignedAgentIds.length > 0
+                ? existing.assignedAgentIds
+                : initialStage.assignedAgentIds,
+            interactiveItems:
+              existing.interactiveItems && existing.interactiveItems.length >= initialStage.interactiveItems.length
+                ? existing.interactiveItems
+                : initialStage.interactiveItems,
+          };
+        });
+        setWorkplaceStages(mergedStages);
+      }
 
       const storedModels = getStoredItem<AiModel[] | null>("agentflow_models", null);
       if (storedModels) setModels(storedModels);
@@ -672,6 +713,16 @@ export default function App() {
     );
   };
 
+  const [healthSelectedAgentId, setHealthSelectedAgentId] = useState<string | null>(null);
+
+  const handleNavigateToHealthMonitor = (agentId?: string) => {
+    if (agentId) {
+      setHealthSelectedAgentId(agentId);
+    }
+    setCurrentTab("health");
+    playInteractiveSound("click");
+  };
+
   const handleUpdateAgent = (updated: Agent) => {
     setAgents((prev) =>
       prev.map((a) => (a.id === updated.id ? updated : a))
@@ -890,11 +941,20 @@ export default function App() {
     setAgents((prev) =>
       prev.map((a) => {
         if (a.id === record.agentId) {
+          const isFailure = record.status === "failed" || record.status === "rejected";
+          const currentTasks = a.stats.tasksCompleted || 1;
+          const newTasks = currentTasks + 1;
+          const currentRate = a.stats.successRate ?? 95;
+          const newRate = isFailure
+            ? Math.max(50, parseFloat(((currentRate * currentTasks) / newTasks).toFixed(1)))
+            : parseFloat(Math.min(99.8, (currentRate * currentTasks + 100) / newTasks).toFixed(1));
+
           return {
             ...a,
             stats: {
               ...a.stats,
-              tasksCompleted: a.stats.tasksCompleted + 1,
+              tasksCompleted: newTasks,
+              successRate: newRate,
               hoursSaved: parseFloat((a.stats.hoursSaved + record.hoursSaved).toFixed(1)),
               xpGenerated: a.stats.xpGenerated + record.xpEarned,
             },
@@ -1350,7 +1410,7 @@ export default function App() {
           }}
           pendingReviewsCount={pendingReviewsCount}
           claimableQuestsCount={claimableQuestsCount}
-          unhealthyAgentsCount={agents.filter((a) => (a.stats.successRate ?? 95) < 90).length}
+          unhealthyAgentsCount={agents.filter((a) => (a.stats?.successRate ?? 100) < 85).length}
           totalAssetsCount={assets.length}
           automationsCount={approvedAutomations.length}
           savedReportsCount={savedReports.length}
@@ -1434,7 +1494,7 @@ export default function App() {
             onDeleteAgent={handleDeleteAgent}
             onBatchUpdateStatus={handleBatchUpdateAgentStatus}
             onBatchDeleteAgents={handleBatchDeleteAgents}
-            onOpenHealthMonitor={() => setCurrentTab("health")}
+            onOpenHealthMonitor={(agentId) => handleNavigateToHealthMonitor(agentId)}
             onOpenModelManager={handleOpenModelManager}
             onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
             onInstantiateTemplate={handleInstantiateTemplate}
@@ -1477,6 +1537,7 @@ export default function App() {
           <AgentHealthMonitor
             agents={agents}
             models={models}
+            initialAgentId={healthSelectedAgentId || undefined}
             onUpdateAgent={handleUpdateAgent}
             onRewardXP={(amount, hours) => {
               addXpAndCheckLevel(amount, hours || 0);
@@ -1886,6 +1947,12 @@ export default function App() {
         legalDocuments={legalDocs}
         userEmail={userProfile.email || "enterprise@client.com"}
         userName={userProfile.name || "Enterprise User"}
+      />
+
+      {/* Real-time Agent Health Notification Toast System */}
+      <AgentHealthToastSystem
+        agents={agents}
+        onNavigateToHealth={handleNavigateToHealthMonitor}
       />
     </div>
   );

@@ -241,7 +241,7 @@ export const INITIAL_WORKPLACE_STAGES: WorkplaceStage[] = [
     buffMultiplier: "+35% Workflow Node Synthesis Precision",
     buffDescription: "Supercharges automated prompt crafting and few-shot example generation.",
     bannerImage: "linear-gradient(135deg, #2d0b47 0%, #030712 100%)",
-    assignedAgentIds: [],
+    assignedAgentIds: ["agent-6"],
     interactiveItems: [
       {
         id: "item-synth-deck",
@@ -260,6 +260,15 @@ export const INITIAL_WORKPLACE_STAGES: WorkplaceStage[] = [
         bonusEffect: "Inspires creative thought generation",
         xpReward: 30,
         soundEffectType: "chime",
+      },
+      {
+        id: "item-neural-fuel",
+        name: "Prompt Fuel & Cold Nitro Station",
+        icon: "Coffee",
+        description: "Dispense iced cold brew & matcha for rapid prompt prototyping.",
+        bonusEffect: "+25% Reasoning speed & cognitive clarity",
+        xpReward: 45,
+        soundEffectType: "coffee",
       },
     ],
     defaultThoughts: [
@@ -291,7 +300,7 @@ export const INITIAL_WORKPLACE_STAGES: WorkplaceStage[] = [
     buffMultiplier: "+40% RBAC & Data Privacy Leak Prevention",
     buffDescription: "Guarantees zero unauthorized credential exposure and automated PII masking across all tool outputs.",
     bannerImage: "linear-gradient(135deg, #3d0716 0%, #030712 100%)",
-    assignedAgentIds: [],
+    assignedAgentIds: ["agent-3"],
     interactiveItems: [
       {
         id: "item-laser-grid",

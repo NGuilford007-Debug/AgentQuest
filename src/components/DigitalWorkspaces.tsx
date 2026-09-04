@@ -75,12 +75,14 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
 
   // Carousel & View Mode State for Stage Tabs
   const stageCarouselRef = useRef<HTMLDivElement>(null);
+  const compactCarouselRef = useRef<HTMLDivElement>(null);
   const [stageViewMode, setStageViewMode] = useState<"cards" | "compact" | "grid">("cards");
 
   const scrollStages = (direction: "left" | "right") => {
-    if (stageCarouselRef.current) {
+    const targetRef = stageViewMode === "compact" ? compactCarouselRef.current : stageCarouselRef.current;
+    if (targetRef) {
       const scrollAmount = direction === "left" ? -320 : 320;
-      stageCarouselRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+      targetRef.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   };
 
@@ -95,6 +97,17 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const isGlobalAppTheme = activeWorkplaceThemeId === currentStage?.id;
   const currentTheme = getWorkplaceTheme(currentStage?.id);
+
+  // Auto-scroll active stage into view whenever selectedStageId changes
+  useEffect(() => {
+    const targetRef = stageViewMode === "compact" ? compactCarouselRef.current : stageCarouselRef.current;
+    if (targetRef && currentStage) {
+      const activeEl = targetRef.querySelector(`[data-stage-id="${currentStage.id}"]`);
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
+    }
+  }, [selectedStageId, stageViewMode, currentStage]);
 
   // Sync ambient sound when switching stages or toggling play
   useEffect(() => {
@@ -136,9 +149,10 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
     if (item.soundEffectType) {
       playInteractiveSound(item.soundEffectType);
     } else {
-      playInteractiveSound("click");
+      playInteractiveSound("chime");
     }
 
+    fireCelebration();
     onRewardXP(item.xpReward);
     setActiveNotification(`✨ ${item.name} activated! ${item.bonusEffect} (+${item.xpReward} XP)`);
 
@@ -158,6 +172,34 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
     }));
     setActiveNotification(`☕ Handed fresh roast to Agent! Latency reduced & granted +50 XP.`);
     setTimeout(() => setActiveNotification(null), 3500);
+  };
+
+  // Broadcast refreshments & morale boost to all agents in current stage
+  const handleSendRefreshments = () => {
+    playInteractiveSound("coffee");
+    fireCelebration();
+    onRewardXP(60);
+
+    const targetAgents = agents.filter((a) => currentStage.assignedAgentIds.includes(a.id));
+    if (targetAgents.length > 0) {
+      setAgentMoods((prev) => {
+        const next = { ...prev };
+        targetAgents.forEach((a) => {
+          next[a.id] = "⚡ Energy Boosted (100%)";
+        });
+        return next;
+      });
+      setActiveNotification(
+        `☕ Fresh artisan refreshments & espresso served to ${targetAgents.length} agent${
+          targetAgents.length > 1 ? "s" : ""
+        } in ${currentStage.name}! Peak morale active & +60 XP earned!`
+      );
+    } else {
+      setActiveNotification(
+        `☕ Fresh artisan espresso & pastries brewed for ${currentStage.name}! Station an agent here to receive max focus buffs (+60 XP granted)!`
+      );
+    }
+    setTimeout(() => setActiveNotification(null), 4000);
   };
 
   // Reassign agent to this stage
@@ -367,7 +409,10 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
         {/* Stage Tabs / Switcher Rendering (Adapts to stageViewMode) */}
         {stageViewMode === "compact" ? (
           /* Compact Tabs Bar (Guaranteed reachable and minimal height) */
-          <div className="px-4 py-2.5 border-b border-slate-800/60 bg-slate-900/40 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+          <div 
+            ref={compactCarouselRef}
+            className="px-4 py-2.5 border-b border-slate-800/60 bg-slate-900/40 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth"
+          >
             {filteredStages.map((stage) => {
               const isSelected = stage.id === currentStage.id;
               const count = stage.assignedAgentIds.length;
@@ -375,13 +420,15 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
               return (
                 <button
                   key={stage.id}
+                  id={`stage-compact-tab-${stage.id}`}
+                  data-stage-id={stage.id}
                   onClick={() => {
                     setSelectedStageId(stage.id);
                     playInteractiveSound("click");
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border shrink-0 ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
                     isSelected
-                      ? `${stage.themeColor.border} bg-slate-800 text-white shadow-xs font-bold`
+                      ? `${stage.themeColor.border} bg-slate-800 text-white shadow-xs font-bold ring-1 ring-blue-500/50`
                       : "border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                   }`}
                 >
@@ -470,13 +517,15 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                 return (
                   <button
                     key={stage.id}
+                    id={`stage-card-${stage.id}`}
+                    data-stage-id={stage.id}
                     onClick={() => {
                       setSelectedStageId(stage.id);
                       playInteractiveSound("click");
                     }}
-                    className={`min-w-[210px] max-w-[250px] shrink-0 p-3.5 rounded-xl text-left border transition-all relative overflow-hidden group ${
+                    className={`min-w-[210px] max-w-[250px] shrink-0 p-3.5 rounded-xl text-left border transition-all relative overflow-hidden group cursor-pointer ${
                       isSelected
-                        ? `${stage.themeColor.border} bg-slate-800/90 shadow-md ${stage.themeColor.glow}`
+                        ? `${stage.themeColor.border} bg-slate-800/90 shadow-md ${stage.themeColor.glow} ring-1 ring-blue-500/50`
                         : "border-slate-800 bg-slate-900/40 hover:bg-slate-800/50 hover:border-slate-700"
                     }`}
                   >
@@ -569,10 +618,11 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
               </div>
 
               {/* Stage Quick Actions */}
-              <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-3 sm:mt-0 justify-start sm:justify-end">
                 {/* Global Theme Button */}
                 <button
-                  id="btn-apply-zone-app-theme"
+                  id="btn-set-workplace-theme"
+                  data-action="apply-app-theme"
                   onClick={() => {
                     if (onSelectWorkplaceTheme) {
                       onSelectWorkplaceTheme(currentStage.id);
@@ -581,22 +631,22 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                       setActiveNotification(`✨ Activated "${currentStage.name}" as the Global App Theme! Header, sidebar & workspaces now reflect this zone's theme palette.`);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer ${
                     isGlobalAppTheme
                       ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-emerald-500/10"
                       : "bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-slate-600"
                   }`}
-                  title="Apply this workplace zone as the application-wide theme"
+                  title="Set this workplace zone as the application-wide theme"
                 >
                   <Palette className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{isGlobalAppTheme ? "✓ Active App Theme" : "Apply as App Theme"}</span>
+                  <span>{isGlobalAppTheme ? "✓ Active App Theme" : "Set Theme (Apply to App)"}</span>
                 </button>
 
                 {/* Theme Studio Button */}
                 <button
                   id="btn-open-theme-studio"
                   onClick={() => setIsThemeStudioOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/90 to-purple-600/90 hover:from-blue-600 hover:to-purple-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 border border-blue-500/30"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/90 to-purple-600/90 hover:from-blue-600 hover:to-purple-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 border border-blue-500/30 cursor-pointer"
                   title="Open Theme Studio to preview and customize all themes and environmental auras"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -604,20 +654,20 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                 </button>
 
                 <button
+                  id="btn-assign-agent-stage"
                   onClick={() => setIsAssignModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Assign Agent</span>
                 </button>
 
+                {/* Highly Reachable Send Refreshments Action */}
                 <button
-                  onClick={() => {
-                    stationedAgents.forEach((a) => handleBoostAgent(a.id));
-                    fireCelebration();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all"
-                  title="Send fresh espresso to all stationed agents"
+                  id="btn-send-refreshments"
+                  onClick={handleSendRefreshments}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/50 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer hover:shadow-amber-500/20"
+                  title="Send fresh espresso & artisan refreshments to all agents in this zone"
                 >
                   <Coffee className="w-3.5 h-3.5 text-amber-400" />
                   <span>Send Refreshments</span>
@@ -676,16 +726,26 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
 
             {/* STATIONED AGENTS VISUAL SPOTLIGHT */}
             <div className="relative z-10 mt-auto">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
                   <Users className="w-4 h-4 text-blue-400" />
                   <span>Stationed Agents in this Zone ({stationedAgents.length})</span>
                 </h4>
-                {stationedAgents.length > 0 && (
-                  <span className="text-[11px] text-slate-400">
-                    Applying {currentStage.buffMultiplier}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {stationedAgents.length > 0 && (
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">
+                      Applying {currentStage.buffMultiplier}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleSendRefreshments}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold transition-all cursor-pointer"
+                    title="Quick dispatch refreshments to all agents"
+                  >
+                    <Coffee className="w-3 h-3 text-amber-400" />
+                    <span>Send Refreshments (+60 XP)</span>
+                  </button>
+                </div>
               </div>
 
               {stationedAgents.length === 0 ? (
@@ -699,12 +759,21 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                   <p className="text-xs text-slate-400 max-w-sm mb-4">
                     Station your AI agents in this {currentStage.category === "workplace" ? "digital workplace" : "chill spot"} to activate the environmental efficiency bonus.
                   </p>
-                  <button
-                    onClick={() => setIsAssignModalOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md"
-                  >
-                    + Station an Agent in {currentStage.name}
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      onClick={() => setIsAssignModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                    >
+                      + Station an Agent in {currentStage.name}
+                    </button>
+                    <button
+                      onClick={handleSendRefreshments}
+                      className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Brew Refreshments (+60 XP)</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
