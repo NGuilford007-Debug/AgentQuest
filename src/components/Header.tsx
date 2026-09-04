@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { ALL_WORKPLACE_THEMES, WorkplaceZoneTheme, getWorkplaceTheme } from "../utils/workplaceThemes";
+import { ThemeStudioModal } from "./ThemeStudioModal";
 
 interface HeaderProps {
   userProfile: EmployeeProfile;
@@ -97,6 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [isThemeStudioOpen, setIsThemeStudioOpen] = useState(false);
   const themePickerRef = useRef<HTMLDivElement>(null);
 
   const activeTheme = getWorkplaceTheme(activeWorkplaceThemeId);
@@ -241,7 +243,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Operational Autonomy Index: Percentage of tasks executed 100% autonomously without human bottleneck"
           >
             <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500 shrink-0" />
-            <span>{userProfile.autonomousRunRatio ?? 72}% Autonomy</span>
+            <span>{userProfile.autonomousRunRatio ?? 0}% Autonomy</span>
           </div>
 
           {/* OpEx Value Created */}
@@ -251,7 +253,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Total Operating Expense (OpEx) saved by autonomous agent workflows"
           >
             <DollarSign className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <span>${(userProfile.costSavedUsd || 15600).toLocaleString()} Saved</span>
+            <span>${(userProfile.costSavedUsd ?? 0).toLocaleString()} Saved</span>
           </div>
 
           {/* Sign Up / Free Access Tier CTA Button */}
@@ -516,9 +518,24 @@ export const Header: React.FC<HeaderProps> = ({
                   })}
                 </div>
 
+                {/* Theme Studio Launcher in Dropdown */}
+                <div className="pt-2 border-t border-slate-800">
+                  <button
+                    id="btn-open-theme-studio-from-header"
+                    onClick={() => {
+                      setShowThemePicker(false);
+                      setIsThemeStudioOpen(true);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Open Theme Studio & Environmental Aura</span>
+                  </button>
+                </div>
+
                 {/* Ambient Soundscape Quick Controller */}
                 {onToggleZoneAudio && (
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between px-1">
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between px-1">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Radio className={`w-3.5 h-3.5 ${isPlayingZoneAudio ? "text-cyan-400 animate-pulse" : "text-slate-500"}`} />
                       <span className="text-[11px] text-slate-300 truncate">
@@ -684,6 +701,20 @@ export const Header: React.FC<HeaderProps> = ({
 
         </div>
       </header>
+
+      {/* Theme Studio & Aura Customizer Modal */}
+      {isThemeStudioOpen && (
+        <ThemeStudioModal
+          isOpen={isThemeStudioOpen}
+          onClose={() => setIsThemeStudioOpen(false)}
+          activeThemeId={activeWorkplaceThemeId || "stage-war-room"}
+          onSelectTheme={(themeId) => {
+            onSelectWorkplaceTheme?.(themeId);
+          }}
+          isPlayingAudio={isPlayingZoneAudio}
+          onToggleAudio={onToggleZoneAudio}
+        />
+      )}
     </div>
   );
 };

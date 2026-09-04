@@ -203,8 +203,8 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
           setRcCustomerInfo(info);
           setRcOfferings(offs);
           
-          if (info && "SyncSchedule Pro" in info.entitlements.active) {
-            setRcStatusNotice("👑 'SyncSchedule Pro' active entitlement detected from RevenueCat!");
+          if (info && ("AgentFlow Pro" in info.entitlements.active || "SyncSchedule Pro" in info.entitlements.active)) {
+            setRcStatusNotice("👑 'AgentFlow Pro' active entitlement detected from RevenueCat!");
           }
         }
       } catch (err) {
@@ -234,7 +234,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
 
       if (result.success) {
         setPaymentSuccess(true);
-        setStatusMessage("🎉 RevenueCat purchase successful! 'SyncSchedule Pro' entitlement unlocked.");
+        setStatusMessage("🎉 RevenueCat purchase successful! 'AgentFlow Pro' entitlement unlocked.");
         if (onSuccessUpgrade) {
           onSuccessUpgrade("pro");
         }
@@ -256,12 +256,12 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     try {
       const info = await getRevenueCatCustomerInfo();
       setRcCustomerInfo(info);
-      const hasSyncSchedulePro = await checkHasEntitlement("SyncSchedule Pro");
+      const hasAgentFlowPro = await checkHasEntitlement("AgentFlow Pro");
       
-      if (hasSyncSchedulePro) {
-        setRcStatusNotice("✅ 'SyncSchedule Pro' Entitlement is ACTIVE!");
+      if (hasAgentFlowPro) {
+        setRcStatusNotice("✅ 'AgentFlow Pro' Entitlement is ACTIVE!");
         setPaymentSuccess(true);
-        setStatusMessage("🎉 'SyncSchedule Pro' verified active via RevenueCat!");
+        setStatusMessage("🎉 'AgentFlow Pro' verified active via RevenueCat!");
         if (onSuccessUpgrade) {
           onSuccessUpgrade("pro");
         }
@@ -627,7 +627,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Universal in-app subscriptions, web paywalls, and cross-platform entitlement verification for <strong>SyncSchedule Pro</strong>.
+                    Universal in-app subscriptions, web paywalls, and cross-platform entitlement verification for <strong>AgentFlow Pro</strong>.
                   </p>
                 </div>
               </div>
@@ -663,8 +663,8 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
               <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Entitlement Target</span>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white">SyncSchedule Pro</span>
-                  {rcCustomerInfo && "SyncSchedule Pro" in rcCustomerInfo.entitlements.active ? (
+                  <span className="font-bold text-slate-900 dark:text-white">AgentFlow Pro</span>
+                  {rcCustomerInfo && ("AgentFlow Pro" in rcCustomerInfo.entitlements.active || "SyncSchedule Pro" in rcCustomerInfo.entitlements.active) ? (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
                       ACTIVE
                     </span>

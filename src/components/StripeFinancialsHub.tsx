@@ -107,7 +107,7 @@ export const StripeFinancialsHub: React.FC<StripeFinancialsHubProps> = ({
       const result = await presentRevenueCatPaywall(rcOfferings?.current || undefined);
       if (result.customerInfo) setRcCustomerInfo(result.customerInfo);
       if (result.success) {
-        showNotification("RevenueCat purchase complete! 'SyncSchedule Pro' entitlement unlocked.");
+        showNotification("RevenueCat purchase complete! 'AgentFlow Pro' entitlement unlocked.");
       } else if (result.error) {
         setRcNotice(`RevenueCat result: ${result.error}`);
       }
@@ -125,10 +125,10 @@ export const StripeFinancialsHub: React.FC<StripeFinancialsHubProps> = ({
     try {
       const info = await getRevenueCatCustomerInfo();
       setRcCustomerInfo(info);
-      const isPro = await checkHasEntitlement("SyncSchedule Pro");
+      const isPro = await checkHasEntitlement("AgentFlow Pro");
       if (isPro) {
-        setRcNotice("👑 'SyncSchedule Pro' entitlement is ACTIVE in RevenueCat!");
-        showNotification("'SyncSchedule Pro' entitlement is ACTIVE!");
+        setRcNotice("👑 'AgentFlow Pro' entitlement is ACTIVE in RevenueCat!");
+        showNotification("'AgentFlow Pro' entitlement is ACTIVE!");
       } else {
         const activeKeys = info?.entitlements?.active ? Object.keys(info.entitlements.active) : [];
         setRcNotice(
@@ -1142,8 +1142,8 @@ export const StripeFinancialsHub: React.FC<StripeFinancialsHubProps> = ({
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Target Entitlement</span>
                 <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                  <span>SyncSchedule Pro</span>
-                  {rcCustomerInfo && "SyncSchedule Pro" in rcCustomerInfo.entitlements.active ? (
+                  <span>AgentFlow Pro</span>
+                  {rcCustomerInfo && ("AgentFlow Pro" in rcCustomerInfo.entitlements.active || "SyncSchedule Pro" in rcCustomerInfo.entitlements.active) ? (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
                       ACTIVE
                     </span>
@@ -1188,7 +1188,7 @@ export const StripeFinancialsHub: React.FC<StripeFinancialsHubProps> = ({
                   </h4>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Test the native web paywall component. When purchased, RevenueCat will grant the <code>SyncSchedule Pro</code> entitlement to this user session.
+                  Test the native web paywall component. When purchased, RevenueCat will grant the <code>AgentFlow Pro</code> entitlement to this user session.
                 </p>
 
                 <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs space-y-1">
@@ -1232,7 +1232,7 @@ const purchases = Purchases.configure({
 
 // 2. Check Customer Entitlements
 const customerInfo = await purchases.getCustomerInfo();
-if ("SyncSchedule Pro" in customerInfo.entitlements.active) {
+if ("AgentFlow Pro" in customerInfo.entitlements.active) {
   // Grant user access to entitlement
 }
 

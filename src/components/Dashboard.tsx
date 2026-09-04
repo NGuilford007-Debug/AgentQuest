@@ -70,7 +70,8 @@ import {
   ReportCategory, 
   ReportClassification,
   Department,
-  ApprovedAutomation
+  ApprovedAutomation,
+  TenantBillingRecord
 } from "../types";
 
 interface DashboardProps {
@@ -79,6 +80,7 @@ interface DashboardProps {
   userProfile: EmployeeProfile;
   executionHistory: TaskExecutionRecord[];
   savedReports: GeneratedReportDocument[];
+  tenantsBilling?: TenantBillingRecord[];
   onSaveReport: (report: GeneratedReportDocument) => void;
   onDeleteReport: (reportId: string) => void;
   onTogglePinReport: (reportId: string) => void;
@@ -161,6 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   userProfile,
   executionHistory,
   savedReports,
+  tenantsBilling,
   onSaveReport,
   onDeleteReport,
   onTogglePinReport,
@@ -219,29 +222,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Dynamic High-Level Metric Calculations
   const metrics = useMemo(() => {
-    const totalHoursSaved = userProfile.hoursSavedTotal || 575.5;
+    const totalHoursSaved = userProfile.hoursSavedTotal ?? 0;
     const hourlyRate = 85; // $85/hr fully-loaded corporate baseline
     const totalLaborValue = totalHoursSaved * hourlyRate;
-    const estimatedAiComputeCost = Math.max(12, Math.round(totalHoursSaved * 1.15)); // ~$1.15 per saved hour in tokens
+    const estimatedAiComputeCost = totalHoursSaved > 0 ? Math.max(12, Math.round(totalHoursSaved * 1.15)) : 0; // ~$1.15 per saved hour in tokens
     const netSavings = totalLaborValue - estimatedAiComputeCost;
-    const roiMultiplier = Number((totalLaborValue / (estimatedAiComputeCost || 1)).toFixed(1));
+    const roiMultiplier = totalLaborValue > 0 ? Number((totalLaborValue / (estimatedAiComputeCost || 1)).toFixed(1)) : 0;
+
+    // Detect if this workspace is on a clean slate or has populated enterprise baseline activity
+    const isCleanSlate = totalHoursSaved === 0 && executionHistory.length === 0 && (tenantsBilling?.length === 0 || !tenantsBilling);
 
     // MRR Calculations
-    const contractedTenantsCount = 14;
-    const contractedBaseMrr = 18450;
-    const projectedTenantTarget = 29;
-    const projectedTargetMrr = 38200;
-    const grossMarginPercent = 74.2;
-    const annualizedRunRate = projectedTargetMrr * 12;
+    const payingTenants = tenantsBilling ? tenantsBilling.filter((t) => !t.isInternalDeveloper && t.totalBilledRevenue > 0) : [];
+    const contractedTenantsCount = tenantsBilling ? payingTenants.length : (isCleanSlate ? 0 : 14);
+    const contractedBaseMrr = tenantsBilling ? payingTenants.reduce((sum, t) => sum + t.totalBilledRevenue, 0) : (isCleanSlate ? 0 : 18450);
+    const projectedTenantTarget = contractedTenantsCount > 0 ? Math.max(contractedTenantsCount * 2, 10) : (isCleanSlate ? 0 : 29);
+    const projectedTargetMrr = contractedBaseMrr > 0 ? Math.round(contractedBaseMrr * 2.07) : (isCleanSlate ? 0 : 38200);
+    const grossMarginPercent = contractedBaseMrr > 0 ? 74.2 : 0;
+    const annualizedRunRate = contractedBaseMrr * 12;
 
     // Coverage & Autonomy
-    const departmentCoverageData = [
+    const departmentCoverageData = !isCleanSlate ? [
       { name: "DevOps & SecOps", coverage: 94, automatedTasks: 412, manualBacklog: 26, hoursSaved: 184.5, fill: "#3b82f6" },
       { name: "Customer Support", coverage: 88, automatedTasks: 890, manualBacklog: 120, hoursSaved: 142.0, fill: "#10b981" },
       { name: "Engineering & QA", coverage: 82, automatedTasks: 320, manualBacklog: 70, hoursSaved: 98.0, fill: "#6366f1" },
       { name: "Sales & CRM", coverage: 76, automatedTasks: 510, manualBacklog: 160, hoursSaved: 76.0, fill: "#f59e0b" },
       { name: "Finance & Legal", coverage: 72, automatedTasks: 185, manualBacklog: 72, hoursSaved: 48.0, fill: "#8b5cf6" },
       { name: "Human Resources", coverage: 65, automatedTasks: 140, manualBacklog: 75, hoursSaved: 27.0, fill: "#ec4899" },
+    ] : [
+      { name: "DevOps & SecOps", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#3b82f6" },
+      { name: "Customer Support", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#10b981" },
+      { name: "Engineering & QA", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#6366f1" },
+      { name: "Sales & CRM", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#f59e0b" },
+      { name: "Finance & Legal", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#8b5cf6" },
+      { name: "Human Resources", coverage: 0, automatedTasks: 0, manualBacklog: 0, hoursSaved: 0.0, fill: "#ec4899" },
     ];
 
     const overallCoverageAvg = Math.round(
@@ -696,7 +710,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     ${metrics.totalLaborValue.toLocaleString()}
                   </div>
                   <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 flex items-center gap-0.5">
-                    <ArrowUpRight className="w-3 h-3" /> 575.5 hrs @ $85/hr
+                    <ArrowUpRight className="w-3 h-3" /> {metrics.totalHoursSaved.toFixed(1)} hrs @ $85/hr
                   </div>
                 </div>
 
@@ -708,7 +722,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     ${metrics.estimatedAiComputeCost.toFixed(0)}
                   </div>
                   <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
-                    98.7% Net Margin
+                    {metrics.totalLaborValue > 0 ? "98.7% Net Margin" : "0.0% Overhead"}
                   </div>
                 </div>
 

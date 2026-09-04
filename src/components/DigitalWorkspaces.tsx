@@ -39,6 +39,7 @@ import {
 } from "../utils/audioSynth";
 import { fireCelebration } from "../utils/confetti";
 import { getWorkplaceTheme } from "../utils/workplaceThemes";
+import { ThemeStudioModal } from "./ThemeStudioModal";
 
 interface DigitalWorkspacesProps {
   stages: WorkplaceStage[];
@@ -73,6 +74,7 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
   const [agentMoods, setAgentMoods] = useState<Record<string, string>>({});
   const [selectedAgentForModal, setSelectedAgentForModal] = useState<Agent | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isThemeStudioOpen, setIsThemeStudioOpen] = useState(false);
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const isGlobalAppTheme = activeWorkplaceThemeId === currentStage?.id;
@@ -388,20 +390,31 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                       setActiveNotification(`✨ Activated "${currentStage.name}" as the Global App Theme! Header, sidebar & workspaces now reflect this zone's theme palette.`);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 ${
                     isGlobalAppTheme
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-emerald-500/10"
                       : "bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-slate-600"
                   }`}
                   title="Apply this workplace zone as the application-wide theme"
                 >
                   <Palette className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{isGlobalAppTheme ? "✓ Active App Theme" : "Set as App Theme"}</span>
+                  <span>{isGlobalAppTheme ? "✓ Active App Theme" : "Apply as App Theme"}</span>
+                </button>
+
+                {/* Theme Studio Button */}
+                <button
+                  id="btn-open-theme-studio"
+                  onClick={() => setIsThemeStudioOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/90 to-purple-600/90 hover:from-blue-600 hover:to-purple-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 border border-blue-500/30"
+                  title="Open Theme Studio to preview and customize all themes and environmental auras"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Theme Studio</span>
                 </button>
 
                 <button
                   onClick={() => setIsAssignModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Assign Agent</span>
@@ -866,6 +879,22 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Full Theme Studio & Environmental Aura Modal */}
+      {isThemeStudioOpen && (
+        <ThemeStudioModal
+          isOpen={isThemeStudioOpen}
+          onClose={() => setIsThemeStudioOpen(false)}
+          activeThemeId={activeWorkplaceThemeId}
+          onSelectTheme={(themeId) => {
+            if (onSelectWorkplaceTheme) {
+              onSelectWorkplaceTheme(themeId);
+            }
+          }}
+          isPlayingAudio={isPlayingAudio}
+          onToggleAudio={() => setIsPlayingAudio(!isPlayingAudio)}
+        />
       )}
     </div>
   );

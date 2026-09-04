@@ -76,9 +76,9 @@ export async function getRevenueCatCustomerInfo(): Promise<CustomerInfo | null> 
 }
 
 /**
- * Check if the user has a specific entitlement active (e.g. 'SyncSchedule Pro', 'pro', 'enterprise')
+ * Check if the user has a specific entitlement active (e.g. 'AgentFlow Pro', 'pro', 'enterprise')
  */
-export async function checkHasEntitlement(entitlementName: string = "SyncSchedule Pro"): Promise<boolean> {
+export async function checkHasEntitlement(entitlementName: string = "AgentFlow Pro"): Promise<boolean> {
   try {
     const customerInfo = await getRevenueCatCustomerInfo();
     if (!customerInfo) return false;
@@ -93,7 +93,9 @@ export async function checkHasEntitlement(entitlementName: string = "SyncSchedul
     const activeKeys = Object.keys(customerInfo.entitlements.active);
     const hasMatch = activeKeys.some(
       (k) => k.toLowerCase() === entitlementName.toLowerCase() ||
-             k.toLowerCase().includes(entitlementName.toLowerCase())
+             k.toLowerCase().includes(entitlementName.toLowerCase()) ||
+             k.toLowerCase().includes("pro") ||
+             k.toLowerCase().includes("syncschedule")
     );
 
     return hasMatch;
@@ -143,7 +145,9 @@ export async function presentRevenueCatPaywall(customOffering?: Offering): Promi
     const purchaseResult: PurchaseResult = await purchases.presentPaywall({ offering: targetOffering });
     const { customerInfo } = purchaseResult;
 
-    const hasPro = "SyncSchedule Pro" in customerInfo.entitlements.active || Object.keys(customerInfo.entitlements.active).length > 0;
+    const hasPro = "AgentFlow Pro" in customerInfo.entitlements.active || 
+                  "SyncSchedule Pro" in customerInfo.entitlements.active || 
+                  Object.keys(customerInfo.entitlements.active).length > 0;
 
     return {
       success: hasPro,

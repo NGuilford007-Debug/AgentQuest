@@ -543,11 +543,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "You are SentryOps, an enterprise Site Reliability and Security Incident assistant. When an alert or bug occurs, analyze root causes, assess severity (P0-P3), check recent commits, and draft incident Slack updates with clear remediation steps.",
     status: "active",
     stats: {
-      tasksCompleted: 342,
-      hoursSaved: 184.5,
-      successRate: 99.1,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
       avgLatencySec: 1.8,
-      xpGenerated: 42500,
+      xpGenerated: 0,
     },
     monetization: {
       isMonetized: true,
@@ -561,9 +561,9 @@ export const INITIAL_AGENTS: Agent[] = [
       stripePaymentLink: "https://buy.stripe.com/test_sentryops_199mo",
       clientStripeConnectAccountId: "acct_client_apex_01",
       clientRevenueSharePercent: 90,
-      totalRevenueEarned: 3582.00,
-      totalPaidQueriesProcessed: 740,
-      activePayingSubscribersCount: 18,
+      totalRevenueEarned: 0,
+      totalPaidQueriesProcessed: 0,
+      activePayingSubscribersCount: 0,
       publicCheckoutTitle: "Autonomous DevOps & SRE Incident Sentinel (Tier 1 Support)",
       publicOfferingDescription: "24/7 Cloud alert correlation, root-cause diagnostics, and automated Slack/Jira incident triage.",
       customDomainPaywallUrl: "https://ops.apexenterprise.ai/paywall",
@@ -596,11 +596,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "You are RevPulse, a high-converting Enterprise Sales SDR agent. Evaluate company size, tech stack, and pain points to craft personalized demo follow-ups with compelling ROI metrics.",
     status: "active",
     stats: {
-      tasksCompleted: 890,
-      hoursSaved: 298.0,
-      successRate: 97.8,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
       avgLatencySec: 2.1,
-      xpGenerated: 78200,
+      xpGenerated: 0,
     },
     monetization: {
       isMonetized: true,
@@ -614,9 +614,9 @@ export const INITIAL_AGENTS: Agent[] = [
       stripePaymentLink: "https://buy.stripe.com/test_revpulse_149mo",
       clientStripeConnectAccountId: "acct_client_apex_01",
       clientRevenueSharePercent: 90,
-      totalRevenueEarned: 4470.00,
-      totalPaidQueriesProcessed: 1890,
-      activePayingSubscribersCount: 30,
+      totalRevenueEarned: 0,
+      totalPaidQueriesProcessed: 0,
+      activePayingSubscribersCount: 0,
       publicCheckoutTitle: "Autonomous B2B Sales Prospecting & Lead Qualifier",
       publicOfferingDescription: "Real-time Apollo & Crunchbase company enrichment, hyper-personalized email sequences, and CRM syncing.",
       customDomainPaywallUrl: "https://sdr.apexenterprise.ai/paywall",
@@ -649,11 +649,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "You are TicketHero, a world-class customer support specialist. Always maintain a polite, clear, step-by-step problem-solving tone. Cite help documentation accurately and flag churn risks.",
     status: "active",
     stats: {
-      tasksCompleted: 1420,
-      hoursSaved: 460.0,
-      successRate: 98.6,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
       avgLatencySec: 1.4,
-      xpGenerated: 112000,
+      xpGenerated: 0,
     },
     monetization: {
       isMonetized: true,
@@ -667,9 +667,9 @@ export const INITIAL_AGENTS: Agent[] = [
       stripePaymentLink: "https://buy.stripe.com/test_tickethero_metered",
       clientStripeConnectAccountId: "acct_client_apex_01",
       clientRevenueSharePercent: 90,
-      totalRevenueEarned: 2239.50,
-      totalPaidQueriesProcessed: 2986,
-      activePayingSubscribersCount: 22,
+      totalRevenueEarned: 0,
+      totalPaidQueriesProcessed: 0,
+      activePayingSubscribersCount: 0,
       publicCheckoutTitle: "Instant 24/7 AI Customer Support Ticket Resolver",
       publicOfferingDescription: "Pay-as-you-go customer ticket auto-triage, vector documentation search, and empathetic multi-language replies.",
       customDomainPaywallUrl: "https://support.apexenterprise.ai/paywall",
@@ -702,11 +702,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "You are DocuAudit, a meticulous corporate finance and legal auditor. Extract invoice line items, calculate totals, compare against PO limits, and flag discrepancies or unauthorized expenses.",
     status: "idle",
     stats: {
-      tasksCompleted: 215,
-      hoursSaved: 112.5,
-      successRate: 99.8,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
       avgLatencySec: 2.8,
-      xpGenerated: 31000,
+      xpGenerated: 0,
     },
     monetization: {
       isMonetized: true,
@@ -720,9 +720,9 @@ export const INITIAL_AGENTS: Agent[] = [
       stripePaymentLink: "https://buy.stripe.com/test_docuaudit_metered",
       clientStripeConnectAccountId: "acct_client_apex_01",
       clientRevenueSharePercent: 90,
-      totalRevenueEarned: 1825.00,
-      totalPaidQueriesProcessed: 730,
-      activePayingSubscribersCount: 9,
+      totalRevenueEarned: 0,
+      totalPaidQueriesProcessed: 0,
+      activePayingSubscribersCount: 0,
       publicCheckoutTitle: "Corporate Contract & Invoice Discrepancy Auditor",
       publicOfferingDescription: "Automated line-item reconciliation, PO limit validation, tax compliance checks, and variance reports.",
       customDomainPaywallUrl: "https://audit.apexenterprise.ai/paywall",
@@ -755,11 +755,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "Write outreach emails for companies and update salesforce quickly. Make it catchy.", // Vague prompt causing high failure rate
     status: "active",
     stats: {
-      tasksCompleted: 480,
-      hoursSaved: 24.0, // Very low ROI per task (only 0.05 hr/task due to human cleanup)
-      successRate: 68.2, // Critical failure rate
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
       avgLatencySec: 4.8,
-      xpGenerated: 12400,
+      xpGenerated: 0,
     },
     monetization: {
       isMonetized: false,
@@ -798,11 +798,11 @@ export const INITIAL_AGENTS: Agent[] = [
     systemPrompt: "You are a database bot. Look at queries and write SQL migrations or index fixes.", // Missing error boundaries & safety constraints
     status: "active",
     stats: {
-      tasksCompleted: 310,
-      hoursSaved: 38.5, // Low ROI
-      successRate: 79.5, // Warning failure rate
-      avgLatencySec: 5.6, // High latency bottleneck
-      xpGenerated: 19800,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      successRate: 100,
+      avgLatencySec: 5.6,
+      xpGenerated: 0,
     },
     createdAt: "2026-06-28",
   },
@@ -1221,9 +1221,9 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
   accuracyScore: 100,
   creditsBalance: 5000,
   creditsTotal: 5000,
-  approvedAutomationsCount: 1,
-  autonomousRunRatio: 72,
-  companyMilestonesCompleted: 2,
+  approvedAutomationsCount: 0,
+  autonomousRunRatio: 0,
+  companyMilestonesCompleted: 0,
   badges: [
     {
       id: "b-1",
@@ -1232,8 +1232,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "BookmarkCheck",
       category: "automation",
       rarity: "rare",
-      progress: 100,
-      unlockedAt: "2026-08-01",
+      progress: 0,
       businessImpact: "$2,400/yr saved per standardized procedure",
       achievementType: "approved_automation",
       targetMetric: "1 Playbook in Vault",
@@ -1246,7 +1245,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "Clock",
       category: "speed",
       rarity: "epic",
-      progress: 45,
+      progress: 0,
       businessImpact: "$21,250 in manual engineering labor saved",
       achievementType: "operational_scale",
       targetMetric: "250+ Hours Saved",
@@ -1258,7 +1257,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "ShieldCheck",
       category: "governance",
       rarity: "epic",
-      progress: 32,
+      progress: 0,
       businessImpact: "100% SOC2 & GDPR data privacy compliance",
       achievementType: "governance",
       targetMetric: "100 Verified Gates",
@@ -1270,7 +1269,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "Bot",
       category: "automation",
       rarity: "rare",
-      progress: 80,
+      progress: 0,
       businessImpact: "Cross-functional operations coverage 24/7",
       achievementType: "company_milestone",
       targetMetric: "5 Active Agents",
@@ -1282,7 +1281,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "TrendingUp",
       category: "mastery",
       rarity: "legendary",
-      progress: 25,
+      progress: 0,
       businessImpact: "$50,000 direct bottom-line EBITDA improvement",
       achievementType: "company_milestone",
       targetMetric: "$50,000 OpEx Saved",
@@ -1294,7 +1293,7 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       iconName: "Crown",
       category: "mastery",
       rarity: "legendary",
-      progress: 68,
+      progress: 0,
       businessImpact: "Hands-off continuous business execution with 99.4% uptime",
       achievementType: "company_milestone",
       targetMetric: "85% Autonomy & 500 Runs",
@@ -1370,6 +1369,43 @@ export const CLEAN_SLATE_USER_PROFILE: EmployeeProfile = {
       expiresIn: "This Week",
       iconName: "Layers",
       businessGoal: "End-to-end departmental synergy",
+    },
+  ],
+};
+
+export const BENCHMARK_DEMO_USER_PROFILE: EmployeeProfile = {
+  ...CLEAN_SLATE_USER_PROFILE,
+  hoursSavedTotal: 184.5,
+  tasksAutomatedTotal: 412,
+  costSavedUsd: 15600,
+  approvedAutomationsCount: 1,
+  autonomousRunRatio: 72,
+  companyMilestonesCompleted: 2,
+  badges: [
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[0],
+      progress: 100,
+      unlockedAt: "2026-08-01",
+    },
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[1],
+      progress: 45,
+    },
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[2],
+      progress: 32,
+    },
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[3],
+      progress: 80,
+    },
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[4],
+      progress: 25,
+    },
+    {
+      ...CLEAN_SLATE_USER_PROFILE.badges[5],
+      progress: 68,
     },
   ],
 };
@@ -1477,10 +1513,44 @@ export const LEADERBOARD_USERS: LeaderboardUser[] = [
     isCurrentUser: true,
     streak: 1,
     opexSavedUsd: 0,
-    autonomyRate: 72,
-    approvedPlaybooksCount: 1,
+    autonomyRate: 0,
+    approvedPlaybooksCount: 0,
   },
 ];
+
+export const BENCHMARK_DEMO_LEADERBOARD_USERS: LeaderboardUser[] = [
+  ...LEADERBOARD_USERS.filter((u) => !u.isCurrentUser),
+  {
+    ...LEADERBOARD_USERS.find((u) => u.isCurrentUser)!,
+    hoursSaved: 184.5,
+    automationsRun: 412,
+    opexSavedUsd: 15600,
+    autonomyRate: 72,
+    approvedPlaybooksCount: 1,
+    xp: 42500,
+    level: 14,
+  },
+];
+
+export const getCleanSlateAgents = (baseAgents: Agent[] = INITIAL_AGENTS): Agent[] => {
+  return baseAgents.map((a) => ({
+    ...a,
+    stats: {
+      ...a.stats,
+      tasksCompleted: 0,
+      hoursSaved: 0,
+      xpGenerated: 0,
+    },
+    monetization: a.monetization ? {
+      ...a.monetization,
+      totalRevenueEarned: 0,
+      totalPaidQueriesProcessed: 0,
+      activePayingSubscribersCount: 0,
+    } : a.monetization,
+  }));
+};
+
+export const CLEAN_SLATE_AGENTS: Agent[] = getCleanSlateAgents(INITIAL_AGENTS);
 
 export const SAMPLE_TASK_PRESETS = [
   {

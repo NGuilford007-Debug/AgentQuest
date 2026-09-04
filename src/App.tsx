@@ -28,6 +28,7 @@ import {
 } from "./types";
 import { 
   INITIAL_AGENTS, 
+  CLEAN_SLATE_AGENTS,
   INITIAL_USER_PROFILE, 
   CLEAN_SLATE_USER_PROFILE, 
   INITIAL_WORKFLOWS, 
@@ -216,10 +217,10 @@ export default function App() {
       try {
         const userEmail = storedProfile?.email || "toppgunn321@gmail.com";
         initRevenueCat(userEmail);
-        // Check if user has active RevenueCat entitlement ("SyncSchedule Pro")
-        checkHasEntitlement("SyncSchedule Pro").then((hasPro) => {
+        // Check if user has active RevenueCat entitlement ("AgentFlow Pro")
+        checkHasEntitlement("AgentFlow Pro").then((hasPro) => {
           if (hasPro) {
-            console.log("[RevenueCat] Active 'SyncSchedule Pro' entitlement detected! Granting Pro access.");
+            console.log("[RevenueCat] Active 'AgentFlow Pro' entitlement detected! Granting Pro access.");
             setUserProfile((prev) => {
               const updated: EmployeeProfile = {
                 ...prev,
@@ -1078,14 +1079,26 @@ export default function App() {
 
   const handleResetToCleanSlate = () => {
     setUserProfile(CLEAN_SLATE_USER_PROFILE);
+    setAgents(CLEAN_SLATE_AGENTS);
     setExecutionHistory([]);
     setAuditLogs([]);
     setActiveTaskSession(null);
+    setApprovedAutomations([]);
+    setSavedReports([]);
+    setClientAgentRequests([]);
+    setTenantsBilling([]);
+    setFinancialHistory([]);
     setLeaderboardUsers(LEADERBOARD_USERS);
     removeStoredItem("agentflow_profile");
+    removeStoredItem("agentflow_agents");
     removeStoredItem("agentflow_executions");
     removeStoredItem("agentflow_active_task");
     removeStoredItem("agentflow_audit_logs");
+    removeStoredItem("agentflow_approved_automations");
+    removeStoredItem("agentflow_saved_reports");
+    removeStoredItem("agentflow_client_agent_requests");
+    removeStoredItem("agentflow_tenants_billing");
+    removeStoredItem("agentflow_financial_history");
   };
 
   const handleClearExecutionHistory = () => {
@@ -1117,6 +1130,7 @@ export default function App() {
 
   const handleClearAllMockData = () => {
     setUserProfile(CLEAN_SLATE_USER_PROFILE);
+    setAgents(CLEAN_SLATE_AGENTS);
     setExecutionHistory([]);
     setAuditLogs([]);
     setActiveTaskSession(null);
@@ -1126,6 +1140,7 @@ export default function App() {
     setTenantsBilling([]);
     setFinancialHistory([]);
     removeStoredItem("agentflow_profile");
+    removeStoredItem("agentflow_agents");
     removeStoredItem("agentflow_executions");
     removeStoredItem("agentflow_active_task");
     removeStoredItem("agentflow_audit_logs");

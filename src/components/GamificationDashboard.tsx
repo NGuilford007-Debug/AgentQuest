@@ -49,9 +49,30 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"milestones" | "achievements" | "capabilities">("milestones");
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
-  const [milestones, setMilestones] = useState<GamifiedMilestone[]>(INITIAL_GAMIFIED_MILESTONES);
   const [activePhaseFilter, setActivePhaseFilter] = useState<string>("all");
   const [activeAchievementFilter, setActiveAchievementFilter] = useState<string>("all");
+
+  // Dynamically compute milestones from live user profile metrics so clean slate shows 0 progress
+  const milestones: GamifiedMilestone[] = React.useMemo(() => {
+    return INITIAL_GAMIFIED_MILESTONES.map((ms) => {
+      let currentValue = ms.currentValue;
+      if (ms.category === "impact" || ms.metricLabel.includes("hours")) {
+        currentValue = Math.min(ms.targetValue, userProfile.hoursSavedTotal || 0);
+      } else if (ms.category === "automations" || ms.metricLabel.includes("playbook")) {
+        currentValue = Math.min(ms.targetValue, userProfile.approvedAutomationsCount || 0);
+      } else if (ms.metricLabel.includes("OpEx") || ms.metricLabel.includes("$")) {
+        currentValue = Math.min(ms.targetValue, userProfile.costSavedUsd || 0);
+      } else if (ms.metricLabel.includes("active agents")) {
+        currentValue = userProfile.hoursSavedTotal === 0 && userProfile.approvedAutomationsCount === 0 ? 0 : ms.currentValue;
+      }
+      const completed = currentValue >= ms.targetValue;
+      return {
+        ...ms,
+        currentValue,
+        completed,
+      };
+    });
+  }, [userProfile]);
 
   const completedMilestonesCount = milestones.filter((m) => m.completed).length;
   const totalMilestonesCount = milestones.length;
@@ -179,7 +200,7 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
                 <Zap className="w-3.5 h-3.5" />
                 <span>Autonomy Ratio</span>
               </div>
-              <div className="text-xl font-bold text-white">{userProfile.autonomousRunRatio ?? 72}%</div>
+              <div className="text-xl font-bold text-white">{userProfile.autonomousRunRatio ?? 0}%</div>
               <div className="text-[10px] text-slate-400">Hands-Off Execution</div>
             </div>
 
@@ -188,7 +209,7 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>OpEx Replaced</span>
               </div>
-              <div className="text-xl font-bold text-white">${(userProfile.costSavedUsd || 15600).toLocaleString()}</div>
+              <div className="text-xl font-bold text-white">${(userProfile.costSavedUsd ?? 0).toLocaleString()}</div>
               <div className="text-[10px] text-slate-400">Labor Cost Eliminated</div>
             </div>
 
@@ -197,7 +218,7 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
                 <Clock className="w-3.5 h-3.5" />
                 <span>Hours Liberated</span>
               </div>
-              <div className="text-xl font-bold text-white">{userProfile.hoursSavedTotal || 184.5}h</div>
+              <div className="text-xl font-bold text-white">{(userProfile.hoursSavedTotal ?? 0).toFixed(1)}h</div>
               <div className="text-[10px] text-slate-400">Engineering & Staff Time</div>
             </div>
 
@@ -206,7 +227,7 @@ export const GamificationDashboard: React.FC<GamificationDashboardProps> = ({
                 <BookmarkCheck className="w-3.5 h-3.5" />
                 <span>Vault Playbooks</span>
               </div>
-              <div className="text-xl font-bold text-white">{userProfile.approvedAutomationsCount || 6}</div>
+              <div className="text-xl font-bold text-white">{userProfile.approvedAutomationsCount ?? 0}</div>
               <div className="text-[10px] text-slate-400">Approved in Production</div>
             </div>
           </div>

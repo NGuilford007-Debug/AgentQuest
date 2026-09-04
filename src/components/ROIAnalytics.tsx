@@ -91,8 +91,9 @@ const generateTrendData = (period: "7d" | "30d" | "90d" | "1y", liveExecutions: 
       ? d.toLocaleDateString([], { month: "short", day: "numeric" })
       : `Wk ${count - i}`;
 
-    // Base synthetic foundation plus live logged tasks
-    const dailyBase = 12 + Math.sin(i * 0.5) * 4 + (count - i) * 0.8;
+    // Base synthetic foundation plus live logged tasks (or zero if on clean slate)
+    const isCleanZero = baseMultiplier === 0 && liveExecutions.length === 0;
+    const dailyBase = isCleanZero ? 0 : (12 + Math.sin(i * 0.5) * 4 + (count - i) * 0.8);
     const dailyHours = parseFloat(dailyBase.toFixed(1));
     cumulativeHours += dailyHours;
 
@@ -105,7 +106,7 @@ const generateTrendData = (period: "7d" | "30d" | "90d" | "1y", liveExecutions: 
       engineeringHours: parseFloat((dailyHours * 0.28).toFixed(1)),
       devopsHours: parseFloat((dailyHours * 0.20).toFixed(1)),
       salesHours: parseFloat((dailyHours * 0.14).toFixed(1)),
-      tasksCompleted: Math.round(dailyHours * 3.4),
+      tasksCompleted: isCleanZero ? 0 : Math.round(dailyHours * 3.4),
       costSaved: Math.round(dailyHours * 85),
     });
   }
@@ -180,7 +181,7 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
   const discrepancyAudits = executionHistory.filter((e) => e.status === "discrepancy" || e.status === "rejected" || e.feedback?.isApproved === false).length;
   const qualityRate = totalAudits > 0 
     ? parseFloat(((approvedAudits / totalAudits) * 100).toFixed(1))
-    : 98.4;
+    : (totalHours > 0 ? 98.4 : 100.0);
 
   // Department Breakdown Aggregation
   const departmentBreakdown = useMemo(() => {
@@ -217,13 +218,13 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
     });
 
     const list = Object.values(map);
-    const sumHours = list.reduce((acc, d) => acc + d.hours, 0) || 1;
+    const sumHours = list.reduce((acc, d) => acc + d.hours, 0);
 
     return list.map((d) => ({
       ...d,
       hours: parseFloat(d.hours.toFixed(1)),
       costSaved: Math.round(d.hours * blendedHourlyCost),
-      percent: Math.round((d.hours / sumHours) * 100),
+      percent: sumHours > 0 ? Math.round((d.hours / sumHours) * 100) : 0,
     })).sort((a, b) => b.hours - a.hours);
   }, [agents, executionHistory]);
 
