@@ -87,6 +87,8 @@ import { MasterAccessSettings } from "./types";
 import { initRevenueCat, checkHasEntitlement } from "./services/revenuecat";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
 import { getStoredItem, setStoredItem, removeStoredItem } from "./utils/storage";
+import { getWorkplaceTheme } from "./utils/workplaceThemes";
+import { playInteractiveSound, startAmbientSound, stopAmbientSound, AmbientSoundType } from "./utils/audioSynth";
 
 export default function App() {
   const [isHydrated, setIsHydrated] = useState(false);
@@ -128,12 +130,16 @@ export default function App() {
   const [clientAgentRequests, setClientAgentRequests] = useState<ClientAgentRequest[]>(INITIAL_CLIENT_AGENT_REQUESTS);
   const [agentPrivacyPolicy, setAgentPrivacyPolicy] = useState<AgentPrivacyPolicyConfig>(DEFAULT_AGENT_PRIVACY_POLICY);
   const [legalDocs, setLegalDocs] = useState<LegalDocumentItem[]>(INITIAL_LEGAL_DOCUMENTS);
+  const [activeWorkplaceThemeId, setActiveWorkplaceThemeId] = useState<string>("stage-war-room");
+  const [isPlayingZoneAudio, setIsPlayingZoneAudio] = useState<boolean>(false);
 
   // Hydrate persisted state from localStorage on client mount (SSR-safe hydration)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     try {
+      const storedTheme = getStoredItem<string | null>("agentflow_workplace_theme", null);
+      if (storedTheme) setActiveWorkplaceThemeId(storedTheme);
       const storedMasterAccess = getStoredItem<MasterAccessSettings | null>("agentflow_master_access", null);
       if (storedMasterAccess) {
         setMasterAccess({
@@ -1244,8 +1250,44 @@ export default function App() {
     addXpAndCheckLevel(50);
   };
 
+  const handleSelectWorkplaceTheme = (themeId: string) => {
+    setActiveWorkplaceThemeId(themeId);
+    setStoredItem("agentflow_workplace_theme", themeId);
+    playInteractiveSound("chime");
+    fireCelebration();
+  };
+
+  const handleToggleZoneAudio = () => {
+    setIsPlayingZoneAudio((prev) => {
+      const next = !prev;
+      if (next) {
+        const theme = getWorkplaceTheme(activeWorkplaceThemeId);
+        startAmbientSound(theme.ambientTrack as AmbientSoundType, 0.4);
+      } else {
+        stopAmbientSound();
+      }
+      return next;
+    });
+  };
+
+  const activeAppTheme = getWorkplaceTheme(activeWorkplaceThemeId);
+
+  // Sync ambient sound if audio is currently playing and theme changes
+  useEffect(() => {
+    if (isPlayingZoneAudio) {
+      const theme = getWorkplaceTheme(activeWorkplaceThemeId);
+      startAmbientSound(theme.ambientTrack as AmbientSoundType, 0.4);
+    }
+  }, [activeWorkplaceThemeId, isPlayingZoneAudio]);
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+    <div className={`flex flex-col h-screen w-screen overflow-hidden text-slate-900 dark:text-slate-100 font-sans transition-colors duration-500 relative bg-gradient-to-b ${activeAppTheme.colors.appBgGradient}`}>
+      {/* Dynamic Ambient Aura Overlay from Active Workplace Theme */}
+      <div 
+        className="absolute top-0 left-0 right-0 h-96 pointer-events-none opacity-30 transition-all duration-700 z-0"
+        style={{ background: activeAppTheme.colors.ambientAura }}
+      />
+
       {/* Global Header */}
       <Header
         userProfile={userProfile}
@@ -1282,6 +1324,10 @@ export default function App() {
         isMasterDeveloper={isMasterDeveloper}
         accessLevel={masterAccess?.currentAccessLevel}
         onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
+        activeWorkplaceThemeId={activeWorkplaceThemeId}
+        onSelectWorkplaceTheme={handleSelectWorkplaceTheme}
+        isPlayingZoneAudio={isPlayingZoneAudio}
+        onToggleZoneAudio={handleToggleZoneAudio}
         onToggleClientPreview={() =>
           setWhiteLabelConfig((prev) => ({
             ...prev,
@@ -1291,7 +1337,7 @@ export default function App() {
       />
 
       {/* Main View Container */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative z-10">
         {/* Navigation Sidebar */}
         <Sidebar
           currentTab={currentTab}
@@ -1318,6 +1364,7 @@ export default function App() {
           }}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
           userSubscriptionPlan={userProfile.subscriptionPlan}
+          activeWorkplaceThemeId={activeWorkplaceThemeId}
         />
 
         {/* Dynamic Tab Body */}
@@ -1450,6 +1497,8 @@ export default function App() {
             onRewardXP={(amount, hours) => {
               addXpAndCheckLevel(amount, hours || 0);
             }}
+            activeWorkplaceThemeId={activeWorkplaceThemeId}
+            onSelectWorkplaceTheme={handleSelectWorkplaceTheme}
           />
         )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { 
   WorkplaceZoneTheme, 
   ALL_WORKPLACE_THEMES, 
@@ -21,9 +21,13 @@ import {
   Moon, 
   Eye, 
   ArrowRight,
-  Maximize2
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
+  Search
 } from "lucide-react";
 import { playInteractiveSound } from "../utils/audioSynth";
+import { fireCelebration } from "../utils/confetti";
 
 interface ThemeStudioModalProps {
   isOpen: boolean;
@@ -46,7 +50,9 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
 }) => {
   const [selectedPreviewId, setSelectedPreviewId] = useState<string>(activeThemeId);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [notification, setNotification] = useState<string | null>(null);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   // Sync preview with incoming active theme if opened fresh
   React.useEffect(() => {
@@ -64,14 +70,27 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
   }, [activeThemeId]);
 
   const filteredThemes = useMemo(() => {
-    if (activeCategory === "all") return ALL_WORKPLACE_THEMES;
-    return ALL_WORKPLACE_THEMES.filter((t) => t.themeFamily === activeCategory);
-  }, [activeCategory]);
+    let result = ALL_WORKPLACE_THEMES;
+    if (activeCategory !== "all") {
+      result = result.filter((t) => t.themeFamily === activeCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.vibe.toLowerCase().includes(q) ||
+          t.tagline.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [activeCategory, searchQuery]);
 
   const handleApplyTheme = (themeId: string) => {
     onSelectTheme(themeId);
     setSelectedPreviewId(themeId);
     playInteractiveSound("chime");
+    fireCelebration();
     const theme = getWorkplaceTheme(themeId);
     setNotification(`✨ Applied "${theme.name}" as global workspace theme!`);
     setTimeout(() => {
@@ -202,31 +221,81 @@ export const ThemeStudioModal: React.FC<ThemeStudioModalProps> = ({
           
           {/* Left Column: Theme Picker Catalog with Category Filter */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {/* Category Filter Pills */}
-            <div className="px-5 pt-3 pb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 border-b border-slate-800/60">
-              {(
-                [
-                  { id: "all", label: "All Themes", emoji: "✨" },
-                  { id: "cyber", label: "Cyber & Synth", emoji: "⚡" },
-                  { id: "luxe", label: "Luxe & Minimal", emoji: "👑" },
-                  { id: "nature", label: "Nature & Zen", emoji: "🎋" },
-                  { id: "tactical", label: "Tactical SRE", emoji: "🛡️" },
-                  { id: "classic", label: "Social Classic", emoji: "☕" },
-                ] as const
-              ).map((cat) => (
+            {/* Search & Category Filter Ribbon (Tabs guaranteed reachable on all screen sizes) */}
+            <div className="border-b border-slate-800/60 bg-slate-900/40">
+              {/* Quick Search */}
+              <div className="px-5 pt-3 pb-1.5 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search themes by name, vibe or buff..."
+                    className="w-full pl-8 pr-7 py-1 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-slate-200"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Category Pills with Scroll Arrows */}
+              <div className="px-4 pb-2.5 flex items-center gap-1.5">
                 <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                    activeCategory === cat.id
-                      ? "bg-slate-100 text-slate-950 shadow-md"
-                      : "bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800"
-                  }`}
+                  onClick={() => {
+                    categoryScrollRef.current?.scrollBy({ left: -140, behavior: "smooth" });
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors shrink-0"
+                  title="Scroll categories left"
                 >
-                  <span>{cat.emoji}</span>
-                  <span>{cat.label}</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
-              ))}
+
+                <div 
+                  ref={categoryScrollRef}
+                  className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-1 py-0.5"
+                >
+                  {(
+                    [
+                      { id: "all", label: "All Themes", emoji: "✨" },
+                      { id: "cyber", label: "Cyber & Synth", emoji: "⚡" },
+                      { id: "luxe", label: "Luxe & Minimal", emoji: "👑" },
+                      { id: "nature", label: "Nature & Zen", emoji: "🎋" },
+                      { id: "tactical", label: "Tactical SRE", emoji: "🛡️" },
+                      { id: "classic", label: "Social Classic", emoji: "☕" },
+                    ] as const
+                  ).map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                        activeCategory === cat.id
+                          ? "bg-slate-100 text-slate-950 shadow-md"
+                          : "bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800"
+                      }`}
+                    >
+                      <span>{cat.emoji}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {
+                    categoryScrollRef.current?.scrollBy({ left: 140, behavior: "smooth" });
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors shrink-0"
+                  title="Scroll categories right"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Themes Grid */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   WorkplaceStage, 
   Agent, 
@@ -29,7 +29,12 @@ import {
   RefreshCw,
   Cpu,
   Palette,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  Rows,
+  ChevronsUpDown
 } from "lucide-react";
 import { 
   startAmbientSound, 
@@ -67,6 +72,17 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioVolume, setAudioVolume] = useState(0.4);
   const [selectedSoundTrack, setSelectedSoundTrack] = useState<AmbientSoundType>("off");
+
+  // Carousel & View Mode State for Stage Tabs
+  const stageCarouselRef = useRef<HTMLDivElement>(null);
+  const [stageViewMode, setStageViewMode] = useState<"cards" | "compact" | "grid">("cards");
+
+  const scrollStages = (direction: "left" | "right") => {
+    if (stageCarouselRef.current) {
+      const scrollAmount = direction === "left" ? -320 : 320;
+      stageCarouselRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
 
   // Floating notifications / interactive item feedback
   const [activeNotification, setActiveNotification] = useState<string | null>(null);
@@ -194,8 +210,8 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
       <div className="flex-1 flex flex-col overflow-y-auto border-r border-slate-800/80 bg-slate-950">
         
         {/* Stage Selector Ribbon */}
-        <div className="p-4 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+        <div className="p-3.5 sm:p-4 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 shrink-0">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">
               Stages:
             </span>
@@ -231,103 +247,278 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                 Chill Spots
               </button>
             </div>
-          </div>
 
-          {/* Ambient Soundscape Controls Header */}
-          <div className="flex items-center gap-2.5 shrink-0 bg-slate-800/70 border border-slate-700/80 px-3 py-1.5 rounded-xl text-xs">
-            <button
-              onClick={() => {
-                setIsPlayingAudio(!isPlayingAudio);
-                if (!isPlayingAudio) {
-                  playInteractiveSound("chime");
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all ${
-                isPlayingAudio
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse"
-                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-              }`}
-              title="Toggle Ambient Audio Synthesis"
-            >
-              {isPlayingAudio ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span>{isPlayingAudio ? "Soundscape Live" : "Play Ambient Vibe"}</span>
-            </button>
-
-            {isPlayingAudio && (
-              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-700">
-                <input
-                  type="range"
-                  min="0.05"
-                  max="1"
-                  step="0.05"
-                  value={audioVolume}
-                  onChange={(e) => setAudioVolume(parseFloat(e.target.value))}
-                  className="w-16 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-emerald-400"
-                  title="Volume slider"
-                />
-                <span className="text-[10px] text-slate-400 w-6">
-                  {Math.round(audioVolume * 100)}%
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Stage Cards Carousel / Switcher Tabs */}
-        <div className="p-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 border-b border-slate-800/60 bg-slate-900/30">
-          {filteredStages.map((stage) => {
-            const isSelected = stage.id === currentStage.id;
-            const count = stage.assignedAgentIds.length;
-            return (
-              <button
-                key={stage.id}
-                onClick={() => {
-                  setSelectedStageId(stage.id);
+            {/* Quick Stage Jump Dropdown (Always Reachable) */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 rounded-lg px-2 py-1 text-xs ml-1 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Jump:</span>
+              <select
+                value={currentStage.id}
+                onChange={(e) => {
+                  setSelectedStageId(e.target.value);
                   playInteractiveSound("click");
                 }}
-                className={`p-3 rounded-xl text-left border transition-all relative overflow-hidden group ${
-                  isSelected
-                    ? `${stage.themeColor.border} bg-slate-800/90 shadow-md ${stage.themeColor.glow}`
-                    : "border-slate-800 bg-slate-900/40 hover:bg-slate-800/50 hover:border-slate-700"
-                }`}
+                className="bg-transparent text-slate-200 text-xs font-semibold focus:outline-hidden cursor-pointer max-w-[130px] truncate"
+                title="Direct stage selector"
               >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span
-                    className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
-                      stage.category === "workplace"
-                        ? "bg-cyan-950/70 text-cyan-400 border border-cyan-800/50"
-                        : "bg-amber-950/70 text-amber-400 border border-amber-800/50"
-                    }`}
-                  >
-                    {stage.category === "workplace" ? "Workplace" : "Chill Spot"}
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                    {s.name} ({s.assignedAgentIds.length})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Right Controls: Carousel navigation, View toggles & Ambient audio */}
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto justify-between sm:justify-end">
+            {/* View Mode Toggle & Carousel Scroll Arrows */}
+            <div className="flex items-center gap-1 bg-slate-800/70 border border-slate-700/70 rounded-xl p-1 text-xs shrink-0">
+              <button
+                onClick={() => scrollStages("left")}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-colors"
+                title="Scroll stages left"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => scrollStages("right")}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-colors"
+                title="Scroll stages right"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-[1px] h-3.5 bg-slate-700 mx-0.5" />
+              <button
+                onClick={() => setStageViewMode("cards")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  stageViewMode === "cards"
+                    ? "bg-slate-700 text-slate-100 shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Cards Carousel view"
+              >
+                Carousel
+              </button>
+              <button
+                onClick={() => setStageViewMode("compact")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  stageViewMode === "compact"
+                    ? "bg-slate-700 text-slate-100 shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Compact Tabs view"
+              >
+                Tabs
+              </button>
+              <button
+                onClick={() => setStageViewMode("grid")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  stageViewMode === "grid"
+                    ? "bg-slate-700 text-slate-100 shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Full Grid view"
+              >
+                Grid
+              </button>
+            </div>
+
+            {/* Ambient Soundscape Controls Header */}
+            <div className="flex items-center gap-2 shrink-0 bg-slate-800/70 border border-slate-700/80 px-2.5 py-1.5 rounded-xl text-xs">
+              <button
+                onClick={() => {
+                  setIsPlayingAudio(!isPlayingAudio);
+                  if (!isPlayingAudio) {
+                    playInteractiveSound("chime");
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-bold transition-all text-xs ${
+                  isPlayingAudio
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse"
+                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                }`}
+                title="Toggle Ambient Audio Synthesis"
+              >
+                {isPlayingAudio ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{isPlayingAudio ? "Sound Live" : "Play Vibe"}</span>
+              </button>
+
+              {isPlayingAudio && (
+                <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-700">
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="1"
+                    step="0.05"
+                    value={audioVolume}
+                    onChange={(e) => setAudioVolume(parseFloat(e.target.value))}
+                    className="w-14 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                    title="Volume slider"
+                  />
+                  <span className="text-[10px] text-slate-400 w-5">
+                    {Math.round(audioVolume * 100)}%
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {stage.id === activeWorkplaceThemeId && (
-                      <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
-                        Theme
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-                      <Users className="w-3 h-3" />
-                      <span>{count}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Stage Tabs / Switcher Rendering (Adapts to stageViewMode) */}
+        {stageViewMode === "compact" ? (
+          /* Compact Tabs Bar (Guaranteed reachable and minimal height) */
+          <div className="px-4 py-2.5 border-b border-slate-800/60 bg-slate-900/40 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+            {filteredStages.map((stage) => {
+              const isSelected = stage.id === currentStage.id;
+              const count = stage.assignedAgentIds.length;
+              const isTheme = stage.id === activeWorkplaceThemeId;
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => {
+                    setSelectedStageId(stage.id);
+                    playInteractiveSound("click");
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border shrink-0 ${
+                    isSelected
+                      ? `${stage.themeColor.border} bg-slate-800 text-white shadow-xs font-bold`
+                      : "border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                  }`}
+                >
+                  <span className="text-sm">
+                    {stage.category === "workplace" ? "🏢" : "☕"}
+                  </span>
+                  <span>{stage.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-700/80 text-slate-300 font-mono">
+                    {count}
+                  </span>
+                  {isTheme && (
+                    <span className="text-[8px] font-extrabold px-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+                      Theme
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : stageViewMode === "grid" ? (
+          /* Full Grid View */
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 border-b border-slate-800/60 bg-slate-900/30">
+            {filteredStages.map((stage) => {
+              const isSelected = stage.id === currentStage.id;
+              const count = stage.assignedAgentIds.length;
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => {
+                    setSelectedStageId(stage.id);
+                    playInteractiveSound("click");
+                  }}
+                  className={`p-3 rounded-xl text-left border transition-all relative overflow-hidden group ${
+                    isSelected
+                      ? `${stage.themeColor.border} bg-slate-800/90 shadow-md ${stage.themeColor.glow}`
+                      : "border-slate-800 bg-slate-900/40 hover:bg-slate-800/50 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span
+                      className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
+                        stage.category === "workplace"
+                          ? "bg-cyan-950/70 text-cyan-400 border border-cyan-800/50"
+                          : "bg-amber-950/70 text-amber-400 border border-amber-800/50"
+                      }`}
+                    >
+                      {stage.category === "workplace" ? "Workplace" : "Chill Spot"}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {stage.id === activeWorkplaceThemeId && (
+                        <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+                          Theme
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                        <Users className="w-3 h-3" />
+                        <span>{count}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <h4 className={`text-xs font-bold truncate ${isSelected ? stage.themeColor.accent : "text-slate-200"}`}>
-                  {stage.name}
-                </h4>
-                <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                  {stage.focusRating}% Focus • {stage.ambientTrackTitle.split("&")[0]}
-                </p>
+                  <h4 className={`text-xs font-bold truncate ${isSelected ? stage.themeColor.accent : "text-slate-200"}`}>
+                    {stage.name}
+                  </h4>
+                  <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                    {stage.focusRating}% Focus • {stage.ambientTrackTitle.split("&")[0]}
+                  </p>
 
-                {isSelected && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400" />
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  {isSelected && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          /* Cards Carousel View with Smooth Scrolling (Default, no squished or unreachable cards) */
+          <div className="relative border-b border-slate-800/60 bg-slate-900/30">
+            <div 
+              ref={stageCarouselRef}
+              className="p-4 flex gap-3 overflow-x-auto scroll-smooth no-scrollbar"
+            >
+              {filteredStages.map((stage) => {
+                const isSelected = stage.id === currentStage.id;
+                const count = stage.assignedAgentIds.length;
+                return (
+                  <button
+                    key={stage.id}
+                    onClick={() => {
+                      setSelectedStageId(stage.id);
+                      playInteractiveSound("click");
+                    }}
+                    className={`min-w-[210px] max-w-[250px] shrink-0 p-3.5 rounded-xl text-left border transition-all relative overflow-hidden group ${
+                      isSelected
+                        ? `${stage.themeColor.border} bg-slate-800/90 shadow-md ${stage.themeColor.glow}`
+                        : "border-slate-800 bg-slate-900/40 hover:bg-slate-800/50 hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span
+                        className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
+                          stage.category === "workplace"
+                            ? "bg-cyan-950/70 text-cyan-400 border border-cyan-800/50"
+                            : "bg-amber-950/70 text-amber-400 border border-amber-800/50"
+                        }`}
+                      >
+                        {stage.category === "workplace" ? "Workplace" : "Chill Spot"}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {stage.id === activeWorkplaceThemeId && (
+                          <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+                            Theme
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                          <Users className="w-3 h-3" />
+                          <span>{count}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <h4 className={`text-xs font-bold truncate ${isSelected ? stage.themeColor.accent : "text-slate-200"}`}>
+                      {stage.name}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {stage.focusRating}% Focus • {stage.ambientTrackTitle.split("&")[0]}
+                    </p>
+
+                    {isSelected && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Live Notification Banner */}
         {activeNotification && (

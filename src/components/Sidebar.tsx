@@ -106,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all");
 
   const activeTheme = getWorkplaceTheme(activeWorkplaceThemeId);
 
@@ -312,14 +313,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const enabledItems = allNavItems.filter((i) => i.enabled);
-  const filteredItems = searchQuery.trim()
-    ? enabledItems.filter(
-        (i) =>
-          i.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          i.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          i.id.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : enabledItems;
+  const filteredItems = enabledItems.filter((i) => {
+    if (selectedCategoryFilter !== "all" && i.category !== selectedCategoryFilter) {
+      return false;
+    }
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      i.label.toLowerCase().includes(q) ||
+      i.description.toLowerCase().includes(q) ||
+      i.id.toLowerCase().includes(q)
+    );
+  });
 
   const categories = [
     { key: "core" as const, title: "Execution Fleet" },
@@ -356,9 +361,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* Quick Search when expanded */}
+      {/* Quick Search & Category Filter when expanded */}
       {!isCollapsed && (
-        <div className="px-2.5 pt-2">
+        <div className="px-2.5 pt-2 pb-1 border-b border-slate-200/60 dark:border-slate-800/60">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -377,11 +382,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             )}
           </div>
+
+          {/* Category Filter Chips for instant reachability */}
+          <div className="flex items-center gap-1 mt-1.5 pb-1 overflow-x-auto no-scrollbar">
+            {[
+              { id: "all", label: "All" },
+              { id: "core", label: "Fleet" },
+              { id: "tools", label: "Tools" },
+              { id: "enterprise", label: "Admin" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setSelectedCategoryFilter(f.id)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap transition-colors ${
+                  selectedCategoryFilter === f.id
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/60"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Scrollable Navigation Items Container */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 space-y-3 scroll-smooth">
         {categories.map((cat) => {
           const itemsInCat = filteredItems.filter((i) => i.category === cat.key);
           if (itemsInCat.length === 0) return null;
