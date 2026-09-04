@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { 
   Agent, 
   NodeType, 
@@ -15,6 +15,10 @@ import { INITIAL_ASSET_ITEMS } from "../data/initialAssets";
 import { AssetGallery } from "./AssetGallery";
 import { BatchDeleteConfirmationModal } from "./BatchDeleteConfirmationModal";
 import { PayloadTroubleshootModal, PayloadTroubleshootData, getValidTemplateForNode } from "./PayloadTroubleshootModal";
+import { WorkflowValidationModal } from "./WorkflowValidationModal";
+import { validateWorkflow, autoRepairWorkflow, WorkflowValidationReport } from "../utils/workflowValidation";
+import { playInteractiveSound } from "../utils/audioSynth";
+import { fireCelebration } from "../utils/confetti";
 import { 
   Plus, 
   Trash2, 
@@ -25,6 +29,8 @@ import {
   ShieldCheck, 
   UserCheck, 
   DatabaseZap, 
+  Database,
+  Users,
   ZoomIn, 
   ZoomOut, 
   RotateCcw, 
@@ -47,6 +53,9 @@ import {
   Workflow as WorkflowIcon,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
+  Wrench,
   GitFork,
   GitBranch,
   Filter,
@@ -164,6 +173,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Batch edit state inputs
   const [batchActionType, setBatchActionType] = useState<string>("");
   const [batchAssetIdToAttach, setBatchAssetIdToAttach] = useState<string>("");
+
+  // Real-Time Pipeline Validation Engine
+  const validationReport = useMemo(() => validateWorkflow(nodes, connections), [nodes, connections]);
+  const [showValidationModal, setShowValidationModal] = useState<boolean>(false);
+  const [isDeploymentAttempt, setIsDeploymentAttempt] = useState<boolean>(false);
+  const [deploymentSuccess, setDeploymentSuccess] = useState<boolean>(false);
 
   // Sync state if incoming workflow prop changes
   useEffect(() => {
@@ -468,6 +483,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const handleSave = () => {
+    // If the workflow is active and invalid, prevent active deployment
+    let willBeActive = workflow.isActive;
+    if (willBeActive && !validationReport.isValid) {
+      willBeActive = false;
+      playInteractiveSound("alert");
+    }
     const updated: Workflow = {
       ...workflow,
       name: workflowName,
@@ -475,10 +496,44 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       agentId: selectedAgentId,
       nodes,
       connections,
+      isActive: willBeActive,
     };
     onSaveWorkflow(updated);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  // Deploy pipeline with strict real-time validation check
+  const handleDeployPipeline = () => {
+    if (!validationReport.isValid) {
+      // Strictly prevent deployment of invalid automation pipelines
+      playInteractiveSound("alert");
+      setIsDeploymentAttempt(true);
+      setShowValidationModal(true);
+      return;
+    }
+
+    const deployed: Workflow = {
+      ...workflow,
+      name: workflowName,
+      description: workflowDesc,
+      agentId: selectedAgentId,
+      nodes,
+      connections,
+      isActive: true,
+    };
+    onSaveWorkflow(deployed);
+    playInteractiveSound("chime");
+    fireCelebration();
+    setDeploymentSuccess(true);
+    setTimeout(() => setDeploymentSuccess(false), 3500);
+  };
+
+  const handleAutoRepair = () => {
+    const { repairedNodes, repairedConnections } = autoRepairWorkflow(nodes, connections);
+    setNodes(repairedNodes);
+    setConnections(repairedConnections);
+    playInteractiveSound("chime");
   };
 
   // Run live step-by-step canvas test simulation with conditional branching support
@@ -980,6 +1035,42 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </button>
           </div>
 
+          {/* Real-Time Pipeline Validation Status Pill */}
+          <button
+            id="btn-workflow-validation-status"
+            type="button"
+            onClick={() => {
+              setIsDeploymentAttempt(false);
+              setShowValidationModal(true);
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs ${
+              !validationReport.isValid
+                ? "bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 ring-1 ring-rose-400/40"
+                : "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+            }`}
+            title={
+              !validationReport.isValid
+                ? `Validation Check: ${validationReport.errors.length} issue(s) detected. Click to inspect & fix.`
+                : "Validation Check: Pipeline is valid and ready to deploy."
+            }
+          >
+            {!validationReport.isValid ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" />
+                <span>{validationReport.errors.length} Issue{validationReport.errors.length > 1 ? "s" : ""}</span>
+                <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded text-[9px] uppercase font-black">
+                  Fix
+                </span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="hidden sm:inline">Pipeline Valid</span>
+                <span className="sm:hidden">Valid</span>
+              </>
+            )}
+          </button>
+
           {/* Save Workflow (Master Developer Only) */}
           {isMasterDeveloper && (
             <button
@@ -993,6 +1084,46 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             >
               {saveSuccess ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
               <span>{saveSuccess ? "Saved!" : "Save"}</span>
+            </button>
+          )}
+
+          {/* Deploy Pipeline Button (with strict real-time blocker) */}
+          {isMasterDeveloper && (
+            <button
+              id="btn-deploy-pipeline"
+              type="button"
+              onClick={handleDeployPipeline}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs ${
+                !validationReport.isValid
+                  ? "bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-rose-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-not-allowed"
+                  : workflow.isActive
+                  ? "bg-emerald-700 hover:bg-emerald-800 text-white shadow-emerald-700/20"
+                  : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-500/20 active:scale-95"
+              }`}
+              title={
+                !validationReport.isValid
+                  ? `Deployment Blocked: ${validationReport.errors.length} broken connections or missing fields must be resolved.`
+                  : workflow.isActive
+                  ? "Pipeline is Active in Production. Click to re-deploy latest changes."
+                  : "Deploy Pipeline to Production Fleet"
+              }
+            >
+              {!validationReport.isValid ? (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span>Deploy Blocked</span>
+                </>
+              ) : deploymentSuccess ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
+                  <span>Deployed!</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 fill-white shrink-0" />
+                  <span>{workflow.isActive ? "Active (Re-deploy)" : "Deploy"}</span>
+                </>
+              )}
             </button>
           )}
 
@@ -1178,14 +1309,108 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               >
                 <polygon points="0 0, 8 3, 0 6" fill="#f43f5e" />
               </marker>
+              <marker
+                id="arrowhead-error"
+                markerWidth="8"
+                markerHeight="6"
+                refX="7"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 3, 0 6" fill="#f43f5e" />
+              </marker>
             </defs>
 
             {connections.map((conn) => {
+              const isBroken = validationReport.brokenConnectionIds.has(conn.id);
               const sourceNode = nodes.find((n) => n.id === conn.from);
               const targetNode = nodes.find((n) => n.id === conn.to);
-              if (!sourceNode || !targetNode) return null;
 
-              const isConditionSource = sourceNode.type === "condition";
+              // If both missing, skip rendering
+              if (!sourceNode && !targetNode) return null;
+
+              // If dangling source connection (source deleted or missing)
+              if (!sourceNode && targetNode) {
+                const endX = targetNode.position.x * zoom;
+                const endY = (targetNode.position.y + 60) * zoom;
+                const startX = Math.max(20, endX - 140);
+                const startY = endY - 30;
+                const midX = (startX + endX) / 2;
+                const midY = (startY + endY) / 2;
+                const pathData = `M ${startX} ${startY} Q ${startX + 50} ${startY + 20}, ${endX} ${endY}`;
+                return (
+                  <g key={conn.id} className="pointer-events-auto group">
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke="#f43f5e"
+                      strokeWidth={3.5}
+                      strokeDasharray="6,4"
+                      className="animate-pulse"
+                      markerEnd="url(#arrowhead-error)"
+                      style={{ filter: "drop-shadow(0 0 6px rgba(244, 63, 94, 0.7))" }}
+                    />
+                    <g
+                      transform={`translate(${midX}, ${midY})`}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteConnection(conn.id);
+                      }}
+                    >
+                      <rect x="-65" y="-12" width="130" height="24" rx="12" fill="#fff1f2" stroke="#f43f5e" strokeWidth="1.5" />
+                      <text x="0" y="4" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#be123c">
+                        ⚠️ Broken Source (Del)
+                      </text>
+                    </g>
+                  </g>
+                );
+              }
+
+              // If dangling target connection (target deleted or missing)
+              if (sourceNode && !targetNode) {
+                const isConditionSource = sourceNode.type === "condition";
+                const isTrueBranch = conn.branchType === "true" || conn.fromPort === "true";
+                let portOffsetY = isConditionSource ? (isTrueBranch ? 35 : 85) : 60;
+                const startX = (sourceNode.position.x + 230) * zoom;
+                const startY = (sourceNode.position.y + portOffsetY) * zoom;
+                const endX = startX + 140;
+                const endY = startY + 30;
+                const midX = (startX + endX) / 2;
+                const midY = (startY + endY) / 2;
+                const pathData = `M ${startX} ${startY} Q ${startX + 60} ${startY}, ${endX} ${endY}`;
+                return (
+                  <g key={conn.id} className="pointer-events-auto group">
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke="#f43f5e"
+                      strokeWidth={3.5}
+                      strokeDasharray="6,4"
+                      className="animate-pulse"
+                      markerEnd="url(#arrowhead-error)"
+                      style={{ filter: "drop-shadow(0 0 6px rgba(244, 63, 94, 0.7))" }}
+                    />
+                    <circle cx={endX} cy={endY} r={7} fill="#f43f5e" />
+                    <g
+                      transform={`translate(${midX}, ${midY})`}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteConnection(conn.id);
+                      }}
+                    >
+                      <rect x="-65" y="-12" width="130" height="24" rx="12" fill="#fff1f2" stroke="#f43f5e" strokeWidth="1.5" />
+                      <text x="0" y="4" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#be123c">
+                        ⚠️ Broken Target (Del)
+                      </text>
+                    </g>
+                  </g>
+                );
+              }
+
+              // Standard connection between existing source and target nodes
+              const isConditionSource = sourceNode!.type === "condition";
               const isTrueBranch = conn.branchType === "true" || conn.fromPort === "true";
               const isFalseBranch = conn.branchType === "false" || conn.fromPort === "false";
 
@@ -1195,19 +1420,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 portOffsetY = isTrueBranch ? 35 : 85;
               }
 
-              const startX = (sourceNode.position.x + 230) * zoom;
-              const startY = (sourceNode.position.y + portOffsetY) * zoom;
-              const endX = targetNode.position.x * zoom;
-              const endY = (targetNode.position.y + 60) * zoom;
+              const startX = (sourceNode!.position.x + 230) * zoom;
+              const startY = (sourceNode!.position.y + portOffsetY) * zoom;
+              const endX = targetNode!.position.x * zoom;
+              const endY = (targetNode!.position.y + 60) * zoom;
 
               const midX = (startX + endX) / 2;
               const midY = (startY + endY) / 2;
 
               const dx = Math.abs(endX - startX) * 0.5;
               const pathData = `M ${startX} ${startY} C ${startX + dx} ${startY}, ${endX - dx} ${endY}, ${endX} ${endY}`;
-              const isSourceActive = activeRunningNodeId === sourceNode.id;
+              const isSourceActive = activeRunningNodeId === sourceNode!.id;
 
-              const strokeColor = isTrueBranch
+              const strokeColor = isBroken
+                ? "#f43f5e"
+                : isTrueBranch
                 ? "#10b981"
                 : isFalseBranch
                 ? "#f43f5e"
@@ -1215,7 +1442,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 ? "#6366f1"
                 : "#94a3b8";
 
-              const markerId = isTrueBranch
+              const markerId = isBroken
+                ? "url(#arrowhead-error)"
+                : isTrueBranch
                 ? "url(#arrowhead-true)"
                 : isFalseBranch
                 ? "url(#arrowhead-false)"
@@ -1227,14 +1456,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     d={pathData}
                     fill="none"
                     stroke={strokeColor}
-                    strokeWidth={isSourceActive ? 3.5 : 2.5}
-                    strokeDasharray={isTrueBranch || isFalseBranch || isSourceActive ? "6,4" : undefined}
-                    className={`${isSourceActive ? "animate-pulse" : ""} transition-all`}
+                    strokeWidth={isBroken ? 3.5 : isSourceActive ? 3.5 : 2.5}
+                    strokeDasharray={isBroken ? "6,4" : isTrueBranch || isFalseBranch || isSourceActive ? "6,4" : undefined}
+                    className={`${isBroken || isSourceActive ? "animate-pulse" : ""} transition-all`}
                     markerEnd={markerId}
+                    style={isBroken ? { filter: "drop-shadow(0 0 6px rgba(244, 63, 94, 0.7))" } : undefined}
                   />
 
-                  {/* Branch Label Badge in Middle of Cable */}
-                  {(isTrueBranch || isFalseBranch || conn.label) && (
+                  {/* Branch or Error Label Badge in Middle of Cable */}
+                  {(isBroken || isTrueBranch || isFalseBranch || conn.label) && (
                     <g
                       transform={`translate(${midX}, ${midY})`}
                       className="cursor-pointer"
@@ -1244,24 +1474,24 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x="-45"
-                        y="-10"
-                        width="90"
-                        height="20"
-                        rx="10"
-                        fill={isTrueBranch ? "#ecfdf5" : isFalseBranch ? "#fff1f2" : "#f1f5f9"}
-                        stroke={isTrueBranch ? "#10b981" : isFalseBranch ? "#f43f5e" : "#94a3b8"}
-                        strokeWidth="1"
+                        x={isBroken ? "-60" : "-45"}
+                        y="-11"
+                        width={isBroken ? "120" : "90"}
+                        height="22"
+                        rx="11"
+                        fill={isBroken ? "#fff1f2" : isTrueBranch ? "#ecfdf5" : isFalseBranch ? "#fff1f2" : "#f1f5f9"}
+                        stroke={isBroken ? "#f43f5e" : isTrueBranch ? "#10b981" : isFalseBranch ? "#f43f5e" : "#94a3b8"}
+                        strokeWidth={isBroken ? "1.5" : "1"}
                       />
                       <text
                         x="0"
-                        y="3"
+                        y="4"
                         textAnchor="middle"
                         fontSize="9"
                         fontWeight="bold"
-                        fill={isTrueBranch ? "#047857" : isFalseBranch ? "#be123c" : "#475569"}
+                        fill={isBroken ? "#be123c" : isTrueBranch ? "#047857" : isFalseBranch ? "#be123c" : "#475569"}
                       >
-                        {isTrueBranch ? "✓ TRUE" : isFalseBranch ? "✗ FALSE" : conn.label || "NEXT"}
+                        {isBroken ? "⚠️ Broken Link (Del)" : isTrueBranch ? "✓ TRUE" : isFalseBranch ? "✗ FALSE" : conn.label || "NEXT"}
                       </text>
                     </g>
                   )}
@@ -1302,6 +1532,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const colorStyle = getNodeColor(node.type);
               const isConditionNode = node.type === "condition";
 
+              // Validation diagnostics for this node
+              const nodeErrors = validationReport.nodeErrorMap.get(node.id) || [];
+              const hasNodeErrors = nodeErrors.length > 0;
+              const brokenPorts = validationReport.brokenNodePorts.get(node.id) || new Set<string>();
+
               // Find attached assets for this node
               const nodeAssets = (node.attachedAssetIds || [])
                 .map((aid) => assets.find((a) => a.id === aid))
@@ -1332,7 +1567,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     isRunning
                       ? "ring-4 ring-indigo-500 dark:ring-indigo-400 border-indigo-500 scale-105 shadow-xl"
                       : isMultiSelected || isSelected
-                      ? "ring-2 ring-indigo-500 border-indigo-500 shadow-xl z-20"
+                      ? hasNodeErrors
+                        ? "ring-4 ring-rose-500 border-rose-500 shadow-xl z-20"
+                        : "ring-2 ring-indigo-500 border-indigo-500 shadow-xl z-20"
+                      : hasNodeErrors
+                      ? "ring-2 ring-rose-500/80 border-rose-500 shadow-lg shadow-rose-500/20 bg-rose-50/15 dark:bg-rose-950/25"
                       : isSource
                       ? "ring-2 ring-amber-500 border-amber-500"
                       : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -1360,74 +1599,138 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   </button>
 
                   {/* Left Connection Input Port */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (connectingSource && connectingSource.nodeId !== node.id) {
-                        handleStartConnect(e, node.id);
-                      }
-                    }}
-                    className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900 hover:scale-125 hover:bg-indigo-500 transition-transform flex items-center justify-center cursor-pointer z-30"
-                    title="Input Port (Connect here)"
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-slate-600 dark:bg-slate-300" />
-                  </button>
+                  {(() => {
+                    const isInputBroken = brokenPorts.has("in");
+                    return (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (connectingSource && connectingSource.nodeId !== node.id) {
+                            handleStartConnect(e, node.id);
+                          }
+                        }}
+                        className={`absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 hover:scale-125 transition-transform flex items-center justify-center cursor-pointer z-30 ${
+                          isInputBroken
+                            ? "bg-rose-500 ring-4 ring-rose-500/50 animate-pulse shadow-md"
+                            : "bg-slate-200 dark:bg-slate-700 hover:bg-indigo-500"
+                        }`}
+                        title={isInputBroken ? "⚠️ Missing incoming connection: Step is unreachable!" : "Input Port (Connect here)"}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${isInputBroken ? "bg-white" : "bg-slate-600 dark:bg-slate-300"}`} />
+                      </button>
+                    );
+                  })()}
 
                   {/* Output Ports: Single output or Dual True/False output for condition nodes */}
                   {isConditionNode ? (
                     <>
                       {/* TRUE / PASS PORT (Top Right) */}
-                      <button
-                        onClick={(e) => handleStartConnect(e, node.id, "true")}
-                        className="absolute -right-2.5 top-6 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 hover:scale-125 hover:bg-emerald-600 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs"
-                        title="TRUE Branch Port (Drag to connect passing route)"
-                      >
-                        <span className="text-[7px] font-black text-white">T</span>
-                      </button>
+                      {(() => {
+                        const isTrueBroken = brokenPorts.has("true");
+                        return (
+                          <button
+                            onClick={(e) => handleStartConnect(e, node.id, "true")}
+                            className={`absolute -right-2.5 top-6 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 hover:scale-125 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs ${
+                              isTrueBroken
+                                ? "bg-rose-500 ring-4 ring-rose-500/50 animate-pulse"
+                                : "bg-emerald-500 hover:bg-emerald-600"
+                            }`}
+                            title={isTrueBroken ? "⚠️ Missing TRUE branch connection!" : "TRUE Branch Port (Drag to connect passing route)"}
+                          >
+                            <span className="text-[7px] font-black text-white">T</span>
+                          </button>
+                        );
+                      })()}
 
                       {/* FALSE / ELSE PORT (Bottom Right) */}
-                      <button
-                        onClick={(e) => handleStartConnect(e, node.id, "false")}
-                        className="absolute -right-2.5 bottom-6 translate-y-1/2 w-5 h-5 rounded-full bg-rose-500 border-2 border-white dark:border-slate-900 hover:scale-125 hover:bg-rose-600 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs"
-                        title="FALSE / ELSE Branch Port (Drag to connect fallback route)"
-                      >
-                        <span className="text-[7px] font-black text-white">F</span>
-                      </button>
+                      {(() => {
+                        const isFalseBroken = brokenPorts.has("false");
+                        return (
+                          <button
+                            onClick={(e) => handleStartConnect(e, node.id, "false")}
+                            className={`absolute -right-2.5 bottom-6 translate-y-1/2 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 hover:scale-125 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs ${
+                              isFalseBroken
+                                ? "bg-rose-500 ring-4 ring-rose-500/50 animate-pulse"
+                                : "bg-rose-500 hover:bg-rose-600"
+                            }`}
+                            title={isFalseBroken ? "⚠️ Missing FALSE / Fallback branch connection!" : "FALSE / ELSE Branch Port (Drag to connect fallback route)"}
+                          >
+                            <span className="text-[7px] font-black text-white">F</span>
+                          </button>
+                        );
+                      })()}
                     </>
                   ) : (
                     /* Standard Single Output Port */
-                    <button
-                      onClick={(e) => handleStartConnect(e, node.id, "out")}
-                      className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-indigo-600 border-2 border-white dark:border-slate-900 hover:scale-125 hover:bg-indigo-700 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs"
-                      title="Output Port (Drag to connect)"
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    </button>
+                    (() => {
+                      const isOutBroken = brokenPorts.has("out");
+                      return (
+                        <button
+                          onClick={(e) => handleStartConnect(e, node.id, "out")}
+                          className={`absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 hover:scale-125 transition-transform flex items-center justify-center cursor-pointer z-30 shadow-xs ${
+                            isOutBroken
+                              ? "bg-rose-500 ring-4 ring-rose-500/50 animate-pulse"
+                              : "bg-indigo-600 hover:bg-indigo-700"
+                          }`}
+                          title={isOutBroken ? "⚠️ Missing outgoing connection: Step leads nowhere!" : "Output Port (Drag to connect)"}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                        </button>
+                      );
+                    })()
                   )}
 
                   {/* Header */}
                   <div
-                    className={`p-2.5 rounded-t-2xl border-b border-slate-100 dark:border-slate-800 flex items-center justify-between ${colorStyle.bg}`}
+                    className={`p-2.5 rounded-t-2xl border-b flex items-center justify-between ${
+                      hasNodeErrors
+                        ? "bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-900"
+                        : `${colorStyle.bg} border-slate-100 dark:border-slate-800`
+                    }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`p-1 rounded-md shrink-0 ${colorStyle.iconBg}`}>
+                      <div className={`p-1 rounded-md shrink-0 ${hasNodeErrors ? "bg-rose-500 text-white" : colorStyle.iconBg}`}>
                         <DynamicIcon name={node.iconName} className="w-3.5 h-3.5" />
                       </div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                      <span className={`text-xs font-bold truncate ${hasNodeErrors ? "text-rose-900 dark:text-rose-200" : "text-slate-800 dark:text-slate-100"}`}>
                         {node.name}
                       </span>
                     </div>
 
-                    {/* Step Result status badge */}
-                    {isRunning ? (
-                      <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin shrink-0" />
-                    ) : stepResult ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    ) : null}
+                    {/* Step Result / Error status badge */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {hasNodeErrors && (
+                        <span
+                          title={nodeErrors.join(" • ")}
+                          className="px-1.5 py-0.5 rounded bg-rose-500 text-white text-[9px] font-bold flex items-center gap-0.5 animate-pulse shadow-xs"
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          <span>{nodeErrors.length > 1 ? `${nodeErrors.length} Errors` : "Error"}</span>
+                        </span>
+                      )}
+                      {isRunning ? (
+                        <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin shrink-0" />
+                      ) : stepResult ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : null}
+                    </div>
                   </div>
 
                   {/* Body Content */}
                   <div className="p-2.5 space-y-2">
+                    {/* Red Error Callout Banner if node has errors */}
+                    {hasNodeErrors && (
+                      <div className="p-1.5 rounded-lg bg-rose-50/95 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 text-[10px] text-rose-800 dark:text-rose-200 space-y-0.5">
+                        <div className="flex items-center gap-1 font-bold text-rose-700 dark:text-rose-400">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>Validation Issue</span>
+                        </div>
+                        <p className="line-clamp-2 leading-tight text-rose-600 dark:text-rose-300 font-medium">
+                          {nodeErrors[0]}
+                        </p>
+                      </div>
+                    )}
+
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                       {node.description}
                     </p>
@@ -1579,22 +1882,75 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </div>
 
             <div className="p-4 space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Component Name
-                </label>
-                <input
-                  type="text"
-                  value={selectedNode.name}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNodes((prev) =>
-                      prev.map((n) => (n.id === selectedNode.id ? { ...n, name: val } : n))
-                    );
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              {/* REAL-TIME NODE VALIDATION DIAGNOSTICS & QUICK HEAL */}
+              {(() => {
+                const nodeErrors = validationReport.nodeErrorMap.get(selectedNode.id) || [];
+                if (nodeErrors.length === 0) return null;
+                return (
+                  <div className="p-3 rounded-2xl bg-rose-50/90 dark:bg-rose-950/70 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs space-y-2 shadow-xs animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
+                        <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span>Configuration Errors ({nodeErrors.length})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { repairedNodes } = autoRepairWorkflow([selectedNode], []);
+                          if (repairedNodes[0]) {
+                            setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? repairedNodes[0] : n)));
+                            playInteractiveSound("chime");
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Auto-fill recommended default values for missing configuration fields"
+                      >
+                        <Wrench className="w-3 h-3" />
+                        <span>Quick-Heal</span>
+                      </button>
+                    </div>
+                    <ul className="list-disc list-inside text-[11px] space-y-1 text-rose-700 dark:text-rose-300 font-medium">
+                      {nodeErrors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              {/* COMPONENT NAME */}
+              {(() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasNameError = !!fieldErrors.name;
+                return (
+                  <div>
+                    <label className={`block font-semibold mb-1 ${hasNameError ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-300"}`}>
+                      Component Name {hasNameError && <span className="text-rose-500">* (Required)</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedNode.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNodes((prev) =>
+                          prev.map((n) => (n.id === selectedNode.id ? { ...n, name: val } : n))
+                        );
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-medium focus:ring-2 ${
+                        hasNameError
+                          ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100 focus:ring-rose-500"
+                          : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-indigo-500"
+                      }`}
+                    />
+                    {hasNameError && (
+                      <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.name}</span>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -1613,136 +1969,358 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 />
               </div>
 
-              {/* CONDITIONAL NODE SPECIFIC INSPECTOR */}
-              {selectedNode.type === "condition" && (
-                <div className="p-3.5 rounded-2xl bg-cyan-50/60 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900/60 space-y-3">
-                  <div className="flex items-center justify-between font-bold text-cyan-900 dark:text-cyan-200">
-                    <span className="flex items-center gap-1.5">
-                      <GitFork className="w-4 h-4 text-cyan-600" />
-                      <span>If / Else Routing Rules</span>
-                    </span>
-                  </div>
+              {/* TRIGGER NODE SPECIFIC CONFIG */}
+              {selectedNode.type === "trigger" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasTriggerError = !!fieldErrors.triggerType;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 space-y-3">
+                    <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
+                      <span className="flex items-center gap-1.5">
+                        <Zap className="w-4 h-4 text-amber-600" />
+                        <span>Trigger Event Source</span>
+                      </span>
+                    </div>
 
-                  <div className="space-y-2">
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
-                        Payload Field to Evaluate
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasTriggerError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                        Trigger Protocol / Hook Type {hasTriggerError && "* (Required)"}
                       </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. product_tier or confidence"
-                        value={selectedNode.config?.conditionField || "confidence"}
+                      <select
+                        value={selectedNode.config?.triggerType || ""}
                         onChange={(e) => {
                           const val = e.target.value;
                           setNodes((prev) =>
                             prev.map((n) =>
                               n.id === selectedNode.id
-                                ? { ...n, config: { ...n.config, conditionField: val } }
+                                ? { ...n, config: { ...n.config, triggerType: val } }
                                 : n
                             )
                           );
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700 text-xs font-mono"
-                      />
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                          hasTriggerError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                            : "bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700"
+                        }`}
+                      >
+                        <option value="">Select Trigger Type...</option>
+                        <option value="webhook">Inbound HTTP Webhook</option>
+                        <option value="schedule">Cron Scheduled Interval</option>
+                        <option value="event_stream">Kafka / PubSub Event Stream</option>
+                        <option value="app_event">Third-Party SaaS Event (e.g. Zendesk/Jira)</option>
+                      </select>
+                      {hasTriggerError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.triggerType}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* DATA SOURCE NODE SPECIFIC CONFIG */}
+              {selectedNode.type === "data_source" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasSourceError = !!fieldErrors.sourceApp;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-3">
+                    <div className="flex items-center justify-between font-bold text-blue-900 dark:text-blue-200">
+                      <span className="flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-blue-600" />
+                        <span>Data Connector</span>
+                      </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
-                          Operator
-                        </label>
-                        <select
-                          value={selectedNode.config?.conditionOperator || "greater_than"}
-                          onChange={(e) => {
-                            const val = e.target.value as ConditionOperator;
-                            setNodes((prev) =>
-                              prev.map((n) =>
-                                n.id === selectedNode.id
-                                  ? { ...n, config: { ...n.config, conditionOperator: val } }
-                                  : n
-                              )
-                            );
-                          }}
-                          className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700 text-xs font-semibold"
-                        >
-                          <option value="equals">Equals (==)</option>
-                          <option value="not_equals">Not Equals (!=)</option>
-                          <option value="greater_than">Greater Than (&gt;)</option>
-                          <option value="less_than">Less Than (&lt;)</option>
-                          <option value="contains">Contains Substring</option>
-                          <option value="regex">Matches Regex</option>
-                        </select>
-                      </div>
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasSourceError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                        Source Database / Provider {hasSourceError && "* (Required)"}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. PostgreSQL, Salesforce CRM, Snowflake"
+                        value={selectedNode.config?.sourceApp || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === selectedNode.id
+                                ? { ...n, config: { ...n.config, sourceApp: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium ${
+                          hasSourceError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                            : "bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700"
+                        }`}
+                      />
+                      {hasSourceError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.sourceApp}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
+              {/* HUMAN REVIEW NODE SPECIFIC CONFIG */}
+              {selectedNode.type === "human_review" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasApproverError = !!fieldErrors.approverRole;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 space-y-3">
+                    <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-amber-600" />
+                        <span>Human Approver Escalation</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasApproverError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                        Designated Approver Role {hasApproverError && "* (Required)"}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Senior Architect / Tech Lead or Compliance Officer"
+                        value={selectedNode.config?.approverRole || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === selectedNode.id
+                                ? { ...n, config: { ...n.config, approverRole: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium ${
+                          hasApproverError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                            : "bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700"
+                        }`}
+                      />
+                      {hasApproverError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.approverRole}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ACTION OUTPUT NODE SPECIFIC CONFIG */}
+              {selectedNode.type === "action_output" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasTargetError = !!fieldErrors.actionTarget;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 space-y-3">
+                    <div className="flex items-center justify-between font-bold text-emerald-900 dark:text-emerald-200">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Dispatch Destination</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasTargetError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                        Output Target / Webhook / Channel {hasTargetError && "* (Required)"}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. #customer-alerts Slack, Zendesk API, Email"
+                        value={selectedNode.config?.actionTarget || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === selectedNode.id
+                                ? { ...n, config: { ...n.config, actionTarget: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium ${
+                          hasTargetError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                            : "bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700"
+                        }`}
+                      />
+                      {hasTargetError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.actionTarget}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* CONDITIONAL NODE SPECIFIC INSPECTOR */}
+              {selectedNode.type === "condition" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasConditionFieldError = !!fieldErrors.conditionField;
+                const hasConditionValueError = !!fieldErrors.conditionValue;
+
+                return (
+                  <div className="p-3.5 rounded-2xl bg-cyan-50/60 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900/60 space-y-3">
+                    <div className="flex items-center justify-between font-bold text-cyan-900 dark:text-cyan-200">
+                      <span className="flex items-center gap-1.5">
+                        <GitFork className="w-4 h-4 text-cyan-600" />
+                        <span>If / Else Routing Rules</span>
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
-                          Expected Value
+                        <label className={`block text-[10px] font-bold uppercase mb-1 ${hasConditionFieldError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                          Payload Field to Evaluate {hasConditionFieldError && "* (Required)"}
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. VIP_LIMITED"
-                          value={selectedNode.config?.conditionValue || "0.85"}
+                          placeholder="e.g. product_tier or confidence"
+                          value={selectedNode.config?.conditionField || ""}
                           onChange={(e) => {
                             const val = e.target.value;
                             setNodes((prev) =>
                               prev.map((n) =>
                                 n.id === selectedNode.id
-                                  ? { ...n, config: { ...n.config, conditionValue: val } }
+                                  ? { ...n, config: { ...n.config, conditionField: val } }
                                   : n
                               )
                             );
                           }}
-                          className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700 text-xs font-mono"
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-mono ${
+                            hasConditionFieldError
+                              ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                              : "bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700"
+                          }`}
+                        />
+                        {hasConditionFieldError && (
+                          <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.conditionField}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                            Operator
+                          </label>
+                          <select
+                            value={selectedNode.config?.conditionOperator || "greater_than"}
+                            onChange={(e) => {
+                              const val = e.target.value as ConditionOperator;
+                              setNodes((prev) =>
+                                prev.map((n) =>
+                                  n.id === selectedNode.id
+                                    ? { ...n, config: { ...n.config, conditionOperator: val } }
+                                    : n
+                                )
+                              );
+                            }}
+                            className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700 text-xs font-semibold"
+                          >
+                            <option value="equals">Equals (==)</option>
+                            <option value="not_equals">Not Equals (!=)</option>
+                            <option value="greater_than">Greater Than (&gt;)</option>
+                            <option value="less_than">Less Than (&lt;)</option>
+                            <option value="contains">Contains Substring</option>
+                            <option value="regex">Matches Regex</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className={`block text-[10px] font-bold uppercase mb-1 ${hasConditionValueError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                            Expected Value {hasConditionValueError && "* (Required)"}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. VIP_LIMITED"
+                            value={selectedNode.config?.conditionValue ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setNodes((prev) =>
+                                prev.map((n) =>
+                                  n.id === selectedNode.id
+                                    ? { ...n, config: { ...n.config, conditionValue: val } }
+                                    : n
+                                )
+                              );
+                            }}
+                            className={`w-full px-2 py-1.5 rounded-lg text-xs font-mono ${
+                              hasConditionValueError
+                                ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                                : "bg-white dark:bg-slate-800 border border-cyan-300 dark:border-cyan-700"
+                            }`}
+                          />
+                          {hasConditionValueError && (
+                            <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 shrink-0" />
+                              <span>{fieldErrors.conditionValue}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                          True Branch Label
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="VIP Limited Drop (Silk-Screen)"
+                          value={selectedNode.config?.trueBranchLabel || "Pass / True Route"}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNodes((prev) =>
+                              prev.map((n) =>
+                                n.id === selectedNode.id
+                                  ? { ...n, config: { ...n.config, trueBranchLabel: val } }
+                                  : n
+                              )
+                            );
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-300 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                          False / Else Branch Label
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Standard Web (Direct-to-Garment)"
+                          value={selectedNode.config?.falseBranchLabel || "Fallback / Else Route"}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNodes((prev) =>
+                              prev.map((n) =>
+                                n.id === selectedNode.id
+                                  ? { ...n, config: { ...n.config, falseBranchLabel: val } }
+                                  : n
+                              )
+                            );
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-rose-300 text-xs font-medium text-rose-700 dark:text-rose-300"
                         />
                       </div>
                     </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
-                        True Branch Label
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="VIP Limited Drop (Silk-Screen)"
-                        value={selectedNode.config?.trueBranchLabel || "Pass / True Route"}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNodes((prev) =>
-                            prev.map((n) =>
-                              n.id === selectedNode.id
-                                ? { ...n, config: { ...n.config, trueBranchLabel: val } }
-                                : n
-                            )
-                          );
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-300 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
-                        False / Else Branch Label
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Standard Web (Direct-to-Garment)"
-                        value={selectedNode.config?.falseBranchLabel || "Fallback / Else Route"}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNodes((prev) =>
-                            prev.map((n) =>
-                              n.id === selectedNode.id
-                                ? { ...n, config: { ...n.config, falseBranchLabel: val } }
-                                : n
-                            )
-                          );
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-rose-300 text-xs font-medium text-rose-700 dark:text-rose-300"
-                      />
-                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ATTACHED ASSETS & DIRECTORY INSPECTOR SECTION */}
               <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 space-y-3">
@@ -1849,31 +2427,89 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               </div>
 
               {/* Node Specific Prompt Config */}
-              {selectedNode.type === "ai_process" && (
-                <div className="space-y-2">
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Gemini Prompt Directive
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={
-                      selectedNode.config?.promptTemplate ||
-                      "Analyze the context, identify critical risk factors, and draft the structured remediation JSON."
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setNodes((prev) =>
-                        prev.map((n) =>
-                          n.id === selectedNode.id
-                            ? { ...n, config: { ...n.config, promptTemplate: val } }
-                            : n
-                        )
-                      );
-                    }}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono"
-                  />
-                </div>
-              )}
+              {selectedNode.type === "ai_process" && (() => {
+                const fieldErrors = validationReport.nodeFieldErrors.get(selectedNode.id) || {};
+                const hasPromptError = !!fieldErrors.promptTemplate;
+                const hasActionError = !!fieldErrors.aiAction;
+
+                return (
+                  <div className="space-y-3 p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/50">
+                    <div className="flex items-center justify-between font-bold text-purple-900 dark:text-purple-200">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <span>Gemini Intelligence Directive</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasActionError ? "text-rose-600 dark:text-rose-400" : "text-slate-500"}`}>
+                        AI Task Mode {hasActionError && "* (Required)"}
+                      </label>
+                      <select
+                        value={selectedNode.config?.aiAction || "generate"}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === selectedNode.id
+                                ? { ...n, config: { ...n.config, aiAction: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                          hasActionError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100"
+                            : "bg-white dark:bg-slate-800 border border-purple-300 dark:border-purple-700"
+                        }`}
+                      >
+                        <option value="generate">Text & Document Generation</option>
+                        <option value="classify">Data & Sentiment Classification</option>
+                        <option value="extract">Structured Schema Extraction</option>
+                        <option value="code_review">Code / Logic Review</option>
+                      </select>
+                      {hasActionError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.aiAction}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase mb-1 ${hasPromptError ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-300"}`}>
+                        Prompt Directive Template {hasPromptError && "* (Required)"}
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder="e.g. Analyze incoming request and format output JSON..."
+                        value={selectedNode.config?.promptTemplate || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === selectedNode.id
+                                ? { ...n, config: { ...n.config, promptTemplate: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl text-xs font-mono focus:ring-2 ${
+                          hasPromptError
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100 focus:ring-rose-500"
+                            : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-indigo-500"
+                        }`}
+                      />
+                      {hasPromptError && (
+                        <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{fieldErrors.promptTemplate}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Single Node Live Testing Button */}
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
@@ -2335,6 +2971,30 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         data={troubleshootPayloadData}
         onResetToTemplate={handleResetNodeToTemplate}
         onApplyFixedPayload={handleApplyFixedPayload}
+      />
+
+      {/* PIPELINE VALIDATION & DEPLOYMENT BLOCKER MODAL */}
+      <WorkflowValidationModal
+        isOpen={showValidationModal}
+        onClose={() => {
+          setShowValidationModal(false);
+          setIsDeploymentAttempt(false);
+        }}
+        report={validationReport}
+        nodes={nodes}
+        connections={connections}
+        workflowName={workflowName}
+        isDeploymentAttempt={isDeploymentAttempt}
+        onSelectNode={(nodeId) => {
+          setSelectedNodeId(nodeId);
+          setSelectedNodeIds([nodeId]);
+          setShowValidationModal(false);
+          setIsDeploymentAttempt(false);
+        }}
+        onAutoRepair={handleAutoRepair}
+        onDeleteConnection={(connId) => {
+          deleteConnection(connId);
+        }}
       />
     </div>
   );

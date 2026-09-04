@@ -290,6 +290,11 @@ export default function App() {
 
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState<boolean>(() => {
     try {
+      // Check persistent localStorage first so terms acceptance persists across sessions
+      const savedTos = localStorage.getItem("agentflow_tos_accepted");
+      if (savedTos) {
+        return true;
+      }
       return sessionStorage.getItem("agentflow_terms_accepted_session") === "true";
     } catch {
       return false;
@@ -1947,6 +1952,8 @@ export default function App() {
         legalDocuments={legalDocs}
         userEmail={userProfile.email || "enterprise@client.com"}
         userName={userProfile.name || "Enterprise User"}
+        canDismiss={Boolean(localStorage.getItem("agentflow_tos_accepted"))}
+        onClose={() => setHasAcceptedTerms(true)}
       />
 
       {/* Real-time Agent Health Notification Toast System */}

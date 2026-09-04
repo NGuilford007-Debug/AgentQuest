@@ -19,7 +19,8 @@ import {
   Maximize2,
   Minimize2,
   BookOpen,
-  Filter
+  Filter,
+  X
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { fireCelebration } from "../utils/confetti";
@@ -30,6 +31,8 @@ interface TermsAgreementGateModalProps {
   legalDocuments?: LegalDocumentItem[];
   userEmail?: string;
   userName?: string;
+  canDismiss?: boolean;
+  onClose?: () => void;
 }
 
 export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = ({
@@ -37,8 +40,21 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
   onAcceptTerms,
   legalDocuments = INITIAL_LEGAL_DOCUMENTS,
   userEmail = "user@organization.com",
-  userName = "Enterprise User"
+  userName = "Enterprise User",
+  canDismiss = false,
+  onClose
 }) => {
+  // Check if previously accepted in persistent localStorage
+  const [previouslyAcceptedInfo] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem("agentflow_tos_accepted");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return null;
+  });
+
   const [selectedDocId, setSelectedDocId] = useState<string>(legalDocuments[0]?.id || "doc-enterprise-reseller");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -46,14 +62,18 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
   const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   
-  // Agreement Checkboxes
-  const [agreeMasterTos, setAgreeMasterTos] = useState<boolean>(false);
-  const [agreeAiSafety, setAgreeAiSafety] = useState<boolean>(false);
-  const [agreePrivacyDpa, setAgreePrivacyDpa] = useState<boolean>(false);
+  // Agreement Checkboxes (prefilled true if already accepted previously)
+  const [agreeMasterTos, setAgreeMasterTos] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
+  const [agreeAiSafety, setAgreeAiSafety] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
+  const [agreePrivacyDpa, setAgreePrivacyDpa] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
   
   // Signer Credentials
-  const [signerName, setSignerName] = useState<string>(userName);
-  const [organizationName, setOrganizationName] = useState<string>("Guilford Enterprise Client");
+  const [signerName, setSignerName] = useState<string>(
+    () => previouslyAcceptedInfo?.name || userName
+  );
+  const [organizationName, setOrganizationName] = useState<string>(
+    () => previouslyAcceptedInfo?.organization || "Guilford Enterprise Client"
+  );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -155,13 +175,22 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
                 <h2 className="text-lg font-black text-white tracking-tight">
                   Guilford Industries Legal & Terms Governance Gate
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  Reviewable at Gate
-                </span>
+                {previouslyAcceptedInfo ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Permanently Accepted & Active
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-amber-400" />
+                    Required Onboarding Gate
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Review, examine clauses, and accept the enterprise contracts for your workspace before proceeding.
+                {previouslyAcceptedInfo
+                  ? `Agreements accepted by ${previouslyAcceptedInfo.name || "Authorized Signer"} (${new Date(previouslyAcceptedInfo.acceptedAt).toLocaleDateString()}). You can review clauses or update your signature below.`
+                  : "Review, examine clauses, and accept the enterprise contracts for your workspace before proceeding."}
               </p>
             </div>
           </div>
@@ -182,6 +211,16 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
             >
               Select All Agreements
             </button>
+            {(canDismiss || onClose) && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/30 transition-colors"
+                title="Close and return to workspace"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -437,7 +476,9 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
               ) : (
                 <CheckCircle2 className="w-4 h-4 text-emerald-300" />
               )}
-              <span>Accept Terms & Enter AgentFlow</span>
+              <span>
+                {previouslyAcceptedInfo ? "Update Signature & Enter Workspace" : "Accept Terms & Enter AgentFlow"}
+              </span>
             </button>
           </div>
         </div>
