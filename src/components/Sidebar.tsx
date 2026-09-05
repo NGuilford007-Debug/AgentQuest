@@ -27,7 +27,8 @@ import {
   Wand2,
   CreditCard,
   Gift,
-  Scale
+  Scale,
+  Mail
 } from "lucide-react";
 import { AccessLevel, WhiteLabelConfig } from "../types";
 import { getWorkplaceTheme } from "../utils/workplaceThemes";
@@ -42,6 +43,7 @@ export type NavTab =
   | "studio" 
   | "automations"
   | "assets"
+  | "emails"
   | "dispatcher" 
   | "gamification" 
   | "leaderboard" 
@@ -231,6 +233,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 font-bold",
       description: "Browse generated images, video concepts & vector assets",
       enabled: toggles ? toggles.enableAssetGallery : true,
+    },
+    {
+      id: "emails",
+      label: "Email Automations",
+      shortLabel: "Emails",
+      category: "tools",
+      icon: Mail,
+      badge: "Receipts & Onboarding",
+      badgeColor: "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold",
+      description: "Welcome feature tours, action receipts & auto-responders",
+      enabled: true,
     },
     {
       id: "permissions",

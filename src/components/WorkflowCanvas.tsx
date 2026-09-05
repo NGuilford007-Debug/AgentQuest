@@ -16,6 +16,7 @@ import { AssetGallery } from "./AssetGallery";
 import { BatchDeleteConfirmationModal } from "./BatchDeleteConfirmationModal";
 import { PayloadTroubleshootModal, PayloadTroubleshootData, getValidTemplateForNode } from "./PayloadTroubleshootModal";
 import { WorkflowValidationModal } from "./WorkflowValidationModal";
+import { WorkflowMinimap } from "./WorkflowMinimap";
 import { validateWorkflow, autoRepairWorkflow, WorkflowValidationReport } from "../utils/workflowValidation";
 import { playInteractiveSound } from "../utils/audioSynth";
 import { fireCelebration } from "../utils/confetti";
@@ -132,6 +133,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Canvas zoom & pan
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   
   // AI Architect Modal
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1237,24 +1239,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </div>
         </div>
 
-        {/* CENTER: INTERACTIVE CANVAS */}
-        <div
-          ref={canvasRef}
-          onDragOver={handleCanvasDragOver}
-          onDrop={handleCanvasDrop}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onClick={() => {
-            setSelectedNodeId(null);
-            setSelectedNodeIds([]);
-            setConnectingSource(null);
-          }}
-          className="flex-1 relative overflow-auto bg-slate-50 dark:bg-slate-950 cursor-crosshair"
-          style={{
-            backgroundImage: `radial-gradient(circle, rgba(148, 163, 184, 0.25) 1px, transparent 1px)`,
-            backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-          }}
-        >
+        {/* CENTER: INTERACTIVE CANVAS CONTAINER */}
+        <div ref={canvasContainerRef} className="flex-1 relative overflow-hidden flex flex-col">
+          <div
+            ref={canvasRef}
+            onDragOver={handleCanvasDragOver}
+            onDrop={handleCanvasDrop}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onClick={() => {
+              setSelectedNodeId(null);
+              setSelectedNodeIds([]);
+              setConnectingSource(null);
+            }}
+            className="w-full h-full relative overflow-auto bg-slate-50 dark:bg-slate-950 cursor-crosshair"
+            style={{
+              backgroundImage: `radial-gradient(circle, rgba(148, 163, 184, 0.25) 1px, transparent 1px)`,
+              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+            }}
+          >
           {/* Active Connection Cable Prompt */}
           {connectingSource && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold shadow-lg flex items-center gap-2 animate-bounce">
@@ -1787,6 +1790,24 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             })}
           </div>
         </div>
+
+        {/* DRAGGABLE PIPELINE MINI-MAP */}
+        <WorkflowMinimap
+          nodes={nodes}
+          connections={connections}
+          selectedNodeId={selectedNodeId}
+          selectedNodeIds={selectedNodeIds}
+          validationReport={validationReport}
+          canvasRef={canvasRef}
+          zoom={zoom}
+          setZoom={setZoom}
+          containerRef={canvasContainerRef}
+          onSelectNode={(nodeId) => {
+            setSelectedNodeId(nodeId);
+            setSelectedNodeIds([nodeId]);
+          }}
+        />
+      </div>
 
         {/* FLOATING BATCH ACTIONS BAR (WHEN 2+ NODES SELECTED) */}
         {selectedNodeIds.length > 1 && (

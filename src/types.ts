@@ -1068,3 +1068,39 @@ export interface GeneratedReportDocument {
     trend?: string;
   }[];
 }
+
+export type EmailType = "welcome_features" | "action_receipt" | "inbound_triage" | "incident_alert" | "system_notification";
+
+export interface ActionReceiptDetails {
+  receiptId: string;
+  actionType: "workflow_deployment" | "agent_dispatch" | "subscription_upgrade" | "asset_ingest" | "hitl_approval";
+  title: string;
+  summary: string;
+  timestamp: string;
+  status: "Completed" | "Verified" | "Delivered";
+  actorName: string;
+  actorEmail: string;
+  metadata: {
+    label: string;
+    value: string;
+  }[];
+  tokensUsed?: number;
+  costEstimateUsd?: number;
+  hoursSaved?: number;
+  transactionHash?: string;
+}
+
+export interface DispatchedEmail {
+  id: string;
+  type: EmailType;
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  previewText: string;
+  htmlContent: string;
+  plainText: string;
+  timestamp: string;
+  status: "Delivered" | "Opened" | "Clicked" | "Queued";
+  receiptData?: ActionReceiptDetails;
+  featureTourIncluded?: boolean;
+}

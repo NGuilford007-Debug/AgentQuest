@@ -84,6 +84,7 @@ import { SmartChat } from "./components/SmartChat";
 import { ImageStudio } from "./components/ImageStudio";
 import { LegalGovernanceCenter } from "./components/LegalGovernanceCenter";
 import { TermsAgreementGateModal } from "./components/TermsAgreementGateModal";
+import { EmailAutomationCenter } from "./components/EmailAutomationCenter";
 import { MasterAccessSettings } from "./types";
 import { initRevenueCat, checkHasEntitlement } from "./services/revenuecat";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
@@ -1611,6 +1612,15 @@ export default function App() {
             onAddAsset={handleAddAsset}
             onDeleteAsset={handleDeleteAsset}
             onUpdateAsset={handleUpdateAsset}
+          />
+        )}
+
+        {currentTab === "emails" && (
+          <EmailAutomationCenter
+            userProfile={userProfile}
+            workflows={workflows}
+            developerCompanyName={developerProfile.companyName}
+            onNavigateToTab={(tab) => setCurrentTab(tab as NavTab)}
           />
         )}
 
