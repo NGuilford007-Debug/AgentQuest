@@ -819,6 +819,11 @@ export const INITIAL_WORKFLOWS: Workflow[] = [
     lastRun: "10 mins ago",
     totalRuns: 342,
     avgHoursSavedPerRun: 0.55,
+    emailNotificationsEnabled: true,
+    emailRecipients: ["toppgunn321@gmail.com", "sre-leads@company.internal"],
+    successRate: 99.7,
+    totalEmailsSent: 342,
+    lastEmailDispatched: "10 mins ago",
     nodes: [
       {
         id: "n-101",
@@ -888,6 +893,11 @@ export const INITIAL_WORKFLOWS: Workflow[] = [
     lastRun: "2 hours ago",
     totalRuns: 890,
     avgHoursSavedPerRun: 0.35,
+    emailNotificationsEnabled: true,
+    emailRecipients: ["toppgunn321@gmail.com", "sales-ops@company.internal"],
+    successRate: 98.9,
+    totalEmailsSent: 845,
+    lastEmailDispatched: "2 hours ago",
     nodes: [
       {
         id: "n-201",
@@ -942,6 +952,11 @@ export const INITIAL_WORKFLOWS: Workflow[] = [
     lastRun: "10 mins ago",
     totalRuns: 342,
     avgHoursSavedPerRun: 0.85,
+    emailNotificationsEnabled: false,
+    emailRecipients: ["toppgunn321@gmail.com"],
+    successRate: 99.1,
+    totalEmailsSent: 180,
+    lastEmailDispatched: "Yesterday",
     nodes: [
       {
         id: "n-301",
@@ -1042,6 +1057,11 @@ export const INITIAL_WORKFLOWS: Workflow[] = [
     lastRun: "15 mins ago",
     totalRuns: 218,
     avgHoursSavedPerRun: 1.4,
+    emailNotificationsEnabled: true,
+    emailRecipients: ["toppgunn321@gmail.com"],
+    successRate: 100.0,
+    totalEmailsSent: 218,
+    lastEmailDispatched: "15 mins ago",
     nodes: [
       {
         id: "n-em-01",

@@ -7,9 +7,14 @@ import {
   generateActionReceiptHtml,
   PlatformFeatureItem
 } from "../data/emailTemplates";
-import { ActionReceiptDetails, DispatchedEmail, EmployeeProfile, Workflow } from "../types";
+import { ActionReceiptDetails, DispatchedEmail, EmployeeProfile, Workflow, ActionEmailTrigger, TriggerRuleSet } from "../types";
 import { playInteractiveSound } from "../utils/audioSynth";
 import { fireCelebration } from "../utils/confetti";
+import { ActionTriggersPanel } from "./ActionTriggersPanel";
+import { WorkflowMetricsPanel } from "./WorkflowMetricsPanel";
+import { ConditionBuilder } from "./ConditionBuilder";
+import { INITIAL_ACTION_TRIGGERS, createSimulatedTriggerEmail } from "../data/emailActionTriggers";
+import { evaluateTriggerRuleSet, getDefaultTestContext } from "../data/emailConditionFields";
 import { 
   Mail, 
   Send, 
@@ -39,7 +44,11 @@ import {
   ThumbsUp, 
   Sliders,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Activity,
+  BarChart3,
+  TrendingUp,
+  Filter
 } from "lucide-react";
 
 interface EmailAutomationCenterProps {
@@ -47,19 +56,233 @@ interface EmailAutomationCenterProps {
   workflows: Workflow[];
   developerCompanyName?: string;
   onNavigateToTab?: (tab: string) => void;
+  onUpdateWorkflow?: (updated: Workflow) => void;
 }
 
 export const EmailAutomationCenter: React.FC<EmailAutomationCenterProps> = ({
   userProfile,
   workflows,
   developerCompanyName = "Guilford Industries",
-  onNavigateToTab
+  onNavigateToTab,
+  onUpdateWorkflow
 }) => {
   // Navigation tabs within the email center
-  const [activeSubTab, setActiveSubTab] = useState<"welcome" | "receipts" | "triage" | "outbox">("welcome");
+  const [activeSubTab, setActiveSubTab] = useState<"welcome" | "receipts" | "triggers" | "conditions" | "metrics" | "triage" | "outbox">("conditions");
+  const [conditionBuilderTargetId, setConditionBuilderTargetId] = useState<string>("trig-user-onboarding");
 
   // Dispatched emails store
   const [dispatchedEmails, setDispatchedEmails] = useState<DispatchedEmail[]>(INITIAL_DISPATCHED_EMAILS);
+
+  // Action Triggers State
+  const [actionTriggers, setActionTriggers] = useState<ActionEmailTrigger[]>(() => {
+    try {
+      const saved = localStorage.getItem("agentflow_email_action_triggers_v1");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      // fallback
+    }
+    return INITIAL_ACTION_TRIGGERS;
+  });
+
+  const activeTriggersCount = actionTriggers.filter((t) => t.enabled).length;
+
+  const handleUpdateTriggerRuleSet = (triggerId: string, ruleSet: TriggerRuleSet) => {
+    setActionTriggers((prev) => {
+      const next: ActionEmailTrigger[] = prev.map((t) => 
+        t.id === triggerId 
+          ? { ...t, ruleSet, triggerCondition: "custom_logic" as const } 
+          : t
+      );
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleSimulateTriggerWithContext = (
+    trigger: ActionEmailTrigger,
+    context: Record<string, any>,
+    suppressed: boolean
+  ) => {
+    if (suppressed) {
+      showToast(`Simulated Event: Email for "${trigger.name}" was SUPPRESSED because condition rules evaluated to FALSE.`);
+      return;
+    }
+
+    const newEmail = createSimulatedTriggerEmail(trigger, userProfile.name || "Alex Mercer");
+    if (trigger.ruleSet?.description) {
+      newEmail.previewText = `[Condition Verified: ${trigger.ruleSet.description}] ${newEmail.previewText}`;
+    }
+    setDispatchedEmails((prev) => [newEmail, ...prev]);
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => (t.id === trigger.id ? { ...t, totalTriggered: (t.totalTriggered || 0) + 1, lastTriggered: "Just now" } : t));
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleToggleActionTrigger = (triggerId: string) => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => t.id === triggerId ? { ...t, enabled: !t.enabled } : t);
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    const target = actionTriggers.find((t) => t.id === triggerId);
+    const nextState = !target?.enabled;
+    playInteractiveSound(nextState ? "chime" : "click");
+    showToast(`Email trigger "${target?.name || 'Action'}" is now ${nextState ? "ACTIVE" : "MUTED"}.`);
+  };
+
+  const handleToggleShaProof = (triggerId: string) => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => t.id === triggerId ? { ...t, includeSha256Proof: !t.includeSha256Proof } : t);
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    playInteractiveSound("click");
+  };
+
+  const handleChangeCondition = (triggerId: string, condition: ActionEmailTrigger["triggerCondition"]) => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => t.id === triggerId ? { ...t, triggerCondition: condition } : t);
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    playInteractiveSound("click");
+  };
+
+  const handleUpdateRecipientEmail = (triggerId: string, email: string) => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => t.id === triggerId ? { ...t, recipientEmail: email } : t);
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleSimulateTrigger = (trigger: ActionEmailTrigger) => {
+    // If trigger has active custom logic conditions, check them first
+    if (trigger.ruleSet?.enabled && trigger.ruleSet.conditions.length > 0) {
+      const testContext = getDefaultTestContext();
+      // Ensure user profile setup matches live user context
+      const evalRes = evaluateTriggerRuleSet(trigger.ruleSet, testContext);
+      if (!evalRes.overallMatch) {
+        playInteractiveSound("click");
+        showToast(`Trigger SUPPRESSED: Conditions not met (${trigger.ruleSet.description || 'Custom rules'}). Check Condition Builder.`);
+        return;
+      }
+    }
+
+    playInteractiveSound("laser");
+    fireCelebration();
+    const newEmail = createSimulatedTriggerEmail(trigger, userProfile.name || "Alex Mercer");
+    setDispatchedEmails((prev) => [newEmail, ...prev]);
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => t.id === trigger.id ? { ...t, totalTriggered: (t.totalTriggered || 0) + 1, lastTriggered: "Just now" } : t);
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    showToast(`Simulated "${trigger.name}"! Email dispatched to ${trigger.recipientEmail} & logged to Outbox.`);
+  };
+
+  const handleEnableAllTriggers = () => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => ({ ...t, enabled: true }));
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    playInteractiveSound("chime");
+    showToast("All action email triggers ENABLED.");
+  };
+
+  const handleDisableAllTriggers = () => {
+    setActionTriggers((prev) => {
+      const next = prev.map((t) => ({ ...t, enabled: false }));
+      try {
+        localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    playInteractiveSound("click");
+    showToast("All action email triggers MUTED.");
+  };
+
+  const handleResetDefaults = () => {
+    setActionTriggers(INITIAL_ACTION_TRIGGERS);
+    try {
+      localStorage.setItem("agentflow_email_action_triggers_v1", JSON.stringify(INITIAL_ACTION_TRIGGERS));
+    } catch (e) {}
+    playInteractiveSound("chime");
+    showToast("Reset action triggers to production defaults.");
+  };
+
+  // Workflow Email Toggle & Simulation
+  const handleToggleWorkflowEmail = (workflowId: string) => {
+    const target = workflows.find((w) => w.id === workflowId);
+    if (!target) return;
+    const nextVal = !(target.emailNotificationsEnabled ?? true);
+    const updated: Workflow = {
+      ...target,
+      emailNotificationsEnabled: nextVal
+    };
+    if (onUpdateWorkflow) {
+      onUpdateWorkflow(updated);
+    }
+    playInteractiveSound(nextVal ? "chime" : "click");
+    showToast(`Workflow "${target.name}" email alerts ${nextVal ? "ENABLED" : "MUTED"}`);
+  };
+
+  const handleSimulateWorkflowRun = (wf: Workflow) => {
+    playInteractiveSound("laser");
+    fireCelebration();
+    const nowTime = new Date().toISOString();
+    const receiptId = `RCP-WF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const newRuns = (wf.totalRuns || 0) + 1;
+    const newEmails = (wf.totalEmailsSent || 0) + (wf.emailNotificationsEnabled !== false ? 1 : 0);
+
+    if (onUpdateWorkflow) {
+      onUpdateWorkflow({
+        ...wf,
+        totalRuns: newRuns,
+        totalEmailsSent: newEmails,
+        lastRun: "Just now",
+        lastEmailDispatched: "Just now"
+      });
+    }
+
+    if (wf.emailNotificationsEnabled !== false) {
+      const newEmail: DispatchedEmail = {
+        id: `dispatch-${Date.now()}`,
+        type: "action_receipt",
+        recipientEmail: "toppgunn321@gmail.com",
+        recipientName: userProfile.name || "Alex Mercer",
+        subject: `ACTION RECEIPT: ${wf.name} Executed Successfully [#${receiptId}]`,
+        previewText: `Pipeline ${wf.name} executed successfully. Duration: 242ms. 100% Success.`,
+        htmlContent: `<div style="font-family: sans-serif; padding: 20px;"><h2>ACTION RECEIPT: ${wf.name}</h2><p>Pipeline: ${wf.name} (${wf.department})</p><p>Duration: 242ms</p><p>Status: 100% Success</p></div>`,
+        plainText: `WORKFLOW EXECUTION ACTION RECEIPT\nPipeline: ${wf.name}\nDepartment: ${wf.department}\nNodes Executed: ${wf.nodes.length}\nDuration: 242ms\nStatus: 100% SUCCESS\nRecipient: toppgunn321@gmail.com`,
+        timestamp: nowTime,
+        status: "Delivered"
+      };
+      setDispatchedEmails((prev) => [newEmail, ...prev]);
+      showToast(`Pipeline "${wf.name}" executed! Action receipt dispatched to toppgunn321@gmail.com`);
+    } else {
+      showToast(`Pipeline "${wf.name}" executed (Email notifications are muted for this pipeline).`);
+    }
+  };
 
   // Welcome Email State
   const [welcomeRecipientName, setWelcomeRecipientName] = useState<string>(userProfile.name || "Alex Mercer");
@@ -298,6 +521,57 @@ ${developerCompanyName}`,
       <div className="px-6 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 flex items-center gap-2 overflow-x-auto shrink-0">
         <button
           type="button"
+          id="tab-email-action-triggers"
+          onClick={() => setActiveSubTab("triggers")}
+          className={`px-4 py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeSubTab === "triggers"
+              ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>Action Triggers & Notification Rules</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold">
+            {activeTriggersCount} Active
+          </span>
+        </button>
+
+        <button
+          type="button"
+          id="tab-email-condition-builder"
+          onClick={() => setActiveSubTab("conditions")}
+          className={`px-4 py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeSubTab === "conditions"
+              ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Condition Builder (Logic Triggers)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold">
+            Live Logic
+          </span>
+        </button>
+
+        <button
+          type="button"
+          id="tab-workflow-metrics-telemetry"
+          onClick={() => setActiveSubTab("metrics")}
+          className={`px-4 py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeSubTab === "metrics"
+              ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>Workflow Metrics & Telemetry</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 font-bold">
+            99.4% SLA
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveSubTab("welcome")}
           className={`px-4 py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
             activeSubTab === "welcome"
@@ -354,6 +628,51 @@ ${developerCompanyName}`,
           </span>
         </button>
       </div>
+
+      {/* SUB-TAB: ACTION TRIGGERS & NOTIFICATION RULES */}
+      {activeSubTab === "triggers" && (
+        <ActionTriggersPanel
+          triggers={actionTriggers}
+          onToggleTrigger={handleToggleActionTrigger}
+          onToggleShaProof={handleToggleShaProof}
+          onChangeCondition={handleChangeCondition}
+          onUpdateRecipientEmail={handleUpdateRecipientEmail}
+          onSimulateTrigger={handleSimulateTrigger}
+          onEnableAll={handleEnableAllTriggers}
+          onDisableAll={handleDisableAllTriggers}
+          onResetDefaults={handleResetDefaults}
+          onOpenConditionBuilder={(triggerId) => {
+            setConditionBuilderTargetId(triggerId);
+            setActiveSubTab("conditions");
+          }}
+        />
+      )}
+
+      {/* SUB-TAB: CONDITION BUILDER (LOGIC TRIGGERS) */}
+      {activeSubTab === "conditions" && (
+        <ConditionBuilder
+          triggers={actionTriggers}
+          selectedTriggerId={conditionBuilderTargetId}
+          onSelectTrigger={(id) => setConditionBuilderTargetId(id)}
+          onUpdateTriggerRuleSet={handleUpdateTriggerRuleSet}
+          onSimulateTriggerWithContext={handleSimulateTriggerWithContext}
+          showToast={showToast}
+        />
+      )}
+
+      {/* SUB-TAB: WORKFLOW METRICS & EXECUTION TELEMETRY */}
+      {activeSubTab === "metrics" && (
+        <WorkflowMetricsPanel
+          workflows={workflows}
+          onToggleWorkflowEmail={handleToggleWorkflowEmail}
+          onSimulateWorkflowRun={handleSimulateWorkflowRun}
+          onOpenWorkflowCanvas={(wfId) => {
+            if (onNavigateToTab) {
+              onNavigateToTab("studio");
+            }
+          }}
+        />
+      )}
 
       {/* SUB-TAB 1: WELCOME EMAIL & FULL FEATURE GUIDE */}
       {activeSubTab === "welcome" && (

@@ -1621,6 +1621,9 @@ export default function App() {
             workflows={workflows}
             developerCompanyName={developerProfile.companyName}
             onNavigateToTab={(tab) => setCurrentTab(tab as NavTab)}
+            onUpdateWorkflow={(updatedWf) => {
+              setWorkflows((prev) => prev.map((w) => w.id === updatedWf.id ? updatedWf : w));
+            }}
           />
         )}
 

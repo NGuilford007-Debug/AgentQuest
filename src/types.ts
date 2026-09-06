@@ -208,7 +208,11 @@ export type ConditionOperator =
   | "greater_than" 
   | "less_than" 
   | "regex" 
-  | "ai_eval";
+  | "ai_eval"
+  | "is_true"
+  | "is_false"
+  | "is_empty"
+  | "is_not_empty";
 
 export interface ConditionRule {
   id: string;
@@ -272,6 +276,51 @@ export interface Workflow {
   lastRun?: string;
   totalRuns: number;
   avgHoursSavedPerRun: number;
+  emailNotificationsEnabled?: boolean;
+  emailRecipients?: string[];
+  successRate?: number;
+  totalEmailsSent?: number;
+  lastEmailDispatched?: string;
+}
+
+export interface ConditionFieldDefinition {
+  key: string;
+  label: string;
+  category: "user" | "workflow" | "security" | "billing" | "payload";
+  type: "string" | "number" | "boolean" | "array";
+  description: string;
+  sampleValue: any;
+}
+
+export interface TriggerRuleCondition {
+  id: string;
+  field: string;
+  operator: ConditionOperator;
+  value: string;
+  valueType?: "boolean" | "string" | "number";
+}
+
+export interface TriggerRuleSet {
+  enabled: boolean;
+  matchType: "ALL" | "ANY";
+  conditions: TriggerRuleCondition[];
+  description?: string;
+}
+
+export interface ActionEmailTrigger {
+  id: string;
+  name: string;
+  description: string;
+  category: "pipeline" | "agent" | "governance" | "billing" | "user";
+  iconName: string;
+  enabled: boolean;
+  recipientEmail: string;
+  triggerCondition: "always" | "on_failure_only" | "vip_only" | "critical_only" | "custom_logic";
+  includeSha256Proof: boolean;
+  templateType: "receipt" | "alert" | "tour" | "triage";
+  totalTriggered: number;
+  lastTriggered?: string;
+  ruleSet?: TriggerRuleSet;
 }
 
 export interface Badge {
