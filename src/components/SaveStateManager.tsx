@@ -563,11 +563,11 @@ export const SaveStateManager: React.FC<SaveStateManagerProps> = ({
                     <div className="flex items-center gap-2">
                       <Eraser className="w-4 h-4 text-red-600 dark:text-red-400" />
                       <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                        Wipe All Mock Data (Zero-State Clean Slate)
+                        Wipe All Agents & Mock Data (Clean Slate)
                       </h4>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      Clears execution logs, audit trails, tenant billing records, saved reports, active sessions, and resets hours saved to 0.0 hrs.
+                      Complete clean slate: clears all autonomous agents, workflows, execution logs, audit trails, tenant billing records, saved reports, active sessions, and resets statistics to 0.
                     </p>
                   </div>
 
@@ -576,9 +576,13 @@ export const SaveStateManager: React.FC<SaveStateManagerProps> = ({
                       <button
                         id="btn-confirm-purge-all"
                         onClick={() => {
-                          if (onClearAllMockData) onClearAllMockData();
+                          if (onResetToCleanSlate) {
+                            onResetToCleanSlate();
+                          } else if (onClearAllMockData) {
+                            onClearAllMockData();
+                          }
                           setConfirmPurgeAll(false);
-                          showNotification("Wiped all mock data & reset to clean slate!");
+                          showNotification("Wiped all agents & mock data: Clean Slate active!");
                         }}
                         className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-xs"
                       >
@@ -594,9 +598,9 @@ export const SaveStateManager: React.FC<SaveStateManagerProps> = ({
                   ) : (
                     <button
                       onClick={() => setConfirmPurgeAll(true)}
-                      className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 border border-red-300 dark:border-red-800 text-xs font-bold transition-all shrink-0 shadow-2xs"
+                      className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 border border-red-300 dark:border-red-800 text-xs font-bold transition-all shrink-0 shadow-2xs cursor-pointer"
                     >
-                      Wipe All Mock Data
+                      Wipe All (Clean Slate)
                     </button>
                   )}
                 </div>

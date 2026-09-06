@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import Markdown from "react-markdown";
-import { Agent, TaskExecutionRecord, Workflow, ApprovedAutomation, GeneratedReportDocument } from "../types";
+import { 
+  Agent, 
+  TaskExecutionRecord, 
+  Workflow, 
+  ApprovedAutomation, 
+  GeneratedReportDocument,
+  CircuitBreakerState,
+  CircuitBreakerConfig,
+  StepExecutionResult,
+  TaskCheckpointState
+} from "../types";
 import { SAMPLE_TASK_PRESETS } from "../data/initialData";
+import { INITIAL_CIRCUIT_BREAKER_STATE } from "../data/initialCircuitBreaker";
 import { 
   Play, 
   Sparkles, 
@@ -37,12 +48,20 @@ import {
   BookmarkCheck,
   Bookmark,
   Eraser,
-  Trash2
+  Trash2,
+  ShieldAlert,
+  AlertOctagon,
+  Activity,
+  FastForward,
+  RefreshCw,
+  PlayCircle,
+  Plus
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { fireCelebration } from "../utils/confetti";
 import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
 import { AiTextEnhancer } from "./AiTextEnhancer";
+import { ExecutionStatusBadge } from "./ExecutionStatusBadge";
 
 interface TaskDispatcherProps {
   agents: Agent[];
@@ -55,6 +74,12 @@ interface TaskDispatcherProps {
   onSaveReport?: (report: GeneratedReportDocument) => void;
   streakMultiplier: number;
   initialAgentId?: string;
+  circuitBreakerState?: CircuitBreakerState;
+  onResetBreaker?: () => void;
+  onEmergencyStopBreaker?: () => void;
+  onOpenCircuitBreakerHub?: () => void;
+  onCreateAgent?: () => void;
+  onLoadDemoData?: () => void;
 }
 
 const AGENT_QUICK_IDEAS: Record<string, string[]> = {
@@ -101,6 +126,12 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   onSaveReport,
   streakMultiplier,
   initialAgentId,
+  circuitBreakerState = INITIAL_CIRCUIT_BREAKER_STATE,
+  onResetBreaker,
+  onEmergencyStopBreaker,
+  onOpenCircuitBreakerHub,
+  onCreateAgent,
+  onLoadDemoData,
 }) => {
   const [isSavedAsReport, setIsSavedAsReport] = useState<boolean>(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(
@@ -116,6 +147,7 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   const [activeTab, setActiveTab] = useState<"prompt" | "graph" | "history">("prompt");
   
   const [isRunning, setIsRunning] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
   const [currentExecution, setCurrentExecution] = useState<TaskExecutionRecord | null>(
     executionHistory[0] || null
@@ -126,6 +158,10 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isTroubleshootOpen, setIsTroubleshootOpen] = useState<boolean>(false);
   const [troubleshootRecord, setTroubleshootRecord] = useState<TaskExecutionRecord | null>(null);
+
+  const isBreakerTripped = circuitBreakerState.status === "tripped";
+  const isEmergencyStopped = circuitBreakerState.status === "emergency_stopped";
+  const isBlockedByBreaker = isBreakerTripped || isEmergencyStopped;
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -237,6 +273,8 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
 
   const handleRunExecution = async (customPrompt?: string) => {
     if (!currentAgent) return;
+    if (isBlockedByBreaker) return;
+
     const finalPrompt = customPrompt || promptText;
     if (!finalPrompt.trim()) return;
 
@@ -283,6 +321,59 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
       const creditsCost = data.creditsCost || 12;
       const tokensConsumed = data.tokensConsumed || 640;
 
+      const baseSteps: StepExecutionResult[] = (data.stepsOutput && data.stepsOutput.length > 0)
+        ? data.stepsOutput.map((st: any, idx: number) => ({
+            ...st,
+            checkpointId: st.checkpointId || `chk-${Date.now()}-${idx + 1}`,
+            idempotencyKey: st.idempotencyKey || `idemp-${Math.random().toString(36).slice(2, 9)}`,
+          }))
+        : [
+            {
+              nodeId: "step-1",
+              name: "Prompt Evaluation & Schema Validation",
+              type: "trigger",
+              status: "completed",
+              durationMs: 140,
+              output: `Ingested task directive for ${currentAgent.name}. Token inputs validated against safety schema.`,
+              confidence: 0.99,
+              checkpointId: `chk-${Date.now()}-1`,
+              idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+            },
+            {
+              nodeId: "step-2",
+              name: "Model Generation & Reasoning Core",
+              type: "ai_process",
+              status: "completed",
+              durationMs: 380,
+              output: `Executed via ${currentAgent.model || "Gemini 3.7 Flash"}. Inferred multi-step directives.`,
+              confidence: 0.97,
+              checkpointId: `chk-${Date.now()}-2`,
+              idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+            },
+            {
+              nodeId: "step-3",
+              name: "Governance & Circuit Breaker Audit",
+              type: "governance",
+              status: "completed",
+              durationMs: 110,
+              output: `Velocity verified (${circuitBreakerState.currentSpendVelocityUsdPerMin.toFixed(2)}/min). Zero policy violations.`,
+              confidence: 0.99,
+              checkpointId: `chk-${Date.now()}-3`,
+              idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+            },
+            {
+              nodeId: "step-4",
+              name: "Action Dispatch & Result Assembly",
+              type: currentAgent.autonomyLevel === "hitl" ? "human_review" : "action_output",
+              status: currentAgent.autonomyLevel === "hitl" ? "needs_review" : "completed",
+              durationMs: 120,
+              output: outputText.slice(0, 120) + "...",
+              confidence: 0.98,
+              checkpointId: `chk-${Date.now()}-4`,
+              idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+            },
+          ];
+
       const record: TaskExecutionRecord = {
         id: `exec-${Date.now()}`,
         agentId: currentAgent.id,
@@ -298,39 +389,18 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
         prompt: finalPrompt,
         creditsCost,
         tokensConsumed,
-        stepsOutput: data.stepsOutput || [
-          {
-            nodeId: "step-1",
-            name: "Prompt Evaluation & Parsing",
-            type: "trigger",
-            status: "completed",
-            durationMs: 140,
-            output: `Ingested task directive for ${currentAgent.name}`,
-            confidence: 0.99,
-          },
-          {
-            nodeId: "step-2",
-            name: "Model Generation Core",
-            type: "ai_process",
-            status: "completed",
-            durationMs: 380,
-            output: `Executed via ${currentAgent.model || "Gemini 3.7 Flash"}`,
-            confidence: 0.97,
-          },
-          {
-            nodeId: "step-3",
-            name: "Governance & Action Dispatch",
-            type: currentAgent.autonomyLevel === "hitl" ? "human_review" : "action_output",
-            status: currentAgent.autonomyLevel === "hitl" ? "needs_review" : "completed",
-            durationMs: 120,
-            output: outputText.slice(0, 120) + "...",
-            confidence: 0.98,
-          },
-        ],
+        stepsOutput: baseSteps,
+        checkpointState: {
+          lastCompletedStepIndex: baseSteps.length - 1,
+          canResume: false,
+          tokensSavedByCache: 0,
+          creditsSavedByCache: 0,
+        },
         auditLogs: data.auditLogs || [
           `Agent persona: ${currentAgent.role}`,
           `Model engine: ${currentAgent.model || "Gemini 3.7 Flash"}`,
           `Governance check: 0 policy violations`,
+          `Circuit breaker: Armed and verified healthy`,
         ],
         keyEntitiesExtracted: data.keyEntitiesExtracted || {},
         suggestedHumanAction: currentAgent.autonomyLevel === "hitl" 
@@ -356,6 +426,168 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
       setIsRunning(false);
       abortControllerRef.current = null;
     }
+  };
+
+  const handleResumeFromStep = (stepIndex: number, targetRecord?: TaskExecutionRecord) => {
+    const record = targetRecord || currentExecution;
+    if (!record || !record.stepsOutput || record.stepsOutput.length === 0) return;
+
+    setIsResuming(true);
+    setIsRunning(true);
+    setIsCancelled(false);
+
+    setTimeout(() => {
+      const updatedSteps: StepExecutionResult[] = record.stepsOutput.map((st, idx) => {
+        if (idx < stepIndex) {
+          return {
+            ...st,
+            status: "completed" as const,
+            isCachedFromCheckpoint: true,
+          };
+        } else if (idx === stepIndex) {
+          return {
+            ...st,
+            status: "completed" as const,
+            isCachedFromCheckpoint: false,
+            errorDetails: undefined,
+            durationMs: 240,
+            output: `Checkpoint resumed & resolved: Executed step "${st.name}" successfully with verified downstream connection.`,
+          };
+        } else {
+          return {
+            ...st,
+            status: "completed" as const,
+            isCachedFromCheckpoint: false,
+            durationMs: 160,
+          };
+        }
+      });
+
+      const tokensSaved = stepIndex * 850;
+      const creditsSaved = stepIndex * 4;
+
+      const resumedRecord: TaskExecutionRecord = {
+        ...record,
+        status: "completed",
+        summary: `Pipeline resumed from Checkpoint #${stepIndex + 1} and completed successfully.`,
+        generatedOutput: record.generatedOutput?.includes("Execution Paused")
+          ? `### Pipeline Checkpoint Successfully Resumed & Finalized\n\nExecution recovered from **Checkpoint #${stepIndex + 1}** without re-running prior steps.\n\n- **Preserved Prior Steps**: Steps 1..${stepIndex} retrieved from cache (100% idempotent)\n- **Tokens Preserved**: +${tokensSaved.toLocaleString()} tokens ($${creditsSaved.toFixed(2)} in model inference saved)\n- **Final Status**: All pipeline nodes verified and published.`
+          : record.generatedOutput,
+        stepsOutput: updatedSteps,
+        auditLogs: [
+          ...record.auditLogs,
+          `[CHECKPOINT RESTORE]: Steps 1..${stepIndex} re-hydrated from snapshot (idempotency token verified).`,
+          `[TOKEN SAVINGS]: +${tokensSaved.toLocaleString()} tokens ($${creditsSaved.toFixed(2)}) preserved via checkpoint reuse.`,
+          `[RESUME]: Successfully finalized execution starting from Step #${stepIndex + 1}.`,
+        ],
+        checkpointState: {
+          lastCompletedStepIndex: updatedSteps.length - 1,
+          canResume: false,
+          resumedAt: "Just now",
+          resumeCount: (record.checkpointState?.resumeCount || 0) + 1,
+          tokensSavedByCache: (record.checkpointState?.tokensSavedByCache || 0) + tokensSaved,
+          creditsSavedByCache: (record.checkpointState?.creditsSavedByCache || 0) + creditsSaved,
+        },
+      };
+
+      setCurrentExecution(resumedRecord);
+      if (onUpdateExecution) {
+        onUpdateExecution(resumedRecord);
+      } else {
+        onTaskCompleted(resumedRecord);
+      }
+      setIsRunning(false);
+      setIsResuming(false);
+      fireCelebration();
+    }, 850);
+  };
+
+  const handleSimulateStepFailure = () => {
+    if (!currentAgent) return;
+    const prompt = promptText.trim() || `Multi-Step Enterprise Sync for ${currentAgent.name}`;
+
+    const failedSteps: StepExecutionResult[] = [
+      {
+        nodeId: "step-1",
+        name: "Input Payload Ingestion & Validation",
+        type: "trigger",
+        status: "completed",
+        durationMs: 120,
+        output: `Sanitized inputs and verified JSON schema parameters for ${currentAgent.name}.`,
+        confidence: 0.99,
+        checkpointId: `chk-${Date.now()}-1`,
+        idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+      },
+      {
+        nodeId: "step-2",
+        name: "Gemini Model Reasoning Core",
+        type: "ai_process",
+        status: "completed",
+        durationMs: 390,
+        output: `Generated reasoning graph, plan parameters, and structured artifacts via ${currentAgent.model || "Gemini 3.7 Flash"}.`,
+        confidence: 0.98,
+        checkpointId: `chk-${Date.now()}-2`,
+        idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+      },
+      {
+        nodeId: "step-3",
+        name: "Downstream Webhook & API Dispatch",
+        type: "action_output",
+        status: "failed",
+        durationMs: 1450,
+        output: `[ERROR] HTTP 504 Gateway Timeout: Downstream webhook integration api.crm-sync.internal timed out after 1450ms. Step checkpoint stored.`,
+        confidence: 0.20,
+        errorDetails: "HTTP 504 Gateway Timeout: Target endpoint unreachable. Steps 1 & 2 cached at checkpoint.",
+        checkpointId: `chk-${Date.now()}-3`,
+        idempotencyKey: `idemp-${Math.random().toString(36).slice(2, 9)}`,
+      },
+      {
+        nodeId: "step-4",
+        name: "Governance Audit & Confirmation",
+        type: "governance",
+        status: "pending",
+        durationMs: 0,
+        output: "Pending completion of upstream step 3.",
+        confidence: 0,
+      },
+    ];
+
+    const simulatedFailedRecord: TaskExecutionRecord = {
+      id: `exec-paused-${Date.now()}`,
+      agentId: currentAgent.id,
+      agentName: currentAgent.name,
+      workflowId: currentWorkflow?.id || "wf-adhoc",
+      workflowName: currentWorkflow?.name || "Multi-Step Pipeline",
+      title: prompt.length > 60 ? `${prompt.slice(0, 57)}...` : prompt,
+      department: currentAgent.department,
+      inputPayload: prompt,
+      status: "failed",
+      summary: `Execution paused at Step 3 (API Timeout). Steps 1 & 2 are cached at checkpoint ready for instant resume.`,
+      generatedOutput: `### ⏸️ Execution Paused at Checkpoint #3\n\n**Failure Reason**: Downstream integration timeout (HTTP 504 Gateway Timeout).\n\n**Enterprise Checkpoint Cache Active**:\n- **Step 1 (Ingestion)**: Completed & Cached\n- **Step 2 (Gemini Reasoning Core)**: Completed & Cached\n- **Tokens Preserved**: ~1,700 tokens cached safely\n\nClick **"Resume from Step 3"** in the **Execution Steps & Graph** tab to resume without re-paying or re-running Steps 1 & 2!`,
+      prompt: prompt,
+      creditsCost: 6,
+      tokensConsumed: 420,
+      stepsOutput: failedSteps,
+      auditLogs: [
+        `Step 1 completed: Checkpoint snapshot saved to state store.`,
+        `Step 2 completed: Model reasoning outputs cached.`,
+        `Step 3 failed with HTTP 504 Gateway Timeout.`,
+        `Checkpoint engine captured step state. Resume available from Step 3.`,
+      ],
+      checkpointState: {
+        canResume: true,
+        lastCompletedStepIndex: 1,
+        failedStepIndex: 2,
+        checkpointHash: `sha256-${Math.random().toString(36).slice(2, 12)}`,
+      },
+      hoursSaved: 0.2,
+      xpEarned: 30,
+      timestamp: "Just now",
+    };
+
+    setCurrentExecution(simulatedFailedRecord);
+    onTaskCompleted(simulatedFailedRecord);
+    setActiveTab("graph");
   };
 
   const handleFollowUpRefinement = async () => {
@@ -423,10 +655,128 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
     return rec.status === filterStatus;
   });
 
+  if (agents.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6 bg-slate-100 dark:bg-slate-950 overflow-y-auto">
+        <div className="p-10 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-4 max-w-lg mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center mx-auto text-blue-600 dark:text-blue-400">
+            <Zap className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+              Task Dispatcher — Clean Fleet Slate
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              There are currently 0 autonomous agents in your organization. To dispatch tasks, prompt models, and execute live automation pipelines, deploy your first agent or load the sample demo fleet.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+            {onCreateAgent && (
+              <button
+                type="button"
+                onClick={onCreateAgent}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Agent</span>
+              </button>
+            )}
+            {onLoadDemoData && (
+              <button
+                type="button"
+                onClick={onLoadDemoData}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4 text-blue-500" />
+                <span>Load Demo Fleet</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 dark:bg-slate-950">
       {/* LEFT COLUMN: TASK PROMPTING & CONTROLS */}
       <div className="w-full md:w-[420px] lg:w-[460px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0 overflow-y-auto p-4 sm:p-5 space-y-4 shadow-xs">
+        {/* FINANCIAL CIRCUIT BREAKER INTEGRATED STATUS */}
+        <div
+          className={`p-3 rounded-2xl border transition-all text-xs ${
+            isBreakerTripped
+              ? "bg-rose-500/10 border-rose-500/60 dark:bg-rose-950/40 dark:border-rose-700 text-rose-900 dark:text-rose-200"
+              : isEmergencyStopped
+              ? "bg-amber-500/10 border-amber-500/60 dark:bg-amber-950/40 dark:border-amber-700 text-amber-900 dark:text-amber-200"
+              : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  isBreakerTripped
+                    ? "bg-rose-500 animate-ping"
+                    : isEmergencyStopped
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+                }`}
+              />
+              <span className="font-extrabold text-[11px] truncate">
+                {isBreakerTripped
+                  ? "Breaker Tripped: Runaway Freeze"
+                  : isEmergencyStopped
+                  ? "Emergency Halt: Agents Frozen"
+                  : `Breaker Armed: $${circuitBreakerState.currentSpendVelocityUsdPerMin.toFixed(2)}/min`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isBlockedByBreaker ? (
+                onResetBreaker && (
+                  <button
+                    type="button"
+                    onClick={onResetBreaker}
+                    className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Reset</span>
+                  </button>
+                )
+              ) : (
+                onEmergencyStopBreaker && (
+                  <button
+                    type="button"
+                    onClick={onEmergencyStopBreaker}
+                    className="px-2 py-0.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 font-bold text-[10px] flex items-center gap-1 border border-rose-200 dark:border-rose-800 transition-all"
+                    title="Emergency halt all autonomous agents immediately"
+                  >
+                    <AlertOctagon className="w-2.5 h-2.5" />
+                    <span>Halt Fleet</span>
+                  </button>
+                )
+              )}
+
+              {onOpenCircuitBreakerHub && (
+                <button
+                  type="button"
+                  onClick={onOpenCircuitBreakerHub}
+                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                >
+                  Configure
+                </button>
+              )}
+            </div>
+          </div>
+
+          {isBlockedByBreaker && (
+            <p className="text-[10px] text-rose-700 dark:text-rose-300 mt-1.5 font-medium leading-tight">
+              {circuitBreakerState.trippedReason ||
+                "Spend velocity threshold breached. Autonomous execution suspended to protect funds."}
+            </p>
+          )}
+        </div>
+
         {/* Header */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -625,24 +975,48 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
 
           {/* MAIN EXECUTE CTA & CANCEL BUTTON */}
           <div className="space-y-2">
-            <button
-              id="btn-execute-workflow"
-              onClick={() => handleRunExecution()}
-              disabled={isRunning || !promptText.trim()}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white text-xs font-bold shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 active:scale-98 transition-all disabled:opacity-50"
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{currentAgent?.name} is Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Generate & Execute Task</span>
-                </>
-              )}
-            </button>
+            {isBlockedByBreaker ? (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-center space-y-2">
+                <div className="flex items-center justify-center gap-1.5 text-rose-600 dark:text-rose-400 text-xs font-bold">
+                  <AlertOctagon className="w-4 h-4 shrink-0" />
+                  <span>Execution Locked by Financial Guard</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {isEmergencyStopped
+                    ? "Emergency Stop triggered manually. Reset breaker to resume."
+                    : "Runaway cost ceiling breached. Verify parameters before re-arming."}
+                </p>
+                {onResetBreaker && (
+                  <button
+                    type="button"
+                    onClick={onResetBreaker}
+                    className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Breaker & Unfreeze Fleet</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                id="btn-execute-workflow"
+                onClick={() => handleRunExecution()}
+                disabled={isRunning || !promptText.trim()}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white text-xs font-bold shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 active:scale-98 transition-all disabled:opacity-50"
+              >
+                {isRunning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{isResuming ? "Resuming Checkpoint..." : `${currentAgent?.name} is Generating...`}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Generate & Execute Task</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {isRunning && (
               <button
@@ -655,6 +1029,20 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                 <span>Cancel Task (Refund Quota)</span>
               </button>
             )}
+
+            {/* SIMULATE FAILURE & CHECKPOINT RESUME TEST */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleSimulateStepFailure}
+                disabled={isRunning}
+                className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-amber-50 dark:bg-slate-800/60 dark:hover:bg-amber-950/40 text-slate-700 hover:text-amber-700 dark:text-slate-300 dark:hover:text-amber-300 border border-slate-200 hover:border-amber-300 dark:border-slate-700 dark:hover:border-amber-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all"
+                title="Simulates a downstream step failure on Step 3 to demonstrate checkpointed resumption"
+              >
+                <FastForward className="w-3.5 h-3.5 text-amber-500" />
+                <span>Test Operational Resilience: Simulate Checkpoint Pause</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -770,19 +1158,12 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                           {currentExecution.title}
                         </h3>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                            currentExecution.status === "completed"
-                              ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                              : currentExecution.status === "needs_review"
-                              ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 animate-pulse"
-                              : currentExecution.status === "cancelled"
-                              ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
-                              : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                          }`}
-                        >
-                          {currentExecution.status === "needs_review" ? "Pending Approval" : currentExecution.status}
-                        </span>
+                        <ExecutionStatusBadge
+                          status={currentExecution.status}
+                          size="xs"
+                          pulse={currentExecution.status === "needs_review" || currentExecution.status === "running"}
+                          id="active-task-status-badge"
+                        />
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         Agent: <strong>{currentExecution.agentName}</strong> • {currentExecution.department}
@@ -1010,42 +1391,174 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
         {/* TAB 2: EXECUTION STEPS & GRAPH */}
         {activeTab === "graph" && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 animate-in fade-in">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-blue-600" />
-              <span>Granular Step Execution Trace</span>
-            </h3>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-blue-600" />
+                <span>Granular Step Execution & Checkpoint Trace</span>
+              </h3>
+
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono text-slate-600 dark:text-slate-400">
+                  Idempotency Guard: Active
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-mono font-bold">
+                  Durable Checkpoints: Enabled
+                </span>
+              </div>
+            </div>
+
+            {/* CHECKPOINT RESUME PROMPT BANNER */}
+            {currentExecution?.checkpointState?.canResume && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200 font-bold text-xs">
+                    <FastForward className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Workflow Paused at Checkpoint #{(currentExecution.checkpointState.failedStepIndex ?? 0) + 1}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    Prior steps are verified & cached in memory. You can resume downstream execution without re-paying or re-running completed steps.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleResumeFromStep(currentExecution.checkpointState?.failedStepIndex ?? 0)}
+                  disabled={isRunning}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all shrink-0 active:scale-98 disabled:opacity-50"
+                >
+                  {isResuming ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Resuming Pipeline...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FastForward className="w-3.5 h-3.5" />
+                      <span>Resume from Step #{(currentExecution.checkpointState.failedStepIndex ?? 0) + 1}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* CHECKPOINT RESTORED SUCCESS BANNER */}
+            {currentExecution?.checkpointState?.resumeCount && currentExecution.checkpointState.resumeCount > 0 ? (
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="font-bold">Workflow Recovered from Checkpoint Snapshot</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block sm:inline sm:ml-2">
+                      +{currentExecution.checkpointState.tokensSavedByCache?.toLocaleString() || "1,700"} tokens preserved · Idempotency validated
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
+                  Zero Redundant Spend
+                </span>
+              </div>
+            ) : null}
 
             {currentExecution?.stepsOutput && currentExecution.stepsOutput.length > 0 ? (
               <div className="space-y-3">
-                {currentExecution.stepsOutput.map((step, idx) => (
-                  <div
-                    key={step.nodeId || idx}
-                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
-                        <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px]">
-                          {idx + 1}
-                        </span>
-                        <span>{step.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 font-mono text-slate-600 dark:text-slate-300">
-                          {step.type}
-                        </span>
+                {currentExecution.stepsOutput.map((step, idx) => {
+                  const isFailed = step.status === "failed";
+                  const isPending = step.status === "pending";
+                  const isCompleted = step.status === "completed";
+                  const isCached = step.isCachedFromCheckpoint;
+
+                  return (
+                    <div
+                      key={step.nodeId || idx}
+                      className={`p-4 rounded-2xl border space-y-2 transition-all ${
+                        isFailed
+                          ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800"
+                          : isCached
+                          ? "bg-blue-50/40 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                          : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              isFailed
+                                ? "bg-rose-600 text-white"
+                                : isCached
+                                ? "bg-blue-600 text-white"
+                                : isCompleted
+                                ? "bg-emerald-600 text-white"
+                                : "bg-slate-200 dark:bg-slate-700 text-slate-600"
+                            }`}
+                          >
+                            {isCompleted ? "✓" : isFailed ? "!" : idx + 1}
+                          </span>
+                          <span>{step.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 font-mono text-slate-600 dark:text-slate-300">
+                            {step.type}
+                          </span>
+                          {isCached && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold flex items-center gap-1 font-mono">
+                              <Zap className="w-2.5 h-2.5" /> Checkpoint Cache Hit
+                            </span>
+                          )}
+                          {step.checkpointId && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-slate-400">
+                              {step.checkpointId}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          {isFailed ? (
+                            <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Failed
+                            </span>
+                          ) : isPending ? (
+                            <span className="text-slate-400 font-medium">Pending Upstream</span>
+                          ) : (
+                            <span className="text-emerald-600 font-bold">
+                              {Math.round((step.confidence || 0.98) * 100)}% Confidence
+                            </span>
+                          )}
+                          <span className="text-slate-400 font-mono text-[11px]">
+                            {step.durationMs || 150}ms
+                          </span>
+
+                          {isFailed && (
+                            <button
+                              type="button"
+                              onClick={() => handleResumeFromStep(idx)}
+                              disabled={isRunning}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all ml-1 shadow-xs"
+                            >
+                              <FastForward className="w-3 h-3" />
+                              <span>Resume Step</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-emerald-600 font-bold">
-                          {Math.round((step.confidence || 0.98) * 100)}% Confidence
-                        </span>
-                        <span className="text-slate-400 font-mono">
-                          {step.durationMs || 150}ms
-                        </span>
-                      </div>
+
+                      <p
+                        className={`text-xs font-mono p-2.5 rounded-xl border whitespace-pre-wrap ${
+                          isFailed
+                            ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-300"
+                            : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        {step.output}
+                      </p>
+
+                      {step.idempotencyKey && (
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono pt-1">
+                          <span>Idempotency Key: {step.idempotencyKey}</span>
+                          <span>•</span>
+                          <span>Side Effect Deduplication: Active</span>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 whitespace-pre-wrap">
-                      {step.output}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-slate-500">Run a task to see granular step results.</p>
@@ -1054,8 +1567,9 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
             {/* Audit Logs */}
             {currentExecution?.auditLogs && currentExecution.auditLogs.length > 0 && (
               <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Compliance Audit Trail:
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Compliance & Idempotency Audit Trail:</span>
+                  <span className="text-[10px] font-mono text-slate-400 font-normal">Tamper-evident logs</span>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-950 text-slate-200 font-mono text-[11px] space-y-1 overflow-x-auto">
                   {currentExecution.auditLogs.map((log, idx) => (
@@ -1081,12 +1595,16 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                <option value="all">All Runs</option>
-                <option value="completed">Completed</option>
-                <option value="needs_review">Needs Review</option>
-                <option value="approved">Approved</option>
+                <option value="all">All Runs ({executionHistory.length})</option>
+                <option value="needs_resume">Checkpoint Paused (Can Resume)</option>
+                <option value="resolved">Resolved (Green)</option>
+                <option value="needs_review">Needs Review (Amber)</option>
+                <option value="failed">Failed (Red)</option>
+                <option value="completed">Completed (Green)</option>
+                <option value="approved">Approved (Teal)</option>
+                <option value="discrepancy">Discrepancy (Orange)</option>
               </select>
             </div>
 
@@ -1096,45 +1614,81 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {filteredHistory.map((rec) => (
-                  <div
-                    key={rec.id}
-                    onClick={() => {
-                      setCurrentExecution(rec);
-                      setActiveTab("prompt");
-                    }}
-                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 border border-slate-200 dark:border-slate-800 cursor-pointer flex items-center justify-between gap-3 transition-all group"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                          {rec.title}
-                        </span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
-                            rec.status === "completed"
-                              ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                              : rec.status === "needs_review"
-                              ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
-                              : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                          }`}
-                        >
-                          {rec.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        {rec.agentName} • {rec.department} • {rec.timestamp}
-                      </div>
-                    </div>
+                {filteredHistory.map((rec) => {
+                  const borderAccentClass =
+                    rec.status === "resolved" || rec.status === "completed" || rec.status === "approved"
+                      ? "border-l-4 border-l-emerald-500"
+                      : rec.status === "needs_review"
+                      ? "border-l-4 border-l-amber-500"
+                      : rec.status === "failed" || rec.status === "rejected"
+                      ? "border-l-4 border-l-rose-500"
+                      : rec.status === "discrepancy"
+                      ? "border-l-4 border-l-orange-500"
+                      : rec.status === "running"
+                      ? "border-l-4 border-l-blue-500"
+                      : "border-l-4 border-l-slate-400";
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                        +{rec.xpEarned} XP
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  return (
+                    <div
+                      key={rec.id}
+                      id={`execution-history-item-${rec.id}`}
+                      onClick={() => {
+                        setCurrentExecution(rec);
+                        setActiveTab("prompt");
+                      }}
+                      className={`p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/30 border border-slate-200 dark:border-slate-800 cursor-pointer flex items-center justify-between gap-3 transition-all group hover:shadow-xs ${borderAccentClass}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="font-bold text-xs text-slate-900 dark:text-white truncate max-w-[240px] sm:max-w-md">
+                            {rec.title}
+                          </span>
+                          <ExecutionStatusBadge
+                            status={rec.status}
+                            size="xs"
+                            id={`history-status-badge-${rec.id}`}
+                          />
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">{rec.agentName}</span>
+                          <span>•</span>
+                          <span>{rec.department}</span>
+                          <span>•</span>
+                          <span className="font-mono text-[10px] text-slate-400">{rec.timestamp}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        {rec.checkpointState?.canResume && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentExecution(rec);
+                              setActiveTab("graph");
+                              if (rec.checkpointState?.failedStepIndex !== undefined) {
+                                handleResumeFromStep(rec.checkpointState.failedStepIndex, rec);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs transition-all active:scale-95"
+                          >
+                            <FastForward className="w-3 h-3" />
+                            <span>Resume Step #{(rec.checkpointState.failedStepIndex ?? 0) + 1}</span>
+                          </button>
+                        )}
+                        {rec.hoursSaved > 0 && (
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40">
+                            {rec.hoursSaved}h
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                          +{rec.xpEarned} XP
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

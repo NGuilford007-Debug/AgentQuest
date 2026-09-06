@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { fireCelebration } from "../utils/confetti";
+import { ExecutionStatusBadge } from "./ExecutionStatusBadge";
 
 export interface ApprovedAutomationsVaultProps {
   automations: ApprovedAutomation[];
@@ -754,10 +755,15 @@ export const ApprovedAutomationsVault: React.FC<ApprovedAutomationsVaultProps> =
                     className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all flex items-center justify-between gap-3 bg-white dark:bg-slate-900"
                   >
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
                           {rec.title}
                         </h4>
+                        <ExecutionStatusBadge
+                          status={rec.status}
+                          size="xs"
+                          id={`vault-import-badge-${rec.id}`}
+                        />
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                           {rec.agentName}
                         </span>

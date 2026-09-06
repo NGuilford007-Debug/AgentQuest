@@ -1046,6 +1046,7 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
           {/* Quick Dispatch in Stage Vibe button */}
           <div className="mt-5 pt-3 border-t border-slate-800">
             <button
+              disabled={agents.length === 0}
               onClick={() => {
                 if (stationedAgents.length > 0) {
                   onDispatchWithAgent(stationedAgents[0].id);
@@ -1053,10 +1054,14 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                   onDispatchWithAgent(agents[0].id);
                 }
               }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg transition-all"
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                agents.length === 0
+                  ? "bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg cursor-pointer"
+              }`}
             >
               <Zap className="w-4 h-4" />
-              <span>Launch Execution in {currentStage.name}</span>
+              <span>{agents.length === 0 ? "Deploy Agents to Launch Stage" : `Launch Execution in ${currentStage.name}`}</span>
             </button>
           </div>
         </div>
@@ -1074,7 +1079,7 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
               </h3>
               <button
                 onClick={() => setIsAssignModalOpen(false)}
-                className="text-slate-400 hover:text-white text-sm"
+                className="text-slate-400 hover:text-white text-sm cursor-pointer"
               >
                 ✕
               </button>
@@ -1085,7 +1090,14 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                 Select an agent to station in this spot and activate environmental efficiency buffs:
               </p>
 
-              {agents.map((agent) => {
+              {agents.length === 0 ? (
+                <div className="py-8 text-center space-y-2 border border-dashed border-slate-800 rounded-xl">
+                  <Users className="w-8 h-8 mx-auto text-slate-600" />
+                  <p className="text-xs text-slate-400 font-medium">Clean Slate Fleet: 0 Agents Available</p>
+                  <p className="text-[11px] text-slate-500">Create an agent or load demo fleet to station agents here.</p>
+                </div>
+              ) : (
+                agents.map((agent) => {
                 const isCurrentlyHere = currentStage.assignedAgentIds.includes(agent.id);
                 return (
                   <div
@@ -1126,7 +1138,8 @@ export const DigitalWorkspaces: React.FC<DigitalWorkspacesProps> = ({
                     )}
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
 
             <div className="pt-3 border-t border-slate-800 flex justify-end">

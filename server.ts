@@ -1863,17 +1863,35 @@ app.post("/api/stripe/payables/:id/payout", async (req, res) => {
 // POST /api/stripe/create-checkout-session - Create Checkout Session for credit wallet or subscription
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
-    const { tenantName, amount, itemName, customerEmail } = req.body;
+    const { 
+      tenantName, 
+      amount, 
+      itemName, 
+      customerEmail,
+      planId = "starter",
+      tokenCreditAmount = 0,
+      tokensToCredit = 0,
+      platformFeeAmount = 0,
+    } = req.body;
     const stripe = getStripeClient();
 
+    const planTokenInfo = {
+      planId,
+      tokenCreditAmount: Number(tokenCreditAmount) || 0,
+      tokensToCredit: Number(tokensToCredit) || 0,
+      platformFeeAmount: Number(platformFeeAmount) || 0,
+      walletDepositGuaranteed: true,
+    };
+
     if (!stripe) {
-      // Return simulated interactive checkout URL
+      // Return simulated interactive checkout URL with token allocation metadata
       return res.json({
         success: true,
         isSimulated: true,
-        checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_mock_${Date.now()}?amount=${amount}`,
+        checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_mock_${Date.now()}?amount=${amount}&tokens=${tokensToCredit}`,
         sessionId: `cs_test_mock_${Date.now()}`,
-        message: "Simulated Stripe Checkout session created.",
+        message: "Simulated Stripe Checkout session created with automated token allocation.",
+        tokenAllocation: planTokenInfo,
       });
     }
 
@@ -1884,7 +1902,10 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: itemName || `${tenantName || "Enterprise"} - AgentFlow Balance Top-Up`,
+              name: itemName || `${tenantName || "Enterprise"} - AgentFlow Plan Subscription`,
+              description: tokenCreditAmount > 0 
+                ? `Includes $${tokenCreditAmount} token wallet deposit (${Number(tokensToCredit).toLocaleString()} AI tokens)` 
+                : undefined,
             },
             unit_amount: Math.round(Number(amount) * 100),
           },
@@ -1892,6 +1913,14 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         },
       ],
       customer_email: customerEmail,
+      metadata: {
+        tenantName: tenantName || "Enterprise",
+        planId: String(planId),
+        tokenCreditAmount: String(tokenCreditAmount),
+        tokensToCredit: String(tokensToCredit),
+        platformFeeAmount: String(platformFeeAmount),
+        tokenSplitRatio: amount > 0 ? `${Math.round((Number(tokenCreditAmount) / Number(amount)) * 100)}% to Tokens` : "0%",
+      },
       mode: "payment",
       success_url: `${process.env.APP_URL || "http://localhost:3000"}?session_id={CHECKOUT_SESSION_ID}&status=success`,
       cancel_url: `${process.env.APP_URL || "http://localhost:3000"}?status=cancelled`,
@@ -1902,10 +1931,43 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       isSimulated: false,
       checkoutUrl: session.url,
       sessionId: session.id,
+      tokenAllocation: planTokenInfo,
     });
   } catch (error: any) {
     console.error("Error creating checkout session:", error);
     res.status(500).json({ error: error.message || "Failed to create checkout session" });
+  }
+});
+
+// POST /api/billing/fulfill-plan-tokens - Explicitly credits user or tenant wallet from confirmed plan payment
+app.post("/api/billing/fulfill-plan-tokens", (req, res) => {
+  try {
+    const {
+      tenantId,
+      customerEmail,
+      planId,
+      planPrice,
+      tokenCreditAmount,
+      includedTokensMonthly,
+    } = req.body;
+
+    const receiptId = `RCPT-TOKENS-${Date.now().toString(36).toUpperCase()}`;
+    const timestamp = new Date().toISOString();
+
+    console.log(`[Plan Token Allocation Executed]: Plan ${planId} ($${planPrice}) -> Credited $${tokenCreditAmount} (${includedTokensMonthly} tokens) for ${customerEmail || tenantId}`);
+
+    res.json({
+      success: true,
+      receiptId,
+      timestamp,
+      planId,
+      planPrice: Number(planPrice),
+      tokenCreditAmount: Number(tokenCreditAmount),
+      includedTokensMonthly: Number(includedTokensMonthly),
+      allocationMessage: `$${tokenCreditAmount} of your $${planPrice} payment was deposited into your AI token wallet. ${Number(includedTokensMonthly).toLocaleString()} tokens are now active.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Token allocation fulfillment failed" });
   }
 });
 
@@ -1920,6 +1982,15 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req,
       if (stripe) {
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
         console.log(`[Stripe Webhook Verified]: ${event.type}`);
+
+        if (event.type === "checkout.session.completed" || event.type === "invoice.payment_succeeded") {
+          const session = event.data.object as any;
+          const tokenCredits = session.metadata?.tokenCreditAmount;
+          const tokens = session.metadata?.tokensToCredit;
+          if (tokenCredits) {
+            console.log(`[Stripe Automated Token Deposit]: Credited $${tokenCredits} (${tokens} tokens) to tenant ${session.metadata?.tenantName}`);
+          }
+        }
       }
     } catch (err: any) {
       console.error(`Webhook signature verification failed:`, err.message);

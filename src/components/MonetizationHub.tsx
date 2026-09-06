@@ -30,7 +30,8 @@ import {
   PieChart,
   Percent,
   Coins,
-  Bot
+  Bot,
+  ShieldAlert
 } from "lucide-react";
 import { 
   DeveloperCompanyProfile, 
@@ -41,12 +42,16 @@ import {
   Agent,
   ClientStripeConnectProfile,
   ClientAgentTransaction,
-  ClientPayoutRecord
+  ClientPayoutRecord,
+  CircuitBreakerState,
+  CircuitBreakerConfig
 } from "../types";
+import { INITIAL_CIRCUIT_BREAKER_STATE } from "../data/initialCircuitBreaker";
 import { ProjectedRevenueDashboard } from "./ProjectedRevenueDashboard";
 import { StripeFinancialsHub } from "./StripeFinancialsHub";
 import { WebAppDeploymentModal } from "./WebAppDeploymentModal";
 import { ClientAgentMonetizationHub } from "./ClientAgentMonetizationHub";
+import { CircuitBreakerPanel } from "./CircuitBreakerPanel";
 
 interface MonetizationHubProps {
   developerProfile: DeveloperCompanyProfile;
@@ -65,6 +70,11 @@ interface MonetizationHubProps {
   onAddTransaction?: (transaction: ClientAgentTransaction) => void;
   onAddPayout?: (payout: ClientPayoutRecord) => void;
   onUpdateClientProfile?: (profile: ClientStripeConnectProfile) => void;
+  circuitBreakerState?: CircuitBreakerState;
+  onUpdateCircuitBreakerConfig?: (config: CircuitBreakerConfig) => void;
+  onResetCircuitBreaker?: () => void;
+  onEmergencyStopCircuitBreaker?: () => void;
+  onSimulateBreach?: (type: "spend_velocity" | "loop_detected") => void;
 }
 
 export const MonetizationHub: React.FC<MonetizationHubProps> = ({
@@ -84,8 +94,13 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
   onAddTransaction = () => {},
   onAddPayout = () => {},
   onUpdateClientProfile = () => {},
+  circuitBreakerState = INITIAL_CIRCUIT_BREAKER_STATE,
+  onUpdateCircuitBreakerConfig,
+  onResetCircuitBreaker,
+  onEmergencyStopCircuitBreaker,
+  onSimulateBreach,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<"overview" | "client_agents" | "stripe_financials" | "projections" | "ratecard" | "tenants" | "simulator" | "developer_shield">("overview");
+  const [activeSubTab, setActiveSubTab] = useState<"overview" | "client_agents" | "stripe_financials" | "projections" | "ratecard" | "tenants" | "simulator" | "developer_shield" | "circuit_breaker">("overview");
   const [isWebAppModalOpen, setIsWebAppModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState<string>("all");
@@ -387,6 +402,35 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
         >
           <ShieldCheck className="w-3.5 h-3.5" />
           <span>Founder Free Access Policy</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab("circuit_breaker")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === "circuit_breaker"
+              ? "bg-rose-600 text-white shadow-sm shadow-rose-500/20"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+          }`}
+        >
+          <ShieldAlert className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5">
+            <span>Runaway Circuit Breakers</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                circuitBreakerState.status === "tripped"
+                  ? "bg-rose-500 text-white animate-pulse"
+                  : circuitBreakerState.status === "emergency_stopped"
+                  ? "bg-amber-500 text-white"
+                  : "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+              }`}
+            >
+              {circuitBreakerState.status === "tripped"
+                ? "TRIPPED"
+                : circuitBreakerState.status === "emergency_stopped"
+                ? "HALTED"
+                : "ARMED"}
+            </span>
+          </span>
         </button>
       </div>
 
@@ -1055,6 +1099,147 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                   Clients pay this fixed monthly fee for workspace hosting and white-label branding, plus usage-based overages.
                 </p>
               </div>
+
+              {/* Plan-to-Token Credit Allocation Policy */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-blue-500/5 dark:from-emerald-950/20 dark:via-teal-950/20 dark:to-blue-950/20 border-2 border-emerald-300 dark:border-emerald-700/70 space-y-3 md:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-600">
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">
+                        Plan-to-Token Credit Allocation Policy (How Plan Payments Fund Customer Tokens)
+                      </span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Specify how much of each subscription fee automatically purchases AI inference credits into the customer wallet.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    Auto-Fulfilled via Stripe Webhook
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  {/* Starter Tier */}
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">Starter Tier ($49/mo)</span>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        {Math.round(((rateCard.starterTokenCreditUsd || 40) / 49) * 100)}% to Tokens
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Wallet Deposit ($/mo)</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">$</span>
+                        <input
+                          type="number"
+                          value={rateCard.starterTokenCreditUsd || 40}
+                          onChange={(e) =>
+                            onUpdateRateCard({
+                              ...rateCard,
+                              starterTokenCreditUsd: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Buys Token Quota:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {((rateCard.starterIncludedTokens || 5000000) / 1_000_000).toFixed(1)}M Tokens
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Retained Platform Fee:</span>
+                      <span className="font-semibold text-indigo-600">
+                        ${Math.max(0, 49 - (rateCard.starterTokenCreditUsd || 40)).toFixed(2)}/mo
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Growth SaaS Tier */}
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">Growth Pro ($199/mo)</span>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        {Math.round(((rateCard.growthTokenCreditUsd || 160) / 199) * 100)}% to Tokens
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Wallet Deposit ($/mo)</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">$</span>
+                        <input
+                          type="number"
+                          value={rateCard.growthTokenCreditUsd || 160}
+                          onChange={(e) =>
+                            onUpdateRateCard({
+                              ...rateCard,
+                              growthTokenCreditUsd: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Buys Token Quota:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {((rateCard.growthIncludedTokens || 25000000) / 1_000_000).toFixed(1)}M Tokens
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Retained Platform Fee:</span>
+                      <span className="font-semibold text-indigo-600">
+                        ${Math.max(0, 199 - (rateCard.growthTokenCreditUsd || 160)).toFixed(2)}/mo
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Enterprise Dedicated Tier */}
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">Enterprise ($499/mo)</span>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        {Math.round(((rateCard.enterpriseTokenCreditUsd || 420) / 499) * 100)}% to Tokens
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Wallet Deposit ($/mo)</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">$</span>
+                        <input
+                          type="number"
+                          value={rateCard.enterpriseTokenCreditUsd || 420}
+                          onChange={(e) =>
+                            onUpdateRateCard({
+                              ...rateCard,
+                              enterpriseTokenCreditUsd: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Buys Token Quota:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {((rateCard.enterpriseIncludedTokens || 100000000) / 1_000_000).toFixed(1)}M Tokens
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex justify-between">
+                      <span>Retained Platform Fee:</span>
+                      <span className="font-semibold text-indigo-600">
+                        ${Math.max(0, 499 - (rateCard.enterpriseTokenCreditUsd || 420)).toFixed(2)}/mo
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1207,19 +1392,32 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                           )}
                         </td>
 
-                        {/* Wallet Balance */}
+                        {/* Wallet Balance & Plan Token Allowance */}
                         <td className="py-3.5 px-3">
                           {isInternal ? (
                             <span className="text-[11px] text-slate-400">N/A</span>
                           ) : (
-                            <div>
+                            <div className="space-y-1">
                               <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                                 <Wallet className="w-3 h-3 text-emerald-500" />
                                 <span>${tenant.walletCreditBalance.toFixed(2)}</span>
                               </div>
-                              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold">
-                                Auto-Recharge: ON
-                              </span>
+                              {tenant.monthlyTokenCreditAllowanceUsd ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-800/60" title={`Plan deposits +$${tenant.monthlyTokenCreditAllowanceUsd}/mo into token wallet`}>
+                                    +${tenant.monthlyTokenCreditAllowanceUsd}/mo plan funded
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold">
+                                  Auto-Recharge: ON
+                                </span>
+                              )}
+                              {tenant.includedTokensQuota && (
+                                <div className="text-[9px] text-slate-400">
+                                  {((tenant.includedTokensQuota) / 1_000_000).toFixed(0)}M tok / cycle
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>
@@ -1582,6 +1780,17 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 8: RUNAWAY CIRCUIT BREAKER & VELOCITY SHIELD */}
+      {activeSubTab === "circuit_breaker" && (
+        <CircuitBreakerPanel
+          breakerState={circuitBreakerState || INITIAL_CIRCUIT_BREAKER_STATE}
+          onUpdateConfig={onUpdateCircuitBreakerConfig || (() => {})}
+          onResetBreaker={onResetCircuitBreaker || (() => {})}
+          onEmergencyStop={onEmergencyStopCircuitBreaker || (() => {})}
+          onSimulateBreach={onSimulateBreach || (() => {})}
+        />
       )}
 
       {/* Web App Deployment Guide Modal */}

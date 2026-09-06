@@ -24,22 +24,33 @@ import {
   GeneratedReportDocument,
   ClientAgentRequest,
   AgentPrivacyPolicyConfig,
-  LegalDocumentItem
+  LegalDocumentItem,
+  CircuitBreakerState,
+  CircuitBreakerConfig
 } from "./types";
+import { 
+  INITIAL_CIRCUIT_BREAKER_STATE,
+  CLEAN_CIRCUIT_BREAKER_STATE 
+} from "./data/initialCircuitBreaker";
 import { 
   INITIAL_AGENTS, 
   CLEAN_SLATE_AGENTS,
   INITIAL_USER_PROFILE, 
   CLEAN_SLATE_USER_PROFILE, 
   INITIAL_WORKFLOWS, 
+  CLEAN_SLATE_WORKFLOWS,
+  DEMO_ENTERPRISE_AGENTS,
+  DEMO_ENTERPRISE_WORKFLOWS,
   LEADERBOARD_USERS,
+  BENCHMARK_DEMO_LEADERBOARD_USERS,
   INITIAL_MODELS,
   AVAILABLE_PERMISSIONS,
   INITIAL_CONNECTED_APPS,
   INITIAL_API_AUDIT_LOGS,
   INITIAL_APPROVED_AUTOMATIONS,
   INITIAL_CLIENT_AGENT_REQUESTS,
-  DEFAULT_AGENT_PRIVACY_POLICY
+  DEFAULT_AGENT_PRIVACY_POLICY,
+  INITIAL_EXECUTION_HISTORY
 } from "./data/initialData";
 import { INITIAL_LEGAL_DOCUMENTS } from "./data/initialLegalDocs";
 import { INITIAL_GENERATED_REPORTS } from "./data/initialReports";
@@ -108,11 +119,11 @@ export default function App() {
 
   const isMasterDeveloper = masterAccess?.currentAccessLevel === "master_developer";
 
-  // Initial local state with static defaults (pure SSR-safe initializers)
-  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
-  const [workflows, setWorkflows] = useState<Workflow[]>(INITIAL_WORKFLOWS);
+  // Initial local state with clean slate defaults (especially for first-time use)
+  const [agents, setAgents] = useState<Agent[]>(CLEAN_SLATE_AGENTS);
+  const [workflows, setWorkflows] = useState<Workflow[]>(CLEAN_SLATE_WORKFLOWS);
   const [assets, setAssets] = useState<AssetItem[]>(INITIAL_ASSET_ITEMS);
-  const [userProfile, setUserProfile] = useState<EmployeeProfile>(INITIAL_USER_PROFILE);
+  const [userProfile, setUserProfile] = useState<EmployeeProfile>(CLEAN_SLATE_USER_PROFILE);
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>(LEADERBOARD_USERS);
   const [executionHistory, setExecutionHistory] = useState<TaskExecutionRecord[]>([]);
   const [activeTaskSession, setActiveTaskSession] = useState<ActiveTaskSession | null>(null);
@@ -120,18 +131,19 @@ export default function App() {
   const [models, setModels] = useState<AiModel[]>(INITIAL_MODELS);
   const [permissions, setPermissions] = useState<PermissionScope[]>(AVAILABLE_PERMISSIONS);
   const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>(INITIAL_CONNECTED_APPS);
-  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>(INITIAL_API_AUDIT_LOGS);
+  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>([]);
   const [whiteLabelConfig, setWhiteLabelConfig] = useState<WhiteLabelConfig>(DEFAULT_WHITELABEL_CONFIG);
   const [tenants, setTenants] = useState<TenantProfile[]>(WHITELABEL_PRESETS);
   const [developerProfile, setDeveloperProfile] = useState<DeveloperCompanyProfile>(DEFAULT_DEVELOPER_PROFILE);
   const [rateCard, setRateCard] = useState<RateCardConfig>(DEFAULT_RATE_CARD);
-  const [tenantsBilling, setTenantsBilling] = useState<TenantBillingRecord[]>(INITIAL_TENANT_BILLING_RECORDS);
-  const [financialHistory, setFinancialHistory] = useState<FinancialMetricSnapshot[]>(HISTORICAL_FINANCIAL_SNAPSHOTS);
-  const [approvedAutomations, setApprovedAutomations] = useState<ApprovedAutomation[]>(INITIAL_APPROVED_AUTOMATIONS);
-  const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>(INITIAL_GENERATED_REPORTS);
-  const [clientAgentRequests, setClientAgentRequests] = useState<ClientAgentRequest[]>(INITIAL_CLIENT_AGENT_REQUESTS);
+  const [tenantsBilling, setTenantsBilling] = useState<TenantBillingRecord[]>([]);
+  const [financialHistory, setFinancialHistory] = useState<FinancialMetricSnapshot[]>([]);
+  const [approvedAutomations, setApprovedAutomations] = useState<ApprovedAutomation[]>([]);
+  const [savedReports, setSavedReports] = useState<GeneratedReportDocument[]>([]);
+  const [clientAgentRequests, setClientAgentRequests] = useState<ClientAgentRequest[]>([]);
   const [agentPrivacyPolicy, setAgentPrivacyPolicy] = useState<AgentPrivacyPolicyConfig>(DEFAULT_AGENT_PRIVACY_POLICY);
   const [legalDocs, setLegalDocs] = useState<LegalDocumentItem[]>(INITIAL_LEGAL_DOCUMENTS);
+  const [circuitBreakerState, setCircuitBreakerState] = useState<CircuitBreakerState>(CLEAN_CIRCUIT_BREAKER_STATE);
   const [activeWorkplaceThemeId, setActiveWorkplaceThemeId] = useState<string>("stage-war-room");
   const [isPlayingZoneAudio, setIsPlayingZoneAudio] = useState<boolean>(false);
 
@@ -190,7 +202,9 @@ export default function App() {
       if (storedLeaderboard) setLeaderboardUsers(storedLeaderboard);
 
       const storedExecutions = getStoredItem<TaskExecutionRecord[] | null>("agentflow_executions", null);
-      if (storedExecutions) setExecutionHistory(storedExecutions);
+      if (storedExecutions) {
+        setExecutionHistory(storedExecutions);
+      }
 
       const storedActiveTask = getStoredItem<ActiveTaskSession | null>("agentflow_active_task", null);
       if (storedActiveTask) setActiveTaskSession(storedActiveTask);
@@ -260,6 +274,9 @@ export default function App() {
 
       const storedLegalDocs = getStoredItem<LegalDocumentItem[] | null>("agentflow_legal_docs", null);
       if (storedLegalDocs) setLegalDocs(storedLegalDocs);
+
+      const storedBreaker = getStoredItem<CircuitBreakerState | null>("agentflow_circuit_breaker", null);
+      if (storedBreaker) setCircuitBreakerState(storedBreaker);
 
       // Initialize RevenueCat Purchases SDK with API Key test_aLsBHkgmNobJrZHUXrAefSAQdHc
       try {
@@ -1109,23 +1126,9 @@ export default function App() {
     }
   };
 
-  // Reset to clean presets handler
+  // Reset to clean presets handler (loads sample enterprise demo fleet)
   const handleResetToDefaults = () => {
-    setAgents(INITIAL_AGENTS);
-    setWorkflows(INITIAL_WORKFLOWS);
-    setUserProfile(INITIAL_USER_PROFILE);
-    setLeaderboardUsers(LEADERBOARD_USERS);
-    setExecutionHistory([]);
-    setAuditLogs([]);
-    setActiveTaskSession(null);
-    setActiveWorkflowId(INITIAL_WORKFLOWS[0]?.id || "wf-1");
-    removeStoredItem("agentflow_agents");
-    removeStoredItem("agentflow_workflows");
-    removeStoredItem("agentflow_profile");
-    removeStoredItem("agentflow_leaderboard");
-    removeStoredItem("agentflow_executions");
-    removeStoredItem("agentflow_active_task");
-    removeStoredItem("agentflow_audit_logs");
+    handleLoadSampleDemoData();
   };
 
   // Profile Identity & Clean Slate Handlers
@@ -1151,7 +1154,8 @@ export default function App() {
 
   const handleResetToCleanSlate = () => {
     setUserProfile(CLEAN_SLATE_USER_PROFILE);
-    setAgents(CLEAN_SLATE_AGENTS);
+    setAgents([]);
+    setWorkflows([]);
     setExecutionHistory([]);
     setAuditLogs([]);
     setActiveTaskSession(null);
@@ -1160,9 +1164,28 @@ export default function App() {
     setClientAgentRequests([]);
     setTenantsBilling([]);
     setFinancialHistory([]);
-    setLeaderboardUsers(LEADERBOARD_USERS);
+    setCircuitBreakerState(CLEAN_CIRCUIT_BREAKER_STATE);
+    setActiveWorkflowId("");
+    setLeaderboardUsers(
+      LEADERBOARD_USERS.map((u) =>
+        u.isCurrentUser
+          ? {
+              ...u,
+              xp: 0,
+              level: 1,
+              hoursSaved: 0,
+              automationsRun: 0,
+              activeAgents: 0,
+              opexSavedUsd: 0,
+              autonomyRate: 0,
+              approvedPlaybooksCount: 0,
+            }
+          : u
+      )
+    );
     removeStoredItem("agentflow_profile");
     removeStoredItem("agentflow_agents");
+    removeStoredItem("agentflow_workflows");
     removeStoredItem("agentflow_executions");
     removeStoredItem("agentflow_active_task");
     removeStoredItem("agentflow_audit_logs");
@@ -1171,6 +1194,9 @@ export default function App() {
     removeStoredItem("agentflow_client_agent_requests");
     removeStoredItem("agentflow_tenants_billing");
     removeStoredItem("agentflow_financial_history");
+    removeStoredItem("agentflow_circuit_breaker");
+    removeStoredItem("agentflow_leaderboard");
+    playInteractiveSound("click");
   };
 
   const handleClearExecutionHistory = () => {
@@ -1201,26 +1227,54 @@ export default function App() {
   };
 
   const handleClearAllMockData = () => {
-    setUserProfile(CLEAN_SLATE_USER_PROFILE);
-    setAgents(CLEAN_SLATE_AGENTS);
-    setExecutionHistory([]);
-    setAuditLogs([]);
-    setActiveTaskSession(null);
-    setApprovedAutomations([]);
-    setSavedReports([]);
-    setClientAgentRequests([]);
-    setTenantsBilling([]);
-    setFinancialHistory([]);
-    removeStoredItem("agentflow_profile");
-    removeStoredItem("agentflow_agents");
-    removeStoredItem("agentflow_executions");
-    removeStoredItem("agentflow_active_task");
-    removeStoredItem("agentflow_audit_logs");
-    removeStoredItem("agentflow_approved_automations");
-    removeStoredItem("agentflow_saved_reports");
-    removeStoredItem("agentflow_client_agent_requests");
-    removeStoredItem("agentflow_tenants_billing");
-    removeStoredItem("agentflow_financial_history");
+    handleResetToCleanSlate();
+  };
+
+  const handleLoadSampleDemoData = () => {
+    setAgents(DEMO_ENTERPRISE_AGENTS);
+    setWorkflows(DEMO_ENTERPRISE_WORKFLOWS);
+    setUserProfile({
+      ...INITIAL_USER_PROFILE,
+      hoursSavedTotal: 184.5,
+      tasksAutomatedTotal: 412,
+      costSavedUsd: 15600,
+      xp: 42500,
+      level: 14,
+    });
+    setExecutionHistory(INITIAL_EXECUTION_HISTORY);
+    setAuditLogs(INITIAL_API_AUDIT_LOGS);
+    setTenantsBilling(INITIAL_TENANT_BILLING_RECORDS);
+    setFinancialHistory(HISTORICAL_FINANCIAL_SNAPSHOTS);
+    setApprovedAutomations(INITIAL_APPROVED_AUTOMATIONS);
+    setSavedReports(INITIAL_GENERATED_REPORTS);
+    setClientAgentRequests(INITIAL_CLIENT_AGENT_REQUESTS);
+    setCircuitBreakerState(INITIAL_CIRCUIT_BREAKER_STATE);
+    setLeaderboardUsers(BENCHMARK_DEMO_LEADERBOARD_USERS);
+    if (DEMO_ENTERPRISE_WORKFLOWS.length > 0) {
+      setActiveWorkflowId(DEMO_ENTERPRISE_WORKFLOWS[0].id);
+    }
+    setStoredItem("agentflow_agents", DEMO_ENTERPRISE_AGENTS);
+    setStoredItem("agentflow_workflows", DEMO_ENTERPRISE_WORKFLOWS);
+    setStoredItem("agentflow_executions", INITIAL_EXECUTION_HISTORY);
+    setStoredItem("agentflow_audit_logs", INITIAL_API_AUDIT_LOGS);
+    setStoredItem("agentflow_tenants_billing", INITIAL_TENANT_BILLING_RECORDS);
+    setStoredItem("agentflow_financial_history", HISTORICAL_FINANCIAL_SNAPSHOTS);
+    setStoredItem("agentflow_approved_automations", INITIAL_APPROVED_AUTOMATIONS);
+    setStoredItem("agentflow_saved_reports", INITIAL_GENERATED_REPORTS);
+    setStoredItem("agentflow_client_agent_requests", INITIAL_CLIENT_AGENT_REQUESTS);
+    setStoredItem("agentflow_circuit_breaker", INITIAL_CIRCUIT_BREAKER_STATE);
+    setStoredItem("agentflow_profile", {
+      ...INITIAL_USER_PROFILE,
+      hoursSavedTotal: 184.5,
+      tasksAutomatedTotal: 412,
+      costSavedUsd: 15600,
+      xp: 42500,
+      level: 14,
+    });
+    setStoredItem("agentflow_leaderboard", BENCHMARK_DEMO_LEADERBOARD_USERS);
+    addXpAndCheckLevel(200);
+    playInteractiveSound("chime");
+    fireCelebration();
   };
 
   // Dispatch focus task directly to dispatcher
@@ -1314,6 +1368,74 @@ export default function App() {
   const handleUpdateTenantsBilling = (updatedBilling: TenantBillingRecord[]) => {
     setTenantsBilling(updatedBilling);
     addXpAndCheckLevel(50);
+  };
+
+  // Operational Resilience & Financial Circuit Breaker Handlers
+  const handleUpdateCircuitBreakerConfig = (newConfig: CircuitBreakerConfig) => {
+    setCircuitBreakerState((prev) => {
+      const updated = { ...prev, config: newConfig };
+      setStoredItem("agentflow_circuit_breaker", updated);
+      return updated;
+    });
+  };
+
+  const handleResetCircuitBreaker = () => {
+    setCircuitBreakerState((prev) => {
+      const updated: CircuitBreakerState = {
+        ...prev,
+        status: "armed",
+        currentSpendVelocityUsdPerMin: 1.45,
+        currentCallsVelocityPerMin: 4,
+        consecutiveFailures: 0,
+        trippedReason: undefined,
+      };
+      setStoredItem("agentflow_circuit_breaker", updated);
+      return updated;
+    });
+  };
+
+  const handleEmergencyStopCircuitBreaker = () => {
+    setCircuitBreakerState((prev) => {
+      const updated: CircuitBreakerState = {
+        ...prev,
+        status: "emergency_stopped",
+        trippedReason: "Administrative Emergency Halt initiated by Master Developer.",
+      };
+      setStoredItem("agentflow_circuit_breaker", updated);
+      return updated;
+    });
+  };
+
+  const handleSimulateBreach = (type: "spend_velocity" | "loop_detected") => {
+    setCircuitBreakerState((prev) => {
+      const isSpend = type === "spend_velocity";
+      const newIncident = {
+        id: `inc-sim-${Date.now().toString().slice(-4)}`,
+        timestamp: "Just now",
+        agentId: "agent-growth-1",
+        agentName: "Campaign Ad Spend Allocator",
+        triggerType: type,
+        triggerMetricValue: isSpend ? "$18.60 / min" : "4 identical loop repetitions in 35s",
+        thresholdLimit: isSpend ? `$${prev.config.maxSpendVelocityUsdPerMin.toFixed(2)}/min` : "Max 2 identical loop cycles",
+        actionTaken: "quarantined" as const,
+        estimatedTokensPreserved: isSpend ? 94000 : 58000,
+        estimatedUsdSaved: isSpend ? 28.20 : 17.40,
+        status: "tripped" as const,
+      };
+      const updated: CircuitBreakerState = {
+        ...prev,
+        status: "tripped",
+        currentSpendVelocityUsdPerMin: isSpend ? 18.60 : prev.currentSpendVelocityUsdPerMin,
+        currentCallsVelocityPerMin: isSpend ? 38 : prev.currentCallsVelocityPerMin,
+        trippedReason: isSpend
+          ? `Runaway spend velocity ($18.60/min) breached hard ceiling ($${prev.config.maxSpendVelocityUsdPerMin.toFixed(2)}/min). Execution halted.`
+          : "Repetitive loop signature detected across 4 consecutive cycles. Agent quarantined.",
+        lastTripTime: new Date().toLocaleTimeString(),
+        incidents: [newIncident, ...prev.incidents],
+      };
+      setStoredItem("agentflow_circuit_breaker", updated);
+      return updated;
+    });
   };
 
   const handleSelectWorkplaceTheme = (themeId: string) => {
@@ -1478,6 +1600,7 @@ export default function App() {
               setEditingAgent(null);
               setIsAgentBuilderOpen(true);
             }}
+            onLoadDemoData={handleLoadSampleDemoData}
           />
         )}
 
@@ -1504,6 +1627,7 @@ export default function App() {
             onOpenModelManager={handleOpenModelManager}
             onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
             onInstantiateTemplate={handleInstantiateTemplate}
+            onLoadDemoData={handleLoadSampleDemoData}
             isMasterDeveloper={isMasterDeveloper}
             developerCompanyName={developerProfile.companyName}
             onOpenMasterAccessGate={() => setIsAccessGateOpen(true)}
@@ -1638,6 +1762,15 @@ export default function App() {
             onSaveApprovedAutomation={handleSaveApprovedAutomation}
             onSaveReport={handleSaveReport}
             streakMultiplier={userProfile.streakMultiplier}
+            circuitBreakerState={circuitBreakerState}
+            onResetBreaker={handleResetCircuitBreaker}
+            onEmergencyStopBreaker={handleEmergencyStopCircuitBreaker}
+            onOpenCircuitBreakerHub={() => setCurrentTab("monetization")}
+            onCreateAgent={() => {
+              setEditingAgent(null);
+              setIsAgentBuilderOpen(true);
+            }}
+            onLoadDemoData={handleLoadSampleDemoData}
           />
         )}
 
@@ -1733,6 +1866,11 @@ export default function App() {
             onUpdateRateCard={handleUpdateRateCard}
             onUpdateTenantsBilling={handleUpdateTenantsBilling}
             tenants={tenants}
+            circuitBreakerState={circuitBreakerState}
+            onUpdateCircuitBreakerConfig={handleUpdateCircuitBreakerConfig}
+            onResetCircuitBreaker={handleResetCircuitBreaker}
+            onEmergencyStopCircuitBreaker={handleEmergencyStopCircuitBreaker}
+            onSimulateBreach={handleSimulateBreach}
           />
         )}
 
@@ -1936,16 +2074,57 @@ export default function App() {
         customerEmail={userProfile.email || developerProfile?.developerEmail || "customer@enterprise.com"}
         tenantName={userProfile.organizationName || whiteLabelConfig?.companyName || "Enterprise Team"}
         initialPlanId={selectedPlanForPricing || userProfile.subscriptionPlan || "free"}
-        onSuccessUpgrade={(planId) => {
+        onSuccessUpgrade={(planId, tokenAllocation) => {
+          const addedCredits = tokenAllocation?.tokenCreditAmount ?? (planId === "starter" ? 40 : planId === "pro" ? 160 : planId === "enterprise" ? 420 : 0);
+          const addedTokens = tokenAllocation?.includedTokensMonthly ?? (planId === "starter" ? 5000000 : planId === "pro" ? 25000000 : planId === "enterprise" ? 100000000 : 500000);
+          const planPrice = tokenAllocation?.planPrice ?? (planId === "starter" ? 49 : planId === "pro" ? 199 : planId === "enterprise" ? 499 : 0);
+
           setUserProfile((prev) => {
             const updated: EmployeeProfile = {
               ...prev,
               subscriptionPlan: planId as "free" | "starter" | "pro" | "enterprise",
               isAuthenticated: true,
+              creditsBalance: (prev.creditsBalance || 100) + addedCredits,
+              creditsTotal: (prev.creditsTotal || 100) + addedCredits,
+              monthlyPlanTokensIncluded: addedTokens,
+              planPaymentTokenDepositUsd: addedCredits,
             };
             setStoredItem("agentflow_profile", updated);
             return updated;
           });
+
+          // Also increment tenant's walletCreditBalance in tenantsBilling state
+          if (addedCredits > 0) {
+            setTenantsBilling((prevTenants) => {
+              const planNameMap: Record<string, "Starter Agency" | "Growth SaaS" | "Enterprise White-Label" | "Developer Free Tier"> = {
+                starter: "Starter Agency",
+                pro: "Growth SaaS",
+                enterprise: "Enterprise White-Label",
+                free: "Developer Free Tier",
+              };
+
+              return prevTenants.map((t, idx) => {
+                // Match user's contact email or target the active client tenant
+                const isTarget = t.contactEmail === userProfile.email || idx === 1 || t.tenantId === "preset-nexus";
+                if (isTarget) {
+                  return {
+                    ...t,
+                    plan: planNameMap[planId] || t.plan,
+                    walletCreditBalance: t.walletCreditBalance + addedCredits,
+                    basePlanFee: planPrice || t.basePlanFee,
+                    billingStatus: "paid" as const,
+                    monthlyTokenCreditAllowanceUsd: addedCredits,
+                    includedTokensQuota: addedTokens,
+                    tokenAllowanceSource: "plan_payment_split" as const,
+                    lastInvoiceDate: "Just Now",
+                    invoiceHistoryCount: (t.invoiceHistoryCount || 0) + 1,
+                  };
+                }
+                return t;
+              });
+            });
+          }
+
           addXpAndCheckLevel(500, 1.5);
           fireCelebration();
         }}

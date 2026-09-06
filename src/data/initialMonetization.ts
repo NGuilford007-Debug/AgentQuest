@@ -36,6 +36,14 @@ export const DEFAULT_RATE_CARD: RateCardConfig = {
   starterTierMonthlyFee: 149,
   growthTierMonthlyFee: 499,
   enterpriseTierMonthlyFee: 1499,
+
+  // Plan-to-Token Credit Allocation Policy ($ portion that buys AI inference tokens)
+  starterTokenCreditUsd: 120,          // $120 of $149 goes directly to token wallet
+  growthTokenCreditUsd: 400,           // $400 of $499 goes directly to token wallet
+  enterpriseTokenCreditUsd: 1250,      // $1,250 of $1,499 goes directly to token wallet
+  starterIncludedTokens: 15000000,     // 15M tokens included
+  growthIncludedTokens: 60000000,      // 60M tokens included
+  enterpriseIncludedTokens: 250000000, // 250M tokens included
 };
 
 export const INITIAL_TENANT_BILLING_RECORDS: TenantBillingRecord[] = [

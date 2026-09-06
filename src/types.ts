@@ -378,6 +378,8 @@ export interface EmployeeProfile {
   accuracyScore: number;
   creditsBalance?: number;
   creditsTotal?: number;
+  monthlyPlanTokensIncluded?: number;
+  planPaymentTokenDepositUsd?: number;
   approvedAutomationsCount?: number;
   autonomousRunRatio?: number;
   companyMilestonesCompleted?: number;
@@ -408,11 +410,61 @@ export interface StepExecutionResult {
   nodeId: string;
   name: string;
   type: string;
-  status: "completed" | "needs_review" | "flagged" | "failed";
+  status: "completed" | "needs_review" | "flagged" | "failed" | "pending" | "skipped";
   durationMs?: number;
   output: string;
   confidence: number;
   extractedData?: Record<string, any>;
+  checkpointId?: string;
+  isCachedFromCheckpoint?: boolean;
+  errorDetails?: string;
+  idempotencyKey?: string;
+}
+
+export interface TaskCheckpointState {
+  lastCompletedStepIndex: number;
+  failedStepIndex?: number;
+  canResume: boolean;
+  checkpointHash?: string;
+  tokensSavedByCache?: number;
+  creditsSavedByCache?: number;
+  resumedAt?: string;
+  resumeCount?: number;
+}
+
+export interface CircuitBreakerConfig {
+  isEnabled: boolean;
+  maxSpendVelocityUsdPerMin: number;
+  maxCallsVelocityPerMin: number;
+  maxConsecutiveFailures: number;
+  maxLoopRepetitions: number;
+  autoQuarantineAgent: boolean;
+  cooldownSeconds: number;
+}
+
+export interface CircuitBreakerIncident {
+  id: string;
+  timestamp: string;
+  agentId: string;
+  agentName: string;
+  triggerType: "spend_velocity" | "call_velocity" | "consecutive_failures" | "loop_detected" | "manual_kill";
+  triggerMetricValue: string;
+  thresholdLimit: string;
+  actionTaken: "quarantined" | "halted" | "tokens_preserved" | "alert_paged";
+  estimatedTokensPreserved: number;
+  estimatedUsdSaved: number;
+  status: "tripped" | "resolved" | "overridden";
+}
+
+export interface CircuitBreakerState {
+  status: "armed" | "tripped" | "emergency_stopped";
+  currentSpendVelocityUsdPerMin: number;
+  currentCallsVelocityPerMin: number;
+  consecutiveFailures: number;
+  lastTripTime?: string;
+  trippedReason?: string;
+  incidents: CircuitBreakerIncident[];
+  config: CircuitBreakerConfig;
 }
 
 export interface TaskTroubleshootReport {
@@ -459,6 +511,9 @@ export interface TaskExecutionRecord {
     troubleshootReport?: TaskTroubleshootReport;
     resolvedAt?: string;
   };
+  checkpointState?: TaskCheckpointState;
+  circuitBreakerTripped?: boolean;
+  circuitBreakerReason?: string;
   timestamp: string;
   isSimulated?: boolean;
 }
@@ -776,6 +831,14 @@ export interface RateCardConfig {
   starterTierMonthlyFee: number;      // e.g. $149
   growthTierMonthlyFee: number;       // e.g. $499
   enterpriseTierMonthlyFee: number;   // e.g. $1,499
+
+  // Plan-to-Token Credit Allocation Policy ($ of base fee deposited into customer token wallet)
+  starterTokenCreditUsd?: number;     // e.g. $40 of $49 base plan goes directly to token wallet
+  growthTokenCreditUsd?: number;      // e.g. $160 of $199 base plan goes directly to token wallet
+  enterpriseTokenCreditUsd?: number;  // e.g. $420 of $499 base plan goes directly to token wallet
+  starterIncludedTokens?: number;     // e.g. 5,000,000 tokens
+  growthIncludedTokens?: number;      // e.g. 25,000,000 tokens
+  enterpriseIncludedTokens?: number;  // e.g. 100,000,000 tokens
 }
 
 export interface TenantBillingRecord {
@@ -788,6 +851,11 @@ export interface TenantBillingRecord {
   
   // Base Fee
   basePlanFee: number;
+
+  // Plan Token Purchase Allocation
+  monthlyTokenCreditAllowanceUsd?: number; // Portioned directly from base plan fee
+  includedTokensQuota?: number;             // Monthly token quota bought by plan payment
+  tokenAllowanceSource?: "plan_payment_split" | "manual_topup" | "founder_grant";
 
   // Metered Storage Metrics
   storageUsedGb: number;

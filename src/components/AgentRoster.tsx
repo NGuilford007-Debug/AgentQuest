@@ -34,7 +34,8 @@ import {
   Globe,
   Inbox,
   Send,
-  MessageSquare
+  MessageSquare,
+  RefreshCw
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -60,6 +61,7 @@ interface AgentRosterProps {
   onOpenProfilePrivacy?: () => void;
   onRequestClientAccess?: (agent: Agent) => void;
   onUpdateAgentVisibility?: (agentId: string, visibility: "internal_only" | "client_visible" | "pending_client_review", clientPageAllowed: boolean) => void;
+  onLoadDemoData?: () => void;
 }
 
 export const AgentRoster: React.FC<AgentRosterProps> = ({
@@ -84,6 +86,7 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
   onOpenProfilePrivacy,
   onRequestClientAccess,
   onUpdateAgentVisibility,
+  onLoadDemoData,
 }) => {
   const [selectedDept, setSelectedDept] = useState<string>("all");
   const [selectedVisibility, setSelectedVisibility] = useState<string>("all");
@@ -610,9 +613,55 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
         </div>
       )}
 
-      {/* Agents Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-4">
-        {filteredAgents.map((agent) => {
+      {/* Agents Grid or Clean Slate Zero State */}
+      {filteredAgents.length === 0 ? (
+        <div className="p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-5 max-w-xl mx-auto my-6">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center mx-auto text-blue-600 dark:text-blue-400 shadow-xs">
+            <Users className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              {searchQuery || selectedDept !== "all" || selectedVisibility !== "all"
+                ? "No agents match your current filters"
+                : "Clean Slate Fleet — 0 Autonomous Agents Deployed"}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+              {searchQuery || selectedDept !== "all" || selectedVisibility !== "all"
+                ? "Try clearing your search query or department filters to show all agents in your roster."
+                : "Your enterprise roster is currently completely clean. Deploy your first custom agent from scratch, launch from tested agent blueprints, or load benchmark demo data."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              onClick={onCreateAgent}
+              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create First Agent</span>
+            </button>
+            {onOpenTemplateModal && (
+              <button
+                onClick={onOpenTemplateModal}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-purple-500" />
+                <span>Explore Templates</span>
+              </button>
+            )}
+            {onLoadDemoData && agents.length === 0 && (
+              <button
+                onClick={onLoadDemoData}
+                className="px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-800 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4 text-blue-500" />
+                <span>Load Demo Fleet</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-4">
+          {filteredAgents.map((agent) => {
           const isSelected = selectedAgentIds.includes(agent.id);
           const isAutonomous = agent.autonomyLevel === "autonomous";
           const isHitl = agent.autonomyLevel === "hitl";
@@ -913,6 +962,7 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
           );
         })}
       </div>
+      )}
 
       {/* BATCH DELETE CONFIRMATION MODAL WITH DETAILED AUTOMATION IMPACT ANALYSIS */}
       <BatchDeleteConfirmationModal

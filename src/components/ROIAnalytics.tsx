@@ -49,6 +49,7 @@ import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
 import { ROIForecastSection } from "./ROIForecastSection";
 import { ROIReportPdfModal } from "./ROIReportPdfModal";
 import { ForecastSummaryData } from "../utils/pdfExport";
+import { ExecutionStatusBadge } from "./ExecutionStatusBadge";
 
 interface ROIAnalyticsProps {
   agents: Agent[];
@@ -248,14 +249,17 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
   // Filtered task audits for the review list
   const filteredAudits = useMemo(() => {
     return executionHistory.filter((rec) => {
-      if (auditFilter === "discrepancies") {
-        return rec.status === "discrepancy" || rec.status === "rejected" || rec.feedback?.isApproved === false;
-      }
-      if (auditFilter === "approved") {
-        return rec.status === "approved" || rec.status === "resolved" || rec.feedback?.isApproved === true;
+      if (auditFilter === "resolved") {
+        return rec.status === "resolved";
       }
       if (auditFilter === "needs_review") {
         return rec.status === "needs_review";
+      }
+      if (auditFilter === "discrepancies") {
+        return rec.status === "discrepancy" || rec.status === "rejected" || rec.status === "failed" || rec.feedback?.isApproved === false;
+      }
+      if (auditFilter === "approved") {
+        return rec.status === "approved" || rec.feedback?.isApproved === true;
       }
       return true;
     });
@@ -642,7 +646,7 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 self-start sm:self-auto flex-wrap">
             <button
               onClick={() => setAuditFilter("all")}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
@@ -654,25 +658,47 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
               All Runs ({executionHistory.length})
             </button>
             <button
-              onClick={() => setAuditFilter("discrepancies")}
+              onClick={() => setAuditFilter("resolved")}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                auditFilter === "discrepancies"
-                  ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
-                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-            >
-              <AlertTriangle className="w-3 h-3 text-amber-500" />
-              <span>Flagged Discrepancies</span>
-            </button>
-            <button
-              onClick={() => setAuditFilter("approved")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                auditFilter === "approved"
+                auditFilter === "resolved"
                   ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
               <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              <span>Resolved</span>
+            </button>
+            <button
+              onClick={() => setAuditFilter("needs_review")}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                auditFilter === "needs_review"
+                  ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+            >
+              <Clock className="w-3 h-3 text-amber-500" />
+              <span>Needs Review</span>
+            </button>
+            <button
+              onClick={() => setAuditFilter("discrepancies")}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                auditFilter === "discrepancies"
+                  ? "bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+            >
+              <AlertTriangle className="w-3 h-3 text-rose-500" />
+              <span>Discrepancies & Failures</span>
+            </button>
+            <button
+              onClick={() => setAuditFilter("approved")}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                auditFilter === "approved"
+                  ? "bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+            >
+              <ShieldCheck className="w-3 h-3 text-teal-500" />
               <span>Approved</span>
             </button>
           </div>
@@ -735,24 +761,20 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
                           <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                             {task.title}
                           </h4>
-                          <span
-                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                              isDiscrepancy
-                                ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200"
-                                : isResolved
-                                ? "bg-teal-200 dark:bg-teal-900 text-teal-900 dark:text-teal-200"
-                                : isApproved
-                                ? "bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200"
-                                : "bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200"
-                            }`}
-                          >
-                            {task.status === "discrepancy" ? "Not What I Asked For" : task.status}
-                          </span>
+                          <ExecutionStatusBadge
+                            status={task.status}
+                            size="xs"
+                            id={`audit-status-badge-${task.id}`}
+                          />
                         </div>
 
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                           Agent: <strong>{task.agentName}</strong> • {task.department} • {task.hoursSaved}h Saved •{" "}
-                          {new Date(task.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          <span className="font-mono text-[10px]">
+                            {isNaN(new Date(task.timestamp).getTime())
+                              ? task.timestamp
+                              : new Date(task.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
                         </div>
                       </div>
                     </div>
