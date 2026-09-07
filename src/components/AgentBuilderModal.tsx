@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
-import { Agent, AgentTemplate, AiModel, AutonomyLevel, Department, PermissionScope, AgentMonetizationConfig } from "../types";
+import { Agent, AgentTemplate, AiModel, AutonomyLevel, Department, PermissionScope, AgentMonetizationConfig, Workflow } from "../types";
 import { AVAILABLE_PERMISSIONS, INITIAL_MODELS } from "../data/initialData";
 import { AGENT_TEMPLATES, PROMPT_SNIPPETS, generateAutoSuggestedPrompt, evaluatePromptQuality } from "../data/agentTemplates";
+import { AgentDocumentationModal } from "./AgentDocumentationModal";
 import { 
   X, 
   Sparkles, 
@@ -30,7 +31,9 @@ import {
   DollarSign,
   CreditCard,
   Wallet,
-  Globe
+  Globe,
+  FileText,
+  BookOpen
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -44,6 +47,8 @@ interface AgentBuilderModalProps {
   onOpenModelManager?: () => void;
   onOpenAppManager?: () => void;
   onOpenTemplateModal?: () => void;
+  workflows?: Workflow[];
+  allAgents?: Agent[];
 }
 
 const DEPARTMENTS: Department[] = [
@@ -74,7 +79,10 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
   availablePermissions = AVAILABLE_PERMISSIONS,
   onOpenModelManager,
   onOpenAppManager,
+  workflows = [],
+  allAgents = [],
 }) => {
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [name, setName] = useState(initialAgent?.name || "AutoTriage Specialist");
   const [role, setRole] = useState(initialAgent?.role || "Workflow Automation Agent");
   const [department, setDepartment] = useState<Department>(initialAgent?.department || "Engineering");
@@ -102,6 +110,16 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [promptTips, setPromptTips] = useState<string[]>([]);
   const [showPromptSnippets, setShowPromptSnippets] = useState(false);
+
+  // Associated workflow matching this agent
+  const associatedWorkflow = useMemo(() => {
+    return (
+      workflows.find((w) => w.agentId === initialAgent?.id) ||
+      workflows.find((w) => w.department === department) ||
+      workflows[0] ||
+      null
+    );
+  }, [workflows, initialAgent?.id, department]);
 
   // Monetization & Stripe State
   const [isMonetized, setIsMonetized] = useState<boolean>(initialAgent?.monetization?.isMonetized ?? false);
@@ -304,8 +322,19 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              id="btn-agent-docs-header"
+              onClick={() => setIsDocsModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-100 dark:hover:bg-teal-900/60 transition-colors cursor-pointer"
+              title="Open generated README.md documentation for this agent"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Documentation</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowTemplatePicker(!showTemplatePicker)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>{showTemplatePicker ? "Hide Templates" : "Load Template Blueprint"}</span>
@@ -313,7 +342,7 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -604,6 +633,21 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
                       </div>
                     </div>
                   )}
+
+                  {/* README & Workflow Preview Link */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/70 dark:border-teal-800/60 text-xs">
+                    <div className="flex items-center gap-2 text-teal-800 dark:text-teal-200 text-[11px]">
+                      <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                      <span>Live system prompt &amp; workflow nodes generate an enterprise README.md</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsDocsModalOpen(true)}
+                      className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      <span>Open Documentation &rarr;</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1130,13 +1174,24 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
 
           {/* Footer Action Buttons */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-agent-docs-footer"
+                onClick={() => setIsDocsModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-100 dark:hover:bg-teal-900/60 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>Documentation (README)</span>
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {activeTab !== "monetization" ? (
                 <button
@@ -1147,14 +1202,14 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
                     else if (activeTab === "permissions") setActiveTab("team");
                     else if (activeTab === "team") setActiveTab("monetization");
                   }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Next Step &rarr;
                 </button>
               ) : (
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <DollarSign className="w-3.5 h-3.5" />
                   {initialAgent ? "Save Agent & Monetization" : "Deploy Monetized Agent"}
@@ -1164,6 +1219,33 @@ export const AgentBuilderModal: React.FC<AgentBuilderModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Generated Agent Documentation & Batch Export Modal */}
+      {isDocsModalOpen && (
+        <AgentDocumentationModal
+          isOpen={isDocsModalOpen}
+          onClose={() => setIsDocsModalOpen(false)}
+          currentAgentData={{
+            id: initialAgent?.id,
+            name,
+            role,
+            department,
+            description,
+            model,
+            temperature,
+            autonomyLevel,
+            assignedUserName,
+            assignedTeam,
+            selectedPermissions,
+            systemPrompt,
+          }}
+          currentWorkflow={associatedWorkflow}
+          workflows={workflows}
+          allAgents={allAgents.length > 0 ? allAgents : (initialAgent ? [initialAgent] : [])}
+          availableModels={allModels}
+          availablePermissions={availablePermissions}
+        />
+      )}
     </div>
   );
 };

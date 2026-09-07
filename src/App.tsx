@@ -1904,6 +1904,8 @@ export default function App() {
           setIsAgentBuilderOpen(false);
           setCurrentTab("permissions");
         }}
+        workflows={workflows}
+        allAgents={agents}
       />
 
       {/* Modal: Enterprise AI Model Manager & Benchmarking */}

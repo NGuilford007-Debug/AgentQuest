@@ -58,7 +58,7 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
         ? "Master Founder / Admin Mode" 
         : newLevel === "team_operator" 
         ? "Team Operator Mode" 
-        : `Client Portal Mode (${whiteLabelBrandName})`;
+        : `Standard Member Mode (${whiteLabelBrandName})`;
 
     setSuccessMsg(`Switched active workspace to ${roleName}`);
     setTimeout(() => {
@@ -94,15 +94,15 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
                     ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
                     : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
                 }`}>
-                  {isMaster ? "👑 Master Founder" : isOperator ? "👥 Team Operator" : "🏢 Client Portal"}
+                  {isMaster ? "👑 Master Founder" : isOperator ? "👥 Team Operator" : "👤 Standard Member"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isMaster 
-                  ? `Authenticated as Master Agency Founder (${developerCompanyName})`
+                  ? `Authenticated as Master Founder (${developerCompanyName})`
                   : isOperator
                   ? `Testing workspace as Internal Team Operator (${whiteLabelBrandName})`
-                  : `Testing workspace as Client / Tenant (${whiteLabelBrandName})`}
+                  : `Testing workspace as Standard Member (${whiteLabelBrandName})`}
               </p>
             </div>
           </div>
@@ -196,13 +196,13 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 text-xs">
-                    <Building2 className="w-4 h-4" />
-                    <span>Client Portal</span>
+                    <Users className="w-4 h-4" />
+                    <span>Standard Member</span>
                   </span>
                   {isClient && <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                  End-client view. Hides monetization markups and locks agent system prompts.
+                  Individual profile view. Run personal agents and workflows with direct account billing.
                 </div>
               </button>
             </div>

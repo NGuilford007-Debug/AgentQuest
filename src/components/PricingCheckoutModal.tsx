@@ -821,7 +821,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                   <span>Wallet Credited</span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  Webhook deposits ${selectedPlan.tokenCreditAmount > 0 ? selectedPlan.tokenCreditAmount : 5}.00 into tenant <code className="text-[10px] text-teal-600 font-mono">walletCreditBalance</code>.
+                  Webhook deposits ${selectedPlan.tokenCreditAmount > 0 ? selectedPlan.tokenCreditAmount : 5}.00 into account <code className="text-[10px] text-teal-600 font-mono">walletCreditBalance</code>.
                 </p>
               </div>
 
@@ -1036,7 +1036,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              By subscribing to paid tiers or provisioning tenants under Guilford Industries, Customer agrees to the <strong>Master EULA</strong>, <strong>Enterprise Distribution Agreement</strong>, <strong>Acceptable Use Policy</strong>, <strong>AI Safety & Responsible Autonomy Agreement</strong>, and <strong>Data Processing Addendum (DPA)</strong>.
+              By subscribing to paid tiers under Guilford Industries, Customer agrees to the <strong>Master EULA</strong>, <strong>Enterprise Distribution Agreement</strong>, <strong>Acceptable Use Policy</strong>, <strong>AI Safety & Responsible Autonomy Agreement</strong>, and <strong>Data Processing Addendum (DPA)</strong>.
             </p>
 
             {showLegalDetails && (

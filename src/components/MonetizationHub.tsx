@@ -376,8 +376,8 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
               : "text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"
           }`}
         >
-          <Building2 className="w-3.5 h-3.5" />
-          <span>Tenant Metered Billing ({tenantsBilling.length})</span>
+          <CreditCard className="w-3.5 h-3.5" />
+          <span>Account Usage & Direct Billing ({tenantsBilling.length})</span>
         </button>
 
         <button
@@ -1257,7 +1257,7 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Search tenant by company or billing email..."
+                  placeholder="Search account by user name or billing email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
@@ -1273,27 +1273,27 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
                 className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-hidden"
               >
                 <option value="all">All Plans</option>
-                <option value="Enterprise White-Label">Enterprise White-Label</option>
-                <option value="Growth SaaS">Growth SaaS</option>
-                <option value="Starter Agency">Starter Agency</option>
-                <option value="Developer Free Tier">Developer Free Tier</option>
+                <option value="Enterprise White-Label">Enterprise Pro</option>
+                <option value="Growth SaaS">Growth Plan</option>
+                <option value="Starter Agency">Starter</option>
+                <option value="Developer Free Tier">Free Tier</option>
               </select>
             </div>
           </div>
 
-          {/* Tenants Table */}
+          {/* Accounts Table */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  Tenant Billing Ledger & P&L Statement
+                  Account Billing Ledger & Usage Statement
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Itemized usage breakdown, gross margin contribution, and credit wallet balances.
+                  Itemized usage breakdown, token consumption, and credit wallet balances.
                 </p>
               </div>
               <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                {filteredTenants.length} Organizations
+                {filteredTenants.length} Accounts
               </span>
             </div>
 
@@ -1301,7 +1301,7 @@ export const MonetizationHub: React.FC<MonetizationHubProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Organization & Plan</th>
+                    <th className="py-3 px-4">Account & Plan</th>
                     <th className="py-3 px-3">Storage (GB)</th>
                     <th className="py-3 px-3">AI Tokens & Images</th>
                     <th className="py-3 px-3">Raw Infra Cost</th>
