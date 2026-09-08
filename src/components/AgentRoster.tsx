@@ -25,6 +25,7 @@ import {
   Lock,
   Eye,
   Info,
+  Search,
   CheckSquare,
   Square,
   MinusSquare,
@@ -119,12 +120,11 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
       if (selectedVisibility === "requires_review" && !isRequiresReview) return false;
 
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return (
-          ag.name.toLowerCase().includes(q) ||
-          ag.role.toLowerCase().includes(q) ||
-          ag.description.toLowerCase().includes(q)
-        );
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = ag.name ? ag.name.toLowerCase().includes(q) : false;
+        const matchesRole = ag.role ? ag.role.toLowerCase().includes(q) : false;
+        const matchesDescription = ag.description ? ag.description.toLowerCase().includes(q) : false;
+        return matchesName || matchesRole || matchesDescription;
       }
       return true;
     });
@@ -237,8 +237,8 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
       )}
 
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Bot className="w-5 h-5 text-blue-600" />
@@ -256,6 +256,39 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
               ? "Creator Governance Mode: Control client-page exposure, set internal-only policies, and review inbound client requests."
               : `Production-ready agent fleet managed and secured by ${developerCompanyName}. Execution & scoping enabled.`}
           </p>
+        </div>
+
+        {/* Real-time Agent Search Input Field in Header */}
+        <div className="w-full sm:w-72 md:w-80 relative shrink-0">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="agent-roster-header-search"
+              type="text"
+              role="searchbox"
+              aria-label="Search agents by name or role description"
+              placeholder="Search by agent name or role description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                id="btn-clear-header-search"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Clear search query"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {searchQuery.trim() && (
+            <div className="absolute top-full left-1 mt-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 z-10">
+              <span>{filteredAgents.length} matching agent{filteredAgents.length === 1 ? "" : "s"} found</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
@@ -466,13 +499,28 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
       {/* Filters, Search Bar & Multi-Select Control Header */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="Search agents by role, persona, or keyword..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="agent-roster-filter-search"
+              type="text"
+              aria-label="Filter agents by name or role description"
+              placeholder="Filter agents by name or role description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Clear search query"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
           <select
             value={selectedDept}
@@ -632,6 +680,17 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            {searchQuery && (
+              <button
+                type="button"
+                id="btn-clear-search-empty-state"
+                onClick={() => setSearchQuery("")}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+              >
+                <X className="w-4 h-4" />
+                <span>Clear Search ("{searchQuery}")</span>
+              </button>
+            )}
             <button
               onClick={onCreateAgent}
               className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"

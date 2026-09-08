@@ -283,19 +283,23 @@ export default function App() {
         const userEmail = storedProfile?.email || "toppgunn321@gmail.com";
         initRevenueCat(userEmail);
         // Check if user has active RevenueCat entitlement ("AgentFlow Pro")
-        checkHasEntitlement("AgentFlow Pro").then((hasPro) => {
-          if (hasPro) {
-            console.log("[RevenueCat] Active 'AgentFlow Pro' entitlement detected! Granting Pro access.");
-            setUserProfile((prev) => {
-              const updated: EmployeeProfile = {
-                ...prev,
-                subscriptionPlan: prev.subscriptionPlan === "enterprise" ? "enterprise" : "pro",
-              };
-              setStoredItem("agentflow_profile", updated);
-              return updated;
-            });
-          }
-        });
+        checkHasEntitlement("AgentFlow Pro")
+          .then((hasPro) => {
+            if (hasPro) {
+              console.log("[RevenueCat] Active 'AgentFlow Pro' entitlement detected! Granting Pro access.");
+              setUserProfile((prev) => {
+                const updated: EmployeeProfile = {
+                  ...prev,
+                  subscriptionPlan: prev.subscriptionPlan === "enterprise" ? "enterprise" : "pro",
+                };
+                setStoredItem("agentflow_profile", updated);
+                return updated;
+              });
+            }
+          })
+          .catch((rcCheckErr) => {
+            console.warn("[RevenueCat] Entitlement verification deferred:", rcCheckErr);
+          });
       } catch (rcError) {
         console.warn("[RevenueCat] Initialization check skipped:", rcError);
       }

@@ -554,6 +554,40 @@ export interface SaveStateSnapshot {
   };
 }
 
+export interface RoiExecutiveReport {
+  reportTitle: string;
+  period: string;
+  generatedAt: string;
+  modelUsed: string;
+  isSimulated?: boolean;
+  executionsAnalyzedCount: number;
+  executiveSummary: string;
+  headlineMetrics: Array<{
+    label: string;
+    value: string;
+    subtext: string;
+    trend: string;
+  }>;
+  departmentalImpacts: Array<{
+    department: string;
+    hoursSaved: number;
+    impactSummary: string;
+    efficiencyGain: string;
+  }>;
+  operationalHighlights: string[];
+  governanceAndQualityAudit: {
+    complianceRate: string;
+    discrepancyAnalysis: string;
+    humanInTheLoopEfficiency: string;
+  };
+  strategicRecommendations: Array<{
+    recommendation: string;
+    priority: "High" | "Medium" | "Strategic" | string;
+    expectedImpact: string;
+  }>;
+  fullMarkdownReport: string;
+}
+
 export type WorkplaceVibe = "deep_focus" | "chill_lofi" | "cyber_alert" | "zen_oasis" | "creative_flow" | "social_cafe";
 
 export interface WorkplaceStageItem {
