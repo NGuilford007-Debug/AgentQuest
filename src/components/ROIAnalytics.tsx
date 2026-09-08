@@ -402,15 +402,16 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
             </button>
           )}
 
-          {/* Export Report PDF Action Button */}
+          {/* Download Report PDF Action Button */}
           <button
-            id="btn-header-export-pdf"
+            id="btn-header-download-pdf"
             type="button"
             onClick={() => setIsPdfModalOpen(true)}
             className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-sm shadow-emerald-500/20 flex items-center gap-1.5 border border-emerald-500/30 active:scale-95 transition-all cursor-pointer"
+            title="Download Executive ROI Report as PDF"
           >
             <FileDown className="w-3.5 h-3.5" />
-            <span>Export Report (PDF)</span>
+            <span>Download PDF</span>
           </button>
         </div>
       </div>

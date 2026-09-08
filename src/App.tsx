@@ -1732,6 +1732,8 @@ export default function App() {
             onRewardNodeAdded={() => addXpAndCheckLevel(50)}
             isMasterDeveloper={isMasterDeveloper}
             developerCompanyName={developerProfile.companyName}
+            executionHistory={executionHistory}
+            onOpenQuickStart={() => setIsQuickStartOpen(true)}
           />
         )}
 

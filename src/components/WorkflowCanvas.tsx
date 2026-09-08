@@ -8,7 +8,8 @@ import {
   StepExecutionResult,
   AssetItem,
   ConditionOperator,
-  ConditionRule
+  ConditionRule,
+  TaskExecutionRecord
 } from "../types";
 import { PALETTE_TEMPLATES } from "../data/initialData";
 import { INITIAL_ASSET_ITEMS } from "../data/initialAssets";
@@ -18,6 +19,7 @@ import { PayloadTroubleshootModal, PayloadTroubleshootData, getValidTemplateForN
 import { WorkflowValidationModal } from "./WorkflowValidationModal";
 import { WorkflowMinimap } from "./WorkflowMinimap";
 import { WorkflowMetricsModal } from "./WorkflowMetricsModal";
+import { WorkflowPerformanceCard } from "./WorkflowPerformanceCard";
 import { validateWorkflow, autoRepairWorkflow, WorkflowValidationReport } from "../utils/workflowValidation";
 import { playInteractiveSound } from "../utils/audioSynth";
 import { fireCelebration } from "../utils/confetti";
@@ -74,7 +76,9 @@ import {
   Shirt,
   ExternalLink,
   Paperclip,
-  Wand2
+  Wand2,
+  Map,
+  Compass
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 
@@ -93,6 +97,8 @@ interface WorkflowCanvasProps {
   onRewardNodeAdded?: () => void;
   isMasterDeveloper?: boolean;
   developerCompanyName?: string;
+  executionHistory?: TaskExecutionRecord[];
+  onOpenQuickStart?: () => void;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
@@ -110,6 +116,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onRewardNodeAdded,
   isMasterDeveloper = true,
   developerCompanyName = "AgentFlow Enterprise",
+  executionHistory = [],
+  onOpenQuickStart,
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>(workflow.nodes || []);
   const [connections, setConnections] = useState<WorkflowConnection[]>(workflow.connections || []);
@@ -219,6 +227,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [showValidationModal, setShowValidationModal] = useState<boolean>(false);
   const [isDeploymentAttempt, setIsDeploymentAttempt] = useState<boolean>(false);
   const [deploymentSuccess, setDeploymentSuccess] = useState<boolean>(false);
+  const [isMinimapVisible, setIsMinimapVisible] = useState<boolean>(true);
 
   // Sync state if incoming workflow prop changes
   useEffect(() => {
@@ -729,6 +738,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     setActiveRunningNodeId(null);
     setIsSimulating(false);
+    playInteractiveSound("chime");
+    fireCelebration();
+
+    // Update workflow lastRun and totalRuns in parent state
+    const updatedRuns = (workflow.totalRuns || 0) + 1;
+    onSaveWorkflow({
+      ...workflow,
+      name: workflowName,
+      description: workflowDesc,
+      agentId: selectedAgentId,
+      nodes,
+      connections,
+      totalRuns: updatedRuns,
+      lastRun: "Just now",
+      totalEmailsSent: workflow.totalEmailsSent ?? 0,
+      successRate: workflow.successRate ?? 99.4,
+    });
   };
 
   // Test single node isolated
@@ -1109,6 +1135,36 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </button>
           </div>
 
+          {/* Pipeline Mini-Map Toggle */}
+          <button
+            id="btn-toggle-toolbar-minimap"
+            type="button"
+            onClick={() => setIsMinimapVisible((v) => !v)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+              isMinimapVisible
+                ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300"
+                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            }`}
+            title={isMinimapVisible ? "Hide Pipeline Mini-Map" : "Show Pipeline Mini-Map Overview"}
+          >
+            <Map className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="hidden sm:inline">Mini-Map</span>
+          </button>
+
+          {/* Quick Start Tutorial & Studio Features Guide */}
+          {onOpenQuickStart && (
+            <button
+              id="btn-workflow-quick-start"
+              type="button"
+              onClick={onOpenQuickStart}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold transition-colors"
+              title="Open Quick Start Tutorial & Studio Features Guide"
+            >
+              <Compass className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden sm:inline">Guide</span>
+            </button>
+          )}
+
           {/* Real-Time Pipeline Validation Status Pill */}
           <button
             id="btn-workflow-validation-status"
@@ -1313,6 +1369,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
         {/* CENTER: INTERACTIVE CANVAS CONTAINER */}
         <div ref={canvasContainerRef} className="flex-1 relative overflow-hidden flex flex-col">
+          {/* Real-time Active Pipeline Performance Summary Card */}
+          <WorkflowPerformanceCard
+            workflow={workflow}
+            nodes={nodes}
+            isSimulating={isSimulating}
+            activeRunningNodeId={activeRunningNodeId}
+            simulationResults={simulationResults}
+            executionHistory={executionHistory}
+            onRunLiveSimulation={runLiveCanvasSimulation}
+            onOpenMetricsModal={() => setShowWorkflowMetricsModal(true)}
+          />
+
           <div
             ref={canvasRef}
             onDragOver={handleCanvasDragOver}
@@ -1874,6 +1942,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           zoom={zoom}
           setZoom={setZoom}
           containerRef={canvasContainerRef}
+          isMinimapVisible={isMinimapVisible}
+          onToggleMinimapVisible={() => setIsMinimapVisible((v) => !v)}
           onSelectNode={(nodeId) => {
             setSelectedNodeId(nodeId);
             setSelectedNodeIds([nodeId]);

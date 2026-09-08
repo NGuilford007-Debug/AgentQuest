@@ -15,8 +15,24 @@ import {
   ChevronDown, 
   ChevronUp, 
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Search,
+  Compass,
+  Maximize2,
+  Minimize2,
+  CornerDownRight,
+  Crosshair,
+  CheckCircle2,
+  Layers,
+  Sparkles,
+  GitFork,
+  ShieldCheck,
+  UserCheck,
+  Send,
+  X
 } from "lucide-react";
+
+export type MinimapCorner = "bottom-right" | "bottom-left" | "top-right";
 
 export interface WorkflowMinimapProps {
   nodes: WorkflowNode[];
@@ -29,6 +45,8 @@ export interface WorkflowMinimapProps {
   setZoom: React.Dispatch<React.SetStateAction<number>>;
   onSelectNode?: (nodeId: string) => void;
   containerRef?: React.RefObject<HTMLDivElement>;
+  isMinimapVisible?: boolean;
+  onToggleMinimapVisible?: () => void;
 }
 
 export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
@@ -42,9 +60,18 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
   setZoom,
   onSelectNode,
   containerRef,
+  isMinimapVisible = true,
+  onToggleMinimapVisible,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [hoveredNode, setHoveredNode] = useState<WorkflowNode | null>(null);
+  const [isExpandedRadar, setIsExpandedRadar] = useState<boolean>(false);
+  const [showQuickJump, setShowQuickJump] = useState<boolean>(false);
+  const [quickJumpSearch, setQuickJumpSearch] = useState<string>("");
+  const [quickJumpFilter, setQuickJumpFilter] = useState<string>("all");
+  const [dockCorner, setDockCorner] = useState<MinimapCorner>("bottom-right");
+  const [viewMode, setViewMode] = useState<"full" | "pipeline">("full");
+  const [currentErrorCycleIndex, setCurrentErrorCycleIndex] = useState<number>(0);
 
   // Dragging the mini-map container window
   const [mapPosition, setMapPosition] = useState<{ x: number; y: number } | null>(null);
@@ -85,57 +112,111 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
     const el = canvasRef.current;
     if (!el) return;
 
-    el.addEventListener("scroll", updateViewport, { passive: true });
-    window.addEventListener("resize", updateViewport);
-
-    // Initial read
     updateViewport();
 
+    const handleScroll = () => {
+      updateViewport();
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateViewport);
+
     return () => {
-      el.removeEventListener("scroll", updateViewport);
+      el.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", updateViewport);
     };
   }, [canvasRef, updateViewport, zoom]);
 
-  // Dynamic canvas bounds to fit all nodes + comfortable margin
-  const bounds = useMemo(() => {
+  // Full virtual canvas dimensions (base: 3200 x 2200)
+  const fullBounds = useMemo(() => {
     let maxX = 3200;
     let maxY = 2200;
     nodes.forEach((node) => {
       if (node.position.x + 350 > maxX) maxX = node.position.x + 350;
       if (node.position.y + 250 > maxY) maxY = node.position.y + 250;
     });
-    return { width: maxX, height: maxY };
+    return { minX: 0, minY: 0, width: maxX, height: maxY };
   }, [nodes]);
 
-  // Logical camera coordinates on the canvas
-  const logicalViewport = useMemo(() => {
-    const logicalX = Math.max(0, viewport.scrollLeft / zoom);
-    const logicalY = Math.max(0, viewport.scrollTop / zoom);
-    const logicalW = Math.min(bounds.width, viewport.clientWidth / zoom);
-    const logicalH = Math.min(bounds.height, viewport.clientHeight / zoom);
-    return { x: logicalX, y: logicalY, width: logicalW, height: logicalH };
-  }, [viewport, zoom, bounds]);
+  // Tightly fitted pipeline extents bounding box
+  const pipelineBounds = useMemo(() => {
+    if (nodes.length === 0) return fullBounds;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    nodes.forEach((n) => {
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + 240);
+      maxY = Math.max(maxY, n.position.y + 120);
+    });
+    const padding = 100;
+    const boundedMinX = Math.max(0, minX - padding);
+    const boundedMinY = Math.max(0, minY - padding);
+    const boundedWidth = Math.max(800, (maxX - minX) + padding * 2);
+    const boundedHeight = Math.max(600, (maxY - minY) + padding * 2);
+    return {
+      minX: boundedMinX,
+      minY: boundedMinY,
+      width: boundedWidth,
+      height: boundedHeight,
+    };
+  }, [nodes, fullBounds]);
 
-  // Node color helper for the mini-map SVG
-  const getNodeColor = (type: NodeType): { fill: string; stroke: string } => {
+  const currentBounds = viewMode === "pipeline" ? pipelineBounds : fullBounds;
+
+  // Viewport camera rect mapped to mini-map logical coordinates
+  const logicalViewport = useMemo(() => {
+    const unscaledScrollLeft = viewport.scrollLeft / zoom;
+    const unscaledScrollTop = viewport.scrollTop / zoom;
+    const unscaledClientWidth = viewport.clientWidth / zoom;
+    const unscaledClientHeight = viewport.clientHeight / zoom;
+
+    return {
+      x: unscaledScrollLeft,
+      y: unscaledScrollTop,
+      width: unscaledClientWidth,
+      height: unscaledClientHeight,
+    };
+  }, [viewport, zoom]);
+
+  // Palette color styles by node type
+  const getNodeColor = (type: NodeType) => {
     switch (type) {
       case "trigger":
-        return { fill: "#f59e0b", stroke: "#d97706" };
+        return { fill: "#10b981", stroke: "#059669", bgLight: "bg-emerald-500", text: "text-emerald-500" };
       case "data_source":
-        return { fill: "#10b981", stroke: "#059669" };
+        return { fill: "#06b6d4", stroke: "#0891b2", bgLight: "bg-cyan-500", text: "text-cyan-500" };
       case "ai_process":
-        return { fill: "#6366f1", stroke: "#4f46e5" };
+        return { fill: "#6366f1", stroke: "#4f46e5", bgLight: "bg-indigo-500", text: "text-indigo-500" };
       case "condition":
-        return { fill: "#06b6d4", stroke: "#0891b2" };
+        return { fill: "#f59e0b", stroke: "#d97706", bgLight: "bg-amber-500", text: "text-amber-500" };
       case "permission_gate":
-        return { fill: "#a855f7", stroke: "#9333ea" };
+        return { fill: "#a855f7", stroke: "#9333ea", bgLight: "bg-purple-500", text: "text-purple-500" };
       case "human_review":
-        return { fill: "#f97316", stroke: "#ea580c" };
+        return { fill: "#f97316", stroke: "#ea580c", bgLight: "bg-orange-500", text: "text-orange-500" };
       case "action_output":
-        return { fill: "#3b82f6", stroke: "#2563eb" };
+        return { fill: "#3b82f6", stroke: "#2563eb", bgLight: "bg-blue-500", text: "text-blue-500" };
       default:
-        return { fill: "#64748b", stroke: "#475569" };
+        return { fill: "#64748b", stroke: "#475569", bgLight: "bg-slate-500", text: "text-slate-500" };
+    }
+  };
+
+  const getNodeIcon = (type: NodeType) => {
+    switch (type) {
+      case "trigger":
+        return <Sparkles className="w-3 h-3 text-emerald-500 shrink-0" />;
+      case "condition":
+        return <GitFork className="w-3 h-3 text-amber-500 shrink-0" />;
+      case "permission_gate":
+        return <ShieldCheck className="w-3 h-3 text-purple-500 shrink-0" />;
+      case "human_review":
+        return <UserCheck className="w-3 h-3 text-orange-500 shrink-0" />;
+      case "action_output":
+        return <Send className="w-3 h-3 text-blue-500 shrink-0" />;
+      default:
+        return <Layers className="w-3 h-3 text-indigo-500 shrink-0" />;
     }
   };
 
@@ -150,22 +231,22 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
       const clickRatioX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const clickRatioY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
 
-      const targetLogicalCenterX = clickRatioX * bounds.width;
-      const targetLogicalCenterY = clickRatioY * bounds.height;
+      const targetLogicalCenterX = currentBounds.minX + clickRatioX * currentBounds.width;
+      const targetLogicalCenterY = currentBounds.minY + clickRatioY * currentBounds.height;
 
       const targetScrollLeft = (targetLogicalCenterX - logicalViewport.width / 2) * zoom;
       const targetScrollTop = (targetLogicalCenterY - logicalViewport.height / 2) * zoom;
 
       canvasEl.scrollLeft = Math.max(
         0,
-        Math.min(bounds.width * zoom - viewport.clientWidth, targetScrollLeft)
+        Math.min(fullBounds.width * zoom - viewport.clientWidth, targetScrollLeft)
       );
       canvasEl.scrollTop = Math.max(
         0,
-        Math.min(bounds.height * zoom - viewport.clientHeight, targetScrollTop)
+        Math.min(fullBounds.height * zoom - viewport.clientHeight, targetScrollTop)
       );
     },
-    [bounds, logicalViewport, zoom, canvasRef, viewport]
+    [currentBounds, fullBounds, logicalViewport, zoom, canvasRef, viewport]
   );
 
   // Mini-map SVG pointer interactions (panning main canvas)
@@ -196,7 +277,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
     };
   }, [isPanningViewport, navigateCanvasToMapPoint]);
 
-  // Window drag handlers for repositioning the mini-map widget
+  // Window drag handler for repositioning mini-map freely
   const handleWindowDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -261,9 +342,19 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
     };
   }, [isDraggingWindow, containerRef]);
 
-  // Reset mini-map back to default bottom-right position
+  // Reset mini-map back to corner dock
   const handleResetPosition = () => {
     setMapPosition(null);
+  };
+
+  // Toggle corner dock
+  const handleCycleCorner = () => {
+    setMapPosition(null);
+    setDockCorner((prev) => {
+      if (prev === "bottom-right") return "bottom-left";
+      if (prev === "bottom-left") return "top-right";
+      return "bottom-right";
+    });
   };
 
   // Recenter & Fit all nodes inside the viewport
@@ -310,9 +401,9 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
     }, 60);
   };
 
-  // Jump to single node from mini-map click
-  const handleNodeClick = (node: WorkflowNode, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Jump to single node from mini-map click or quick jump
+  const handleJumpToNode = (node: WorkflowNode, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (onSelectNode) onSelectNode(node.id);
 
     const canvasEl = canvasRef.current;
@@ -328,23 +419,70 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
     });
   };
 
+  // Jump to next node with validation issue
+  const handleJumpToNextError = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!validationReport || validationReport.errors.length === 0) return;
+
+    const errorNodeIds = Array.from(validationReport.nodeErrorMap.keys());
+    if (errorNodeIds.length === 0) return;
+
+    const nextIndex = currentErrorCycleIndex % errorNodeIds.length;
+    const targetNodeId = errorNodeIds[nextIndex];
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+
+    if (targetNode) {
+      handleJumpToNode(targetNode);
+      setCurrentErrorCycleIndex((prev) => prev + 1);
+    }
+  };
+
   const totalErrors = validationReport?.errors.length || 0;
+
+  // Filtered nodes for quick jump search
+  const filteredQuickJumpNodes = useMemo(() => {
+    return nodes.filter((n) => {
+      const matchesSearch = n.name.toLowerCase().includes(quickJumpSearch.toLowerCase()) ||
+        n.type.toLowerCase().includes(quickJumpSearch.toLowerCase());
+      if (!matchesSearch) return false;
+
+      if (quickJumpFilter === "all") return true;
+      if (quickJumpFilter === "issues") {
+        return validationReport?.nodeErrorMap.has(n.id);
+      }
+      return n.type === quickJumpFilter;
+    });
+  }, [nodes, quickJumpSearch, quickJumpFilter, validationReport]);
+
+  if (!isMinimapVisible) return null;
+
+  // Corner positioning style when not manually dragged
+  const getCornerStyle = () => {
+    if (mapPosition) {
+      return {
+        left: `${mapPosition.x}px`,
+        top: `${mapPosition.y}px`,
+      };
+    }
+    switch (dockCorner) {
+      case "bottom-left":
+        return { left: "20px", bottom: "20px" };
+      case "top-right":
+        return { right: "20px", top: "70px" };
+      case "bottom-right":
+      default:
+        return { right: "20px", bottom: "20px" };
+    }
+  };
+
+  const minimapWidthClass = isExpandedRadar ? "w-[360px]" : "w-[270px]";
+  const minimapCanvasHeightClass = isExpandedRadar ? "h-[220px]" : "h-[160px]";
 
   return (
     <div
       ref={minimapContainerRef}
       id="workflow-minimap-container"
-      style={
-        mapPosition
-          ? {
-              left: `${mapPosition.x}px`,
-              top: `${mapPosition.y}px`,
-            }
-          : {
-              right: "20px",
-              bottom: "20px",
-            }
-      }
+      style={getCornerStyle()}
       className={`absolute z-30 select-none transition-shadow ${
         isDraggingWindow ? "shadow-2xl opacity-90 scale-[1.01]" : "shadow-xl"
       }`}
@@ -353,6 +491,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
       {isCollapsed ? (
         <div className="flex items-center gap-2 p-1.5 pl-3 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-lg">
           <button
+            id="btn-minimap-expand"
             type="button"
             onClick={() => setIsCollapsed(false)}
             className="flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
@@ -364,7 +503,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
               {nodes.length}
             </span>
             {totalErrors > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
                 {totalErrors}
               </span>
             )}
@@ -373,12 +512,12 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
         </div>
       ) : (
         /* Expanded Mini-Map Window */
-        <div className="w-[260px] rounded-2xl overflow-hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 flex flex-col">
+        <div className={`${minimapWidthClass} rounded-2xl overflow-hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 flex flex-col transition-all duration-200`}>
           {/* Draggable Header Bar */}
           <div
             onMouseDown={handleWindowDragStart}
-            className="px-2.5 py-2 bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between cursor-grab active:cursor-grabbing text-slate-700 dark:text-slate-300"
-            title="Drag to reposition mini-map"
+            className="px-2.5 py-2 bg-slate-100/90 dark:bg-slate-800/90 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between cursor-grab active:cursor-grabbing text-slate-700 dark:text-slate-300"
+            title="Drag to reposition anywhere on canvas"
           >
             <div className="flex items-center gap-1.5">
               <GripHorizontal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -388,37 +527,69 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                 {nodes.length}
               </span>
               {totalErrors > 0 && (
-                <span
-                  title={`${totalErrors} validation issue${totalErrors > 1 ? "s" : ""}`}
-                  className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-500 text-white flex items-center gap-0.5"
+                <button
+                  id="btn-minimap-jump-error"
+                  type="button"
+                  onClick={handleJumpToNextError}
+                  title={`${totalErrors} validation issues. Click to jump to next broken node.`}
+                  className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-500 hover:bg-rose-600 text-white flex items-center gap-0.5 transition-colors animate-pulse"
                 >
                   <AlertCircle className="w-2.5 h-2.5" />
                   <span>{totalErrors}</span>
-                </span>
+                </button>
               )}
             </div>
 
-            {/* Quick Actions */}
+            {/* Header Quick Controls */}
             <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
-              {mapPosition && (
-                <button
-                  type="button"
-                  onClick={handleResetPosition}
-                  title="Snap back to bottom-right"
-                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                </button>
-              )}
+              {/* Quick Jump Search Button */}
+              <button
+                id="btn-minimap-quick-jump"
+                type="button"
+                onClick={() => setShowQuickJump(!showQuickJump)}
+                title="Quick Jump to Pipeline Node (Search & Filter)"
+                className={`p-1 rounded transition-colors ${
+                  showQuickJump 
+                    ? "bg-indigo-600 text-white" 
+                    : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+              </button>
+
+              {/* View Extents Toggle (Pipeline Focus vs Full Workspace) */}
               <button
                 type="button"
-                onClick={handleFitToContent}
-                title="Fit & Center Pipeline"
+                onClick={() => setViewMode((v) => (v === "full" ? "pipeline" : "full"))}
+                title={viewMode === "full" ? "Focus on Pipeline Nodes" : "View Full Infinite Canvas"}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-[10px] font-bold"
+              >
+                {viewMode === "full" ? "Full" : "Fit"}
+              </button>
+
+              {/* Resize Radar Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsExpandedRadar(!isExpandedRadar)}
+                title={isExpandedRadar ? "Compact Radar Size" : "Expand Radar Size for Large Pipelines"}
                 className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
               >
-                <LocateFixed className="w-3.5 h-3.5" />
+                {isExpandedRadar ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
               </button>
+
+              {/* Corner Dock / Reset Button */}
               <button
+                type="button"
+                onClick={mapPosition ? handleResetPosition : handleCycleCorner}
+                title={mapPosition ? "Snap back to corner dock" : `Cycle dock corner (Current: ${dockCorner})`}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
+                {mapPosition ? <RotateCcw className="w-3 h-3" /> : <CornerDownRight className="w-3 h-3" />}
+              </button>
+
+              {/* Minimize Mini-Map */}
+              <button
+                id="btn-minimap-minimize"
                 type="button"
                 onClick={() => setIsCollapsed(true)}
                 title="Minimize Mini-Map"
@@ -429,8 +600,124 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
             </div>
           </div>
 
+          {/* QUICK-JUMP NODE SEARCH OVERLAY */}
+          {showQuickJump && (
+            <div className="p-2.5 bg-slate-50/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 space-y-2 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Quick jump to node..."
+                  value={quickJumpSearch}
+                  onChange={(e) => setQuickJumpSearch(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                  autoFocus
+                />
+                {quickJumpSearch && (
+                  <button onClick={() => setQuickJumpSearch("")} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Category Filter Chips */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[10px] font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setQuickJumpFilter("all")}
+                  className={`px-2 py-0.5 rounded-full transition-colors ${
+                    quickJumpFilter === "all"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  All ({nodes.length})
+                </button>
+                {totalErrors > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickJumpFilter("issues")}
+                    className={`px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 ${
+                      quickJumpFilter === "issues"
+                        ? "bg-rose-600 text-white"
+                        : "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400"
+                    }`}
+                  >
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    <span>Issues ({totalErrors})</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setQuickJumpFilter("trigger")}
+                  className={`px-2 py-0.5 rounded-full transition-colors ${
+                    quickJumpFilter === "trigger"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  Triggers
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickJumpFilter("condition")}
+                  className={`px-2 py-0.5 rounded-full transition-colors ${
+                    quickJumpFilter === "condition"
+                      ? "bg-amber-600 text-white"
+                      : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  Decisions
+                </button>
+              </div>
+
+              {/* Node Jump List */}
+              <div className="max-h-40 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                {filteredQuickJumpNodes.length === 0 ? (
+                  <div className="p-3 text-center text-slate-400 text-xs italic">
+                    No matching pipeline nodes found
+                  </div>
+                ) : (
+                  filteredQuickJumpNodes.map((n) => {
+                    const hasErrors = validationReport?.nodeErrorMap.has(n.id);
+                    const isSelected = selectedNodeId === n.id || selectedNodeIds.includes(n.id);
+
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          handleJumpToNode(n);
+                          setShowQuickJump(false);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors ${
+                          isSelected
+                            ? "bg-indigo-50 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 font-bold"
+                            : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {getNodeIcon(n.type)}
+                          <span className="truncate">{n.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {hasErrors && (
+                            <span className="w-2 h-2 rounded-full bg-rose-500" title="Has validation issue" />
+                          )}
+                          <span className="text-[9px] font-mono text-slate-400">
+                            ({Math.round(n.position.x)}, {Math.round(n.position.y)})
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Interactive Radar Map Canvas */}
-          <div className="relative w-full h-[160px] bg-slate-100 dark:bg-slate-950/90 overflow-hidden cursor-crosshair">
+          <div className={`relative w-full ${minimapCanvasHeightClass} bg-slate-100 dark:bg-slate-950/90 overflow-hidden cursor-crosshair`}>
             {/* Grid Pattern Background */}
             <div
               className="absolute inset-0 opacity-40 pointer-events-none"
@@ -443,7 +730,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
             {/* SVG Mini-Map Rendering */}
             <svg
               ref={mapSvgRef}
-              viewBox={`0 0 ${bounds.width} ${bounds.height}`}
+              viewBox={`${currentBounds.minX} ${currentBounds.minY} ${currentBounds.width} ${currentBounds.height}`}
               preserveAspectRatio="none"
               onPointerDown={handleMapPointerDown}
               className="w-full h-full block"
@@ -502,7 +789,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredNode(node)}
                     onMouseLeave={() => setHoveredNode(null)}
-                    onClick={(e) => handleNodeClick(node, e)}
+                    onClick={(e) => handleJumpToNode(node, e)}
                   >
                     {/* Outer glow for selected or invalid nodes */}
                     {(isSelected || hasErrors) && (
@@ -512,7 +799,7 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                         width={nodeWidth + 28}
                         height={nodeHeight + 28}
                         rx={20}
-                        fill={hasErrors ? "rgba(244, 63, 94, 0.35)" : "rgba(99, 102, 241, 0.35)"}
+                        fill={hasErrors ? "rgba(244, 63, 94, 0.45)" : "rgba(99, 102, 241, 0.45)"}
                       />
                     )}
 
@@ -533,8 +820,8 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                           ? "#ffffff"
                           : colors.stroke
                       }
-                      strokeWidth={hasErrors ? 16 : isSelected ? 16 : 8}
-                      opacity={isHovered ? 1 : 0.9}
+                      strokeWidth={hasErrors ? 18 : isSelected ? 18 : 8}
+                      opacity={isHovered ? 1 : 0.92}
                     />
 
                     {/* Node Header Bar accent */}
@@ -544,13 +831,13 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                       width={nodeWidth}
                       height={24}
                       rx={16}
-                      fill="rgba(0,0,0,0.15)"
+                      fill="rgba(0,0,0,0.2)"
                     />
 
                     {/* Node Title Text */}
                     <text
                       x={node.position.x + 16}
-                      y={node.position.y + 54}
+                      y={node.position.y + 56}
                       fontSize={34}
                       fontWeight="bold"
                       fill="#ffffff"
@@ -564,10 +851,10 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
                       <circle
                         cx={node.position.x + nodeWidth - 10}
                         cy={node.position.y + 10}
-                        r={18}
+                        r={20}
                         fill="#f43f5e"
                         stroke="#ffffff"
-                        strokeWidth={4}
+                        strokeWidth={5}
                       />
                     )}
                   </g>
@@ -607,10 +894,10 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
             {/* Hover Tooltip for hovered node */}
             {hoveredNode && (
               <div
-                className="absolute bottom-2 left-2 right-2 px-2 py-1 rounded-lg bg-slate-900/90 text-white text-[10px] truncate pointer-events-none shadow-md border border-slate-700 flex items-center justify-between"
+                className="absolute bottom-2 left-2 right-2 px-2 py-1 rounded-lg bg-slate-900/95 text-white text-[10px] truncate pointer-events-none shadow-md border border-slate-700 flex items-center justify-between animate-in fade-in"
               >
-                <span className="font-semibold truncate">{hoveredNode.name}</span>
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold ml-1.5 shrink-0">
+                <span className="font-bold truncate">{hoveredNode.name}</span>
+                <span className="text-[9px] uppercase tracking-wider text-indigo-300 font-bold ml-1.5 shrink-0">
                   {hoveredNode.type.replace("_", " ")}
                 </span>
               </div>
@@ -641,15 +928,17 @@ export const WorkflowMinimap: React.FC<WorkflowMinimapProps> = ({
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleFitToContent}
-              className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1"
-              title="Fit entire workflow into view"
-            >
-              <LocateFixed className="w-2.5 h-2.5" />
-              <span>Center</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleFitToContent}
+                className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1"
+                title="Fit and center entire workflow pipeline into canvas viewport"
+              >
+                <LocateFixed className="w-2.5 h-2.5" />
+                <span>Fit Pipeline</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
