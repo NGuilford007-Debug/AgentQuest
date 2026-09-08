@@ -96,6 +96,7 @@ import { ImageStudio } from "./components/ImageStudio";
 import { LegalGovernanceCenter } from "./components/LegalGovernanceCenter";
 import { TermsAgreementGateModal } from "./components/TermsAgreementGateModal";
 import { EmailAutomationCenter } from "./components/EmailAutomationCenter";
+import { QuickStartModal } from "./components/QuickStartModal";
 import { MasterAccessSettings } from "./types";
 import { initRevenueCat, checkHasEntitlement } from "./services/revenuecat";
 import { fireCelebration, fireLevelUp } from "./utils/confetti";
@@ -338,10 +339,25 @@ export default function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isQuickStartOpen, setIsQuickStartOpen] = useState(false);
   const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<string | undefined>("free");
   const [showFocusHUD, setShowFocusHUD] = useState<boolean>(() => {
     return getStoredItem<boolean>("agentflow_show_focus_hud", false);
   });
+
+  // Global Keyboard listener for Quick Start & Help (? key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "?" && 
+        !["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName || ""))
+      ) {
+        setIsQuickStartOpen(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Auto-save feedback indicators with useRef timer cleanup
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1510,6 +1526,7 @@ export default function App() {
         }}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenQuickStart={() => setIsQuickStartOpen(true)}
         isAutoSaving={isAutoSaving}
         lastSavedTime={lastSavedTime}
         whiteLabelConfig={whiteLabelConfig}
@@ -1555,6 +1572,7 @@ export default function App() {
             setIsPricingModalOpen(true);
           }}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onOpenQuickStart={() => setIsQuickStartOpen(true)}
           userSubscriptionPlan={userProfile.subscriptionPlan}
           activeWorkplaceThemeId={activeWorkplaceThemeId}
         />
@@ -1605,6 +1623,7 @@ export default function App() {
               setIsAgentBuilderOpen(true);
             }}
             onLoadDemoData={handleLoadSampleDemoData}
+            onOpenQuickStart={() => setIsQuickStartOpen(true)}
           />
         )}
 
@@ -1846,6 +1865,7 @@ export default function App() {
             executionHistory={executionHistory}
             onUpdateExecution={handleUpdateExecution}
             onApproveHitl={handleApproveHitl}
+            onOpenQuickStart={() => setIsQuickStartOpen(true)}
           />
         )}
 
@@ -2158,6 +2178,20 @@ export default function App() {
       <AgentHealthToastSystem
         agents={agents}
         onNavigateToHealth={handleNavigateToHealthMonitor}
+      />
+
+      {/* Modal: Quick Start Tutorial & 18-Workspace Features Guide */}
+      <QuickStartModal
+        isOpen={isQuickStartOpen}
+        onClose={() => setIsQuickStartOpen(false)}
+        onNavigateToTab={(tab) => {
+          if (!isMasterDeveloper && (tab === "whitelabel" || tab === "monetization")) {
+            setIsAccessGateOpen(true);
+            return;
+          }
+          setCurrentTab(tab);
+        }}
+        currentTab={currentTab}
       />
     </div>
   );

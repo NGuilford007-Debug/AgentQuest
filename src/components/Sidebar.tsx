@@ -28,7 +28,8 @@ import {
   CreditCard,
   Gift,
   Scale,
-  Mail
+  Mail,
+  Compass
 } from "lucide-react";
 import { AccessLevel, WhiteLabelConfig } from "../types";
 import { getWorkplaceTheme } from "../utils/workplaceThemes";
@@ -73,6 +74,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   activeWorkplaceThemeId?: string;
+  onOpenQuickStart?: () => void;
 }
 
 interface NavItemConfig {
@@ -105,6 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed: controlledCollapsed,
   onToggleCollapse,
   activeWorkplaceThemeId = "stage-war-room",
+  onOpenQuickStart,
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -490,6 +493,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Access Mode & Subscription Tier Footer */}
       <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
         
+        {/* Quick Start & Feature Guide Button */}
+        {onOpenQuickStart && (
+          <button
+            id="btn-sidebar-quick-start"
+            onClick={onOpenQuickStart}
+            className={`w-full p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 text-blue-900 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all flex items-center ${
+              isCollapsed ? "justify-center" : "justify-between"
+            } group cursor-pointer shadow-2xs`}
+            title="Open Quick Start Tutorial & 18-Workspace Feature Guide"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Compass className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 group-hover:rotate-45 transition-transform duration-300" />
+              {!isCollapsed && (
+                <div className="truncate text-left">
+                  <div className="text-[11px] font-bold leading-tight truncate">Quick Start & Guide</div>
+                  <div className="text-[9px] text-blue-600 dark:text-blue-400 truncate">18 Workspaces Tour</div>
+                </div>
+              )}
+            </div>
+            {!isCollapsed && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white shrink-0">
+                TOUR
+              </span>
+            )}
+          </button>
+        )}
+
         {/* Tier Upgrade / Free Access Widget */}
         {!isCollapsed && onOpenPricing && (
           <div 

@@ -25,7 +25,8 @@ import {
   ThumbsDown,
   RefreshCw,
   Award,
-  FileDown
+  FileDown,
+  Compass
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -57,6 +58,7 @@ interface ROIAnalyticsProps {
   executionHistory: TaskExecutionRecord[];
   onUpdateExecution?: (updated: TaskExecutionRecord) => void;
   onApproveHitl?: (taskId: string) => void;
+  onOpenQuickStart?: () => void;
 }
 
 const DEPARTMENT_COLORS: Record<string, string> = {
@@ -156,7 +158,8 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
   agents, 
   executionHistory, 
   onUpdateExecution,
-  onApproveHitl 
+  onApproveHitl,
+  onOpenQuickStart
 }) => {
   const [timeHorizon, setTimeHorizon] = useState<"7d" | "30d" | "90d" | "1y">("30d");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("all");
@@ -383,6 +386,21 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
               </>
             )}
           </button>
+
+          {/* Quick Guide & ROI Formulas Button */}
+          {onOpenQuickStart && (
+            <button
+              id="btn-header-roi-guide"
+              type="button"
+              onClick={onOpenQuickStart}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-800 shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="View ROI calculation guide, loaded rate formulas, and features walkthrough"
+            >
+              <Compass className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden sm:inline">Guide & Formulas</span>
+              <span className="sm:hidden">Guide</span>
+            </button>
+          )}
 
           {/* Export Report PDF Action Button */}
           <button

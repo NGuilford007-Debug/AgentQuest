@@ -58,7 +58,8 @@ import {
   LayoutList,
   Activity,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Compass
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { 
@@ -90,6 +91,7 @@ interface DashboardProps {
   onNavigateToRoi?: () => void;
   onOpenAgentBuilder?: () => void;
   onLoadDemoData?: () => void;
+  onOpenQuickStart?: () => void;
 }
 
 const REPORT_DEPARTMENTS: Department[] = [
@@ -173,7 +175,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateToMonetization,
   onNavigateToRoi,
   onOpenAgentBuilder,
-  onLoadDemoData
+  onLoadDemoData,
+  onOpenQuickStart
 }) => {
   // Layout Toggle State: 'expanded' (full coverage, charts, reports) vs 'condensed' (top-line metrics only)
   const [dashboardLayout, setDashboardLayout] = useState<"condensed" | "expanded">(() => {
@@ -483,6 +486,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span>Expanded View</span>
               </button>
             </div>
+
+            {/* Quick Start & Feature Guide CTA */}
+            {onOpenQuickStart && (
+              <button
+                id="btn-dashboard-open-guide"
+                type="button"
+                onClick={onOpenQuickStart}
+                className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 text-xs font-bold shadow-xs flex items-center gap-1.5 active:scale-98 transition-all cursor-pointer"
+                title="Launch Quick Start Tutorial & 18-Workspace Features Guide"
+              >
+                <Compass className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>🧭 Quick Start & Guide</span>
+              </button>
+            )}
 
             <button
               id="btn-open-report-generator"

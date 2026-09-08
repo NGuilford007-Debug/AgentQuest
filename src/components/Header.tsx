@@ -34,7 +34,8 @@ import {
   Volume2,
   VolumeX,
   Radio,
-  Scale
+  Scale,
+  Compass
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { ALL_WORKPLACE_THEMES, WorkplaceZoneTheme, getWorkplaceTheme } from "../utils/workplaceThemes";
@@ -67,6 +68,7 @@ interface HeaderProps {
   isPlayingZoneAudio?: boolean;
   onToggleZoneAudio?: () => void;
   onOpenLegal?: () => void;
+  onOpenQuickStart?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -95,6 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
   isPlayingZoneAudio = false,
   onToggleZoneAudio,
   onOpenLegal,
+  onOpenQuickStart,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -288,6 +291,20 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>Free Sign Up</span>
                 </>
               )}
+            </button>
+          )}
+
+          {/* Quick Start & 18-Workspace Feature Guide Button */}
+          {onOpenQuickStart && (
+            <button
+              id="btn-header-quick-start"
+              onClick={onOpenQuickStart}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-500/30 transition-all shadow-2xs active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              title="Open Quick Start Tutorial & 18-Workspace Features Guide"
+            >
+              <Compass className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="hidden sm:inline">Quick Start & Guide</span>
+              <span className="sm:hidden">Guide</span>
             </button>
           )}
 
