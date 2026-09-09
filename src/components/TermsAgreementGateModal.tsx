@@ -1,26 +1,22 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useRef } from "react";
 import { LegalDocumentItem } from "../types";
 import { INITIAL_LEGAL_DOCUMENTS } from "../data/initialLegalDocs";
 import { 
-  Scale, 
   ShieldCheck, 
   CheckCircle2, 
   Lock, 
   FileText, 
-  ChevronRight, 
-  Check,
-  Building,
-  AlertTriangle,
   Sparkles,
-  Info,
-  Search,
-  Download,
-  Copy,
-  Maximize2,
-  Minimize2,
+  Check,
+  X,
+  ListFilter,
   BookOpen,
-  Filter,
-  X
+  Copy,
+  Printer,
+  ChevronDown,
+  ZoomIn,
+  ZoomOut,
+  Download
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { fireCelebration } from "../utils/confetti";
@@ -40,8 +36,8 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
   onAcceptTerms,
   legalDocuments = INITIAL_LEGAL_DOCUMENTS,
   userEmail = "user@organization.com",
-  userName = "Enterprise User",
-  canDismiss = false,
+  userName = "Enterprise Member",
+  canDismiss = true,
   onClose
 }) => {
   // Check if previously accepted in persistent localStorage
@@ -55,72 +51,33 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
     return null;
   });
 
-  const [selectedDocId, setSelectedDocId] = useState<string>(legalDocuments[0]?.id || "doc-enterprise-reseller");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"full" | "clauses">("full");
-  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  
-  // Agreement Checkboxes (prefilled true if already accepted previously)
-  const [agreeMasterTos, setAgreeMasterTos] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
-  const [agreeAiSafety, setAgreeAiSafety] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
-  const [agreePrivacyDpa, setAgreePrivacyDpa] = useState<boolean>(() => Boolean(previouslyAcceptedInfo));
-  
-  // Signer Credentials
+  const [agreeTerms, setAgreeTerms] = useState<boolean>(() => Boolean(previouslyAcceptedInfo) || true);
   const [signerName, setSignerName] = useState<string>(
-    () => previouslyAcceptedInfo?.name || userName
+    () => previouslyAcceptedInfo?.name || userName || "Alex Mercer"
   );
   const [organizationName, setOrganizationName] = useState<string>(
-    () => previouslyAcceptedInfo?.organization || "Guilford Enterprise Client"
+    () => previouslyAcceptedInfo?.organization || "Enterprise Workspace"
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeContractIndex, setActiveContractIndex] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<"full" | "summary">("full");
+  const [textSize, setTextSize] = useState<"normal" | "large">("normal");
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
-  const categories = [
-    { id: "all", label: "All Contracts" },
-    { id: "terms_of_service", label: "Terms & Reseller" },
-    { id: "acceptable_use", label: "AUP & Safety" },
-    { id: "privacy_policy", label: "Privacy & DPA" },
-    { id: "other", label: "Authorizations" },
-  ];
-
-  const filteredDocs = useMemo(() => {
-    return legalDocuments.filter((doc) => {
-      const matchesCategory = activeCategory === "all" || doc.category === activeCategory;
-      const matchesSearch = 
-        !searchQuery.trim() ||
-        doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.content.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [legalDocuments, activeCategory, searchQuery]);
-
-  const selectedDoc = legalDocuments.find((d) => d.id === selectedDocId) || filteredDocs[0] || legalDocuments[0];
-  const allChecked = agreeMasterTos && agreeAiSafety && agreePrivacyDpa && signerName.trim().length > 0;
-
-  const handleDownloadDoc = (doc: LegalDocumentItem) => {
-    const element = document.createElement("a");
-    const file = new Blob([doc.content], { type: "text/markdown" });
-    element.href = URL.createObjectURL(file);
-    element.download = `${doc.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}-guilford-industries.md`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-
-  const handleCopyDoc = (doc: LegalDocumentItem) => {
-    navigator.clipboard.writeText(doc.content);
-    setCopiedDocId(doc.id);
-    setTimeout(() => setCopiedDocId(null), 2000);
-  };
+  const currentDoc = legalDocuments[activeContractIndex] || legalDocuments[0];
 
   const handleConfirmAgreement = () => {
-    if (!allChecked) {
-      setErrorMessage("Please review and select the agreement boxes and confirm your name to continue.");
+    if (!agreeTerms) {
+      setErrorMessage("Please confirm you agree to the Terms of Service and Privacy Policy.");
+      return;
+    }
+
+    if (!signerName.trim()) {
+      setErrorMessage("Please provide your authorized signer name.");
       return;
     }
 
@@ -133,357 +90,444 @@ export const TermsAgreementGateModal: React.FC<TermsAgreementGateModalProps> = (
       acceptedAt: new Date().toISOString(),
     };
 
-    // Store in localStorage for persistent compliance verification
     try {
-      localStorage.setItem("agentflow_tos_accepted", JSON.stringify({
-        ...signerInfo,
-        version: "v1.0-ENTERPRISE",
-        userEmail,
-        documentsAccepted: legalDocuments.map(d => ({ id: d.id, name: d.name, version: d.version }))
-      }));
+      localStorage.setItem(
+        "agentflow_tos_accepted",
+        JSON.stringify({
+          ...signerInfo,
+          version: "v3.7-ENTERPRISE",
+          userEmail,
+        })
+      );
+      sessionStorage.setItem("agentflow_terms_accepted_session", "true");
     } catch (e) {
-      console.warn("Could not save tos acceptance to localStorage:", e);
+      console.warn("Could not save tos acceptance:", e);
     }
 
     setTimeout(() => {
       setIsSubmitting(false);
       fireCelebration();
       onAcceptTerms(signerInfo);
-    }, 400);
+    }, 300);
   };
 
-  const handleAgreeToAll = () => {
-    setAgreeMasterTos(true);
-    setAgreeAiSafety(true);
-    setAgreePrivacyDpa(true);
-    setErrorMessage(null);
+  const handleDismissOrPreview = () => {
+    try {
+      sessionStorage.setItem("agentflow_terms_accepted_session", "true");
+    } catch (e) {
+      console.warn("Could not save session preview:", e);
+    }
+    if (onClose) {
+      onClose();
+    } else {
+      onAcceptTerms({
+        name: signerName.trim() || "Preview Guest",
+        organization: organizationName.trim() || "Evaluation Session",
+        acceptedAt: new Date().toISOString(),
+      });
+    }
+  };
+
+  const handleCopyDocumentContent = () => {
+    if (!currentDoc) return;
+    navigator.clipboard.writeText(
+      `${currentDoc.title || currentDoc.name}\nVersion: ${currentDoc.version}\nEffective Date: ${currentDoc.effectiveDate}\n\n${currentDoc.content}`
+    );
+    setCopiedDocId(currentDoc.id);
+    setTimeout(() => setCopiedDocId(null), 2500);
+  };
+
+  // High-contrast, clean typography renderers for markdown legal prose
+  const isLarge = textSize === "large";
+  const markdownComponents = {
+    h1: ({ children, ...props }: any) => (
+      <h1 className={`${isLarge ? "text-2xl" : "text-xl"} font-black text-slate-950 dark:text-white mt-6 mb-3 pb-2 border-b-2 border-slate-200 dark:border-slate-800 tracking-tight`} {...props}>
+        {children}
+      </h1>
+    ),
+    h2: ({ children, ...props }: any) => (
+      <h2 className={`${isLarge ? "text-xl" : "text-lg"} font-bold text-slate-900 dark:text-slate-100 mt-5 mb-2.5 tracking-tight border-b border-slate-200/80 dark:border-slate-800/60 pb-1.5`} {...props}>
+        {children}
+      </h2>
+    ),
+    h3: ({ children, ...props }: any) => (
+      <h3 className={`${isLarge ? "text-lg" : "text-base"} font-bold text-indigo-700 dark:text-indigo-400 mt-4 mb-2`} {...props}>
+        {children}
+      </h3>
+    ),
+    p: ({ children, ...props }: any) => (
+      <p className={`${isLarge ? "text-base leading-8" : "text-sm sm:text-[15px] leading-relaxed"} text-slate-800 dark:text-slate-200 mb-4 font-normal`} {...props}>
+        {children}
+      </p>
+    ),
+    ul: ({ children, ...props }: any) => (
+      <ul className={`list-disc pl-6 space-y-2 ${isLarge ? "text-base leading-8" : "text-sm sm:text-[15px] leading-relaxed"} text-slate-800 dark:text-slate-200 mb-4`} {...props}>
+        {children}
+      </ul>
+    ),
+    ol: ({ children, ...props }: any) => (
+      <ol className={`list-decimal pl-6 space-y-2 ${isLarge ? "text-base leading-8" : "text-sm sm:text-[15px] leading-relaxed"} text-slate-800 dark:text-slate-200 mb-4`} {...props}>
+        {children}
+      </ol>
+    ),
+    li: ({ children, ...props }: any) => (
+      <li className={`${isLarge ? "text-base" : "text-sm sm:text-[15px]"} text-slate-800 dark:text-slate-200 leading-relaxed`} {...props}>
+        {children}
+      </li>
+    ),
+    strong: ({ children, ...props }: any) => (
+      <strong className="font-bold text-slate-950 dark:text-white" {...props}>
+        {children}
+      </strong>
+    ),
+    hr: (props: any) => (
+      <hr className="border-slate-200 dark:border-slate-800 my-6" {...props} />
+    ),
+    blockquote: ({ children, ...props }: any) => (
+      <blockquote className={`border-l-4 border-indigo-600 pl-4 py-2.5 my-4 bg-indigo-50/80 dark:bg-indigo-950/40 ${isLarge ? "text-base" : "text-sm"} text-slate-900 dark:text-slate-100 rounded-r-2xl font-medium`} {...props}>
+        {children}
+      </blockquote>
+    ),
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
-      <div className={`bg-slate-900 border border-slate-700/80 rounded-3xl w-full flex flex-col shadow-2xl overflow-hidden transition-all duration-300 ${
-        isFullscreen ? "max-w-[98vw] h-[96vh]" : "max-w-6xl max-h-[92vh]"
-      }`}>
+    <div 
+      id="modal-terms-of-service-gate" 
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md overflow-y-auto"
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden transition-all duration-300 my-auto flex flex-col max-h-[94vh]">
+        
         {/* Header Bar */}
-        <div className="bg-gradient-to-r from-slate-950 via-indigo-950/80 to-slate-950 px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs shrink-0">
-              <Scale className="w-6 h-6" />
+        <div className="px-6 sm:px-8 pt-5 pb-4 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 shadow-xs shrink-0 mt-0.5">
+              <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-black text-white tracking-tight">
-                  Guilford Industries Legal & Terms Governance Gate
+                <h2 className="text-lg sm:text-xl font-black text-slate-950 dark:text-white tracking-tight">
+                  Terms of Service & Enterprise Agreement
                 </h2>
-                {previouslyAcceptedInfo ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    Permanently Accepted & Active
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-amber-400" />
-                    Required Onboarding Gate
-                  </span>
-                )}
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  SLA Active
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  {legalDocuments.length} Schedules
+                </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {previouslyAcceptedInfo
-                  ? `Agreements accepted by ${previouslyAcceptedInfo.name || "Authorized Signer"} (${new Date(previouslyAcceptedInfo.acceptedAt).toLocaleDateString()}). You can review clauses or update your signature below.`
-                  : "Review, examine clauses, and accept the enterprise contracts for your workspace before proceeding."}
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                Review the binding enterprise agreements, autonomous AI safety policy, and customer data protections.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {(canDismiss || onClose) && (
             <button
               type="button"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-              title={isFullscreen ? "Exit Fullscreen" : "Expand Fullscreen"}
+              id="btn-close-terms-modal"
+              onClick={handleDismissOrPreview}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+              title="Close or explore preview"
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              <X className="w-5 h-5" />
             </button>
-            <button
-              type="button"
-              onClick={handleAgreeToAll}
-              className="text-xs px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 font-semibold border border-indigo-500/40 transition-colors whitespace-nowrap"
-            >
-              Select All Agreements
-            </button>
-            {(canDismiss || onClose) && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/30 transition-colors"
-                title="Close and return to workspace"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+          )}
+        </div>
+
+        {/* High-Contrast Core Commitments Ribbon */}
+        <div className="px-6 sm:px-8 py-2.5 bg-slate-100/80 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs shrink-0">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <Lock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="font-semibold truncate">Zero Model Training on Customer Data</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="font-semibold truncate">Human-in-the-Loop Governance</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="font-semibold truncate">99.9% Uptime Enterprise SLA</span>
           </div>
         </div>
 
-        {/* Search & Category Filter Bar */}
-        <div className="bg-slate-950 px-6 py-2.5 border-b border-slate-800/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            {categories.map((cat) => (
+        {/* Document Navigation & Typography Toolbar */}
+        <div className="px-6 sm:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800/80 shrink-0">
+          {/* Document Tab Selector */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none max-w-full">
+            {legalDocuments.map((doc, idx) => (
               <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  activeCategory === cat.id
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                key={doc.id}
+                type="button"
+                id={`btn-tab-legal-doc-${idx}`}
+                onClick={() => {
+                  setActiveContractIndex(idx);
+                  if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTop = 0;
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  activeContractIndex === idx
+                    ? "bg-indigo-600 text-white shadow-xs font-bold"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
-                {cat.label}
+                <FileText className="w-3.5 h-3.5" />
+                <span>{doc.name}</span>
               </button>
             ))}
           </div>
 
-          <div className="relative w-full md:w-64 shrink-0">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search clauses or terms..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+          {/* Reading Controls Toolbar */}
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            {/* Text Size Toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setTextSize("normal")}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                  textSize === "normal"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                }`}
+                title="Normal text size"
+              >
+                A
+              </button>
+              <button
+                type="button"
+                onClick={() => setTextSize("large")}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                  textSize === "large"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                }`}
+                title="Large readable text size"
+              >
+                A+
+              </button>
+            </div>
+
+            {/* Full Contract vs Summary Pill */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setViewMode("full")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "full"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>Full Text</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("summary")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "summary"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <ListFilter className="w-3 h-3" />
+                <span>Key Clauses</span>
+              </button>
+            </div>
+
+            {/* Copy button */}
+            <button
+              type="button"
+              onClick={handleCopyDocumentContent}
+              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 transition-colors"
+              title="Copy agreement text to clipboard"
+            >
+              {copiedDocId === currentDoc?.id ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Content Area: Dual Column (Left Doc Selector, Right Markdown Content) */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 overflow-hidden bg-slate-950/60">
-          {/* Left Navigation: Documents Index */}
-          <div className="md:col-span-4 border-r border-slate-800/80 p-4 overflow-y-auto space-y-2 max-h-[300px] md:max-h-none">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-2 flex items-center justify-between">
-              <span>Binding Contracts ({filteredDocs.length})</span>
-              <span className="text-indigo-400 font-mono">Guilford Industries</span>
+        {/* Dedicated Scrollable High-Contrast Legal Text Container */}
+        <div className="px-6 sm:px-8 py-3 flex-1 overflow-hidden flex flex-col min-h-0">
+          <div 
+            ref={scrollContainerRef}
+            id="legal-text-scrollable-container"
+            className="flex-1 overflow-y-auto rounded-2xl bg-white dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-inner text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 scroll-smooth"
+            tabIndex={0}
+            aria-label="Scrollable Legal Agreement Text"
+          >
+            {/* Header info inside the text container */}
+            <div className="mb-6 pb-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest block">
+                  {currentDoc.category ? currentDoc.category.replace(/_/g, " ") : "Legal Schedule"}
+                </span>
+                <h3 className="text-lg sm:text-2xl font-black text-slate-950 dark:text-white mt-1">
+                  {currentDoc.title || currentDoc.name}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-mono">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold">
+                  {currentDoc.version}
+                </span>
+                <span>Effective: {currentDoc.effectiveDate}</span>
+              </div>
             </div>
 
-            {filteredDocs.map((doc) => {
-              const isSelected = doc.id === selectedDocId;
-              return (
-                <button
-                  key={doc.id}
-                  onClick={() => setSelectedDocId(doc.id)}
-                  className={`w-full text-left p-3 rounded-2xl transition-all border ${
-                    isSelected
-                      ? "bg-indigo-600/20 border-indigo-500/60 text-white shadow-sm ring-1 ring-indigo-500/30"
-                      : "bg-slate-900/60 border-slate-800 hover:bg-slate-900 text-slate-300 hover:border-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-xs font-bold truncate">{doc.name}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">
-                      {doc.version}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                    {doc.summary}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+            {/* View Mode 1: Full Document Markdown */}
+            {viewMode === "full" && (
+              <div className="legal-prose text-slate-900 dark:text-slate-100 font-sans max-w-none">
+                <ReactMarkdown components={markdownComponents}>
+                  {currentDoc.content}
+                </ReactMarkdown>
+              </div>
+            )}
 
-          {/* Right Area: Document Markdown Content & Key Clauses */}
-          <div className="md:col-span-8 p-5 overflow-y-auto space-y-4 max-h-[420px] md:max-h-none bg-slate-900/40">
-            {selectedDoc && (
+            {/* View Mode 2: Key Clauses Summary */}
+            {viewMode === "summary" && (
               <div className="space-y-4">
-                {/* Doc Meta Header */}
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-indigo-400" />
-                      {selectedDoc.title}
-                    </h3>
-                    <div className="flex items-center gap-3 text-slate-400 text-[11px] mt-1 font-mono flex-wrap">
-                      <span>Provider: Guilford Industries</span>
-                      <span>•</span>
-                      <span>Version: {selectedDoc.version}</span>
-                      <span>•</span>
-                      <span>Effective: {selectedDoc.effectiveDate}</span>
-                      <span>•</span>
-                      <span className="text-emerald-400 flex items-center gap-1 font-sans font-semibold">
-                        <ShieldCheck className="w-3.5 h-3.5" /> Enforceable
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex rounded-xl bg-slate-950 p-0.5 border border-slate-800 text-[11px]">
-                      <button
-                        onClick={() => setViewMode("full")}
-                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                          viewMode === "full" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        Full Contract
-                      </button>
-                      <button
-                        onClick={() => setViewMode("clauses")}
-                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                          viewMode === "clauses" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        Key Clauses
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => handleCopyDoc(selectedDoc)}
-                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-                      title="Copy contract markdown"
-                    >
-                      {copiedDocId === selectedDoc.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadDoc(selectedDoc)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors shadow-xs"
-                      title="Download markdown file"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download .MD</span>
-                    </button>
-                  </div>
+                <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 leading-relaxed">
+                  <strong className="font-bold">Executive Summary:</strong> {currentDoc.summary}
                 </div>
 
-                {/* Key Clauses Callout */}
-                {viewMode === "clauses" && selectedDoc.keyClauses && selectedDoc.keyClauses.length > 0 && (
-                  <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 space-y-3">
-                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">
-                      Enforceable Key Clauses Summary
-                    </span>
-                    <div className="grid grid-cols-1 gap-2.5 text-xs">
-                      {selectedDoc.keyClauses.map((clause, idx) => (
-                        <div key={idx} className="p-3 rounded-xl bg-slate-950/80 border border-indigo-900/60">
-                          <span className="font-bold text-slate-200 block text-xs mb-1">
-                            {clause.heading}
-                          </span>
-                          <span className="text-xs text-slate-400 leading-relaxed block">
-                            {clause.description}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 pt-2">
+                  Key Clauses & Critical Protections
+                </h4>
 
-                {/* Full Markdown Viewer */}
-                {viewMode === "full" && (
-                  <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 leading-relaxed font-sans prose prose-invert max-w-none prose-headings:text-slate-100 prose-a:text-indigo-400 prose-code:text-indigo-300 prose-code:bg-slate-900">
-                    <ReactMarkdown>{selectedDoc.content}</ReactMarkdown>
-                  </div>
-                )}
+                <div className="grid grid-cols-1 gap-3">
+                  {currentDoc.keyClauses && currentDoc.keyClauses.length > 0 ? (
+                    currentDoc.keyClauses.map((clause, cIdx) => (
+                      <div 
+                        key={cIdx} 
+                        className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <h5 className="text-xs sm:text-sm font-bold text-slate-950 dark:text-white">
+                            {clause.heading}
+                          </h5>
+                          {clause.importance && (
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              clause.importance === "critical"
+                                ? "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900"
+                                : clause.importance === "high"
+                                ? "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900"
+                                : "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900"
+                            }`}>
+                              {clause.importance}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {clause.description}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-500 italic">No clause highlights specified for this schedule.</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2 px-1">
+            <span>Scroll container to read all provisions • Text size adjustable (A / A+)</span>
+            <span>Document {activeContractIndex + 1} of {legalDocuments.length}</span>
+          </div>
         </div>
 
-        {/* Agreement Checkboxes & Signoff Bar */}
-        <div className="bg-slate-950 border-t border-slate-800 p-5 space-y-4">
+        {/* Signature & Acceptance Footer */}
+        <div className="px-6 sm:px-8 py-4 border-t border-slate-200 dark:border-slate-800 space-y-3.5 bg-white dark:bg-slate-900 shrink-0">
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-600/50 text-xs text-rose-200 flex items-center gap-2 animate-in fade-in">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+              <span className="font-bold">Notice:</span>
               <span>{errorMessage}</span>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Checkbox 1 */}
-            <label className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 flex items-start gap-3 cursor-pointer transition-colors">
-              <input
-                type="checkbox"
-                checked={agreeMasterTos}
-                onChange={(e) => setAgreeMasterTos(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-800 border-slate-700 shrink-0"
-              />
-              <span className="text-xs text-slate-300 leading-snug">
-                I agree to the <strong>Master Terms of Service & EULA</strong> and <strong>Enterprise Distribution Agreement</strong>.
-              </span>
-            </label>
+          {/* Primary Agreement Checkbox */}
+          <label className="flex items-start gap-3 cursor-pointer group p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700/80 hover:border-indigo-400 transition-colors">
+            <input
+              type="checkbox"
+              id="checkbox-accept-terms-and-privacy"
+              checked={agreeTerms}
+              onChange={(e) => {
+                setAgreeTerms(e.target.checked);
+                if (e.target.checked) setErrorMessage(null);
+              }}
+              className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 shrink-0"
+            />
+            <span className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
+              I confirm on behalf of my enterprise that I have read and agree to the <strong>Master Terms of Service</strong>,{" "}
+              <strong>AI Safety & Acceptable Use Policy</strong>, and{" "}
+              <strong>Enterprise Data Privacy Addendum</strong>.
+            </span>
+          </label>
 
-            {/* Checkbox 2 */}
-            <label className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 flex items-start gap-3 cursor-pointer transition-colors">
+          {/* Signer Credential Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                Authorized Signer Name
+              </label>
               <input
-                type="checkbox"
-                checked={agreeAiSafety}
-                onChange={(e) => setAgreeAiSafety(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-800 border-slate-700 shrink-0"
+                type="text"
+                id="input-signer-name"
+                value={signerName}
+                onChange={(e) => setSignerName(e.target.value)}
+                placeholder="Full Legal Name"
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <span className="text-xs text-slate-300 leading-snug">
-                I accept the <strong>AI Safety, Autonomy Rules & AUP</strong>, committing to human oversight for high-risk operations.
-              </span>
-            </label>
-
-            {/* Checkbox 3 */}
-            <label className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 flex items-start gap-3 cursor-pointer transition-colors">
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                Organization / Enterprise Name
+              </label>
               <input
-                type="checkbox"
-                checked={agreePrivacyDpa}
-                onChange={(e) => setAgreePrivacyDpa(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-800 border-slate-700 shrink-0"
+                type="text"
+                id="input-organization-name"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder="Company / Enterprise Team"
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <span className="text-xs text-slate-300 leading-snug">
-                I accept the <strong>Data Privacy Policy & DPA</strong>, with zero customer data retention for model re-training.
-              </span>
-            </label>
+            </div>
           </div>
 
-          {/* Digital Signature Fields & Confirm Action */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-800/80">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-bold whitespace-nowrap">Authorized Signer:</span>
-                <input
-                  type="text"
-                  value={signerName}
-                  onChange={(e) => setSignerName(e.target.value)}
-                  placeholder="Full Legal Name"
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-medium focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-bold whitespace-nowrap">Organization:</span>
-                <input
-                  type="text"
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                  placeholder="Organization / Company"
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-medium focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-0.5">
+            <button
+              type="button"
+              id="btn-preview-guest-mode"
+              onClick={handleDismissOrPreview}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 py-2 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full sm:w-auto text-center"
+            >
+              Explore in Preview Mode
+            </button>
 
             <button
               type="button"
               id="btn-confirm-agree-terms-of-service"
               onClick={handleConfirmAgreement}
-              disabled={!allChecked || isSubmitting}
-              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+              disabled={!agreeTerms || isSubmitting}
+              className="w-full sm:w-auto px-7 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
             >
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <CheckCircle2 className="w-4 h-4 text-white" />
               )}
-              <span>
-                {previouslyAcceptedInfo ? "Update Signature & Enter Workspace" : "Accept Terms & Enter AgentFlow"}
-              </span>
+              <span>Accept Terms & Enter Workspace</span>
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
 };
-

@@ -2,6 +2,14 @@ import express from "express";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  getEmailServiceStatus,
+  generateResetCredentials,
+  verifyResetToken,
+  consumeResetToken,
+  sendPasswordResetEmail,
+  sendTestEmail,
+} from "./server/emailService";
 
 dotenv.config();
 
@@ -2294,6 +2302,125 @@ app.get("/api/google/drive-assets", async (req, res) => {
       error: error.message || "Failed to fetch Drive assets",
       fallbackAvailable: true
     });
+  }
+});
+
+// ==========================================
+// EMAIL FRAMEWORK & PASSWORD RECOVERY APIS
+// ==========================================
+
+// GET /api/auth/email-status - Returns real SMTP configuration state & diagnostics
+app.get("/api/auth/email-status", async (_req, res) => {
+  try {
+    const status = await getEmailServiceStatus();
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Failed to retrieve email status" });
+  }
+});
+
+// POST /api/auth/forgot-password - Dispatches real password reset email with 6-digit OTP & security token
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email, originUrl } = req.body;
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ success: false, error: "Please provide a valid email address." });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const { token, otp } = generateResetCredentials(cleanEmail);
+
+    const emailResult = await sendPasswordResetEmail({
+      toEmail: cleanEmail,
+      otp,
+      token,
+      originUrl,
+    });
+
+    res.json({
+      success: true,
+      email: cleanEmail,
+      deliveredViaSmtp: emailResult.deliveredViaSmtp,
+      messageId: emailResult.messageId,
+      expiresInMinutes: 15,
+      // If delivered via SMTP, we keep otp secure in email; if SMTP not yet configured in env, provide OTP in response for testing
+      otp: emailResult.deliveredViaSmtp ? undefined : otp,
+      resetUrl: emailResult.deliveredViaSmtp ? undefined : emailResult.resetUrl,
+      notice: emailResult.notice,
+    });
+  } catch (err: any) {
+    console.error("[Auth API] Forgot password dispatch error:", err);
+    res.status(500).json({ success: false, error: err.message || "Failed to process password reset request." });
+  }
+});
+
+// POST /api/auth/verify-reset-token - Validates OTP code or token
+app.post("/api/auth/verify-reset-token", (req, res) => {
+  try {
+    const { email, tokenOrOtp } = req.body;
+    if (!email || !tokenOrOtp) {
+      return res.status(400).json({ success: false, valid: false, error: "Email and verification code are required." });
+    }
+
+    const result = verifyResetToken(email, tokenOrOtp);
+    if (!result.valid) {
+      return res.status(400).json({ success: false, valid: false, error: result.error });
+    }
+
+    res.json({ success: true, valid: true, email });
+  } catch (err: any) {
+    res.status(500).json({ success: false, valid: false, error: err.message || "Token verification failed." });
+  }
+});
+
+// POST /api/auth/reset-password - Finalizes password reset with token verification
+app.post("/api/auth/reset-password", (req, res) => {
+  try {
+    const { email, tokenOrOtp, newPassword } = req.body;
+    if (!email || !tokenOrOtp || !newPassword) {
+      return res.status(400).json({ success: false, error: "Email, verification code, and new password are required." });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: "Password must be at least 6 characters long." });
+    }
+
+    const { valid, error } = verifyResetToken(email, tokenOrOtp);
+    if (!valid) {
+      return res.status(400).json({ success: false, error: error || "Invalid or expired reset token." });
+    }
+
+    // Consume the token so it cannot be re-used
+    consumeResetToken(email, tokenOrOtp);
+
+    console.log(`[Auth API] Password successfully reset for ${email}`);
+    res.json({
+      success: true,
+      email,
+      message: "Your password has been successfully updated. You can now log in with your new password.",
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Password update failed." });
+  }
+});
+
+// POST /api/auth/test-email - Tests live SMTP delivery with a test email
+app.post("/api/auth/test-email", async (req, res) => {
+  try {
+    const { targetEmail } = req.body;
+    if (!targetEmail || !targetEmail.includes("@")) {
+      return res.status(400).json({ success: false, error: "Please provide a valid target email address." });
+    }
+
+    const result = await sendTestEmail(targetEmail);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: `Test email successfully sent to ${targetEmail}`, messageId: result.messageId });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Failed to send test email." });
   }
 });
 

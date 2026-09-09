@@ -108,13 +108,42 @@ export default function App() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Master Developer vs Client Access Gate State (Direct account authentication, no PIN)
-  const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>({
-    currentAccessLevel: "master_developer",
-    founderEmail: "toppgunn321@gmail.com",
-    developerCompanyName: "Guilford Industries",
-    isSimulatingClientView: false,
-    clientLockEnforced: false,
-    detectedEnvironment: "standalone_web_app",
+  const [masterAccess, setMasterAccess] = useState<MasterAccessSettings>(() => {
+    try {
+      const isFounderAuth = typeof window !== "undefined" && localStorage.getItem("agentflow_founder_authenticated") === "true";
+      const stored = typeof window !== "undefined" ? localStorage.getItem("agentflow_master_access") : null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          ...parsed,
+          founderEmail: parsed.founderEmail || "toppgunn321@gmail.com",
+          developerCompanyName: parsed.developerCompanyName || "Guilford Industries",
+          currentAccessLevel: isFounderAuth ? parsed.currentAccessLevel : "client_tenant",
+          isSimulatingClientView: !isFounderAuth,
+        };
+      }
+      if (isFounderAuth) {
+        return {
+          currentAccessLevel: "master_developer",
+          founderEmail: "toppgunn321@gmail.com",
+          developerCompanyName: "Guilford Industries",
+          isSimulatingClientView: false,
+          clientLockEnforced: false,
+          detectedEnvironment: "standalone_web_app",
+        };
+      }
+    } catch {
+      // fallback
+    }
+    // Default for fresh visitors: client_tenant
+    return {
+      currentAccessLevel: "client_tenant",
+      founderEmail: "toppgunn321@gmail.com",
+      developerCompanyName: "Guilford Industries",
+      isSimulatingClientView: true,
+      clientLockEnforced: true,
+      detectedEnvironment: "standalone_web_app",
+    };
   });
   const [isAccessGateOpen, setIsAccessGateOpen] = useState<boolean>(false);
 
@@ -156,13 +185,21 @@ export default function App() {
       const storedTheme = getStoredItem<string | null>("agentflow_workplace_theme", null);
       if (storedTheme) setActiveWorkplaceThemeId(storedTheme);
       const storedMasterAccess = getStoredItem<MasterAccessSettings | null>("agentflow_master_access", null);
+      const isFounderAuth = localStorage.getItem("agentflow_founder_authenticated") === "true";
       if (storedMasterAccess) {
         setMasterAccess({
           ...storedMasterAccess,
           founderEmail: storedMasterAccess.founderEmail || "toppgunn321@gmail.com",
           developerCompanyName: storedMasterAccess.developerCompanyName || "Guilford Industries",
-          currentAccessLevel: storedMasterAccess.currentAccessLevel || "master_developer",
+          currentAccessLevel: isFounderAuth ? (storedMasterAccess.currentAccessLevel || "master_developer") : "client_tenant",
+          isSimulatingClientView: !isFounderAuth,
         });
+      } else if (!isFounderAuth) {
+        setMasterAccess((prev) => ({
+          ...prev,
+          currentAccessLevel: "client_tenant",
+          isSimulatingClientView: true,
+        }));
       }
 
       const storedAgents = getStoredItem<Agent[] | null>("agentflow_agents", null);
@@ -2014,6 +2051,7 @@ export default function App() {
         whiteLabelBrandName={whiteLabelConfig?.brandName || "AgentFlow Enterprise"}
         onUpdateAccessSettings={(newSettings) => {
           setMasterAccess(newSettings);
+          setStoredItem("agentflow_master_access", newSettings);
           if (newSettings.currentAccessLevel === "client_tenant") {
             if (currentTab === "whitelabel" || currentTab === "monetization") {
               setCurrentTab("agents");
@@ -2156,6 +2194,38 @@ export default function App() {
           addXpAndCheckLevel(500, 1.5);
           fireCelebration();
         }}
+        onRegisterFounder={(data) => {
+          setMasterAccess((prev) => ({
+            ...prev,
+            currentAccessLevel: "master_developer",
+            founderEmail: data.email,
+            developerCompanyName: data.companyName || prev.developerCompanyName,
+            isSimulatingClientView: false,
+            clientLockEnforced: false,
+          }));
+          setDeveloperProfile((prev) => ({
+            ...prev,
+            developerName: data.name,
+            developerEmail: data.email,
+            agencyName: data.companyName,
+          }));
+          setUserProfile((prev) => ({
+            ...prev,
+            name: data.name,
+            email: data.email,
+            organizationName: data.companyName,
+            role: data.title || "Founder & Chief Automation Officer",
+            subscriptionPlan: (data.planId as any) || prev.subscriptionPlan,
+            isAuthenticated: true,
+          }));
+          setStoredItem("agentflow_founder_authenticated", "true");
+          setStoredItem("agentflow_founder_email", data.email);
+          setStoredItem("agentflow_founder_name", data.name);
+          addXpAndCheckLevel(1000, 2.0);
+          fireCelebration();
+        }}
+        isMasterDeveloper={isMasterDeveloper}
+        currentAccessLevel={masterAccess.currentAccessLevel}
       />
       {/* Modal: Enterprise Terms of Service & Agreements Gate */}
       <TermsAgreementGateModal
@@ -2172,7 +2242,7 @@ export default function App() {
         legalDocuments={legalDocs}
         userEmail={userProfile.email || "enterprise@client.com"}
         userName={userProfile.name || "Enterprise User"}
-        canDismiss={Boolean(localStorage.getItem("agentflow_tos_accepted"))}
+        canDismiss={true}
         onClose={() => setHasAcceptedTerms(true)}
       />
 

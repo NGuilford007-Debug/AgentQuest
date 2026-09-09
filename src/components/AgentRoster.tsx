@@ -245,16 +245,16 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
               <span>Autonomous Enterprise AI Agents ({agents.length})</span>
             </h1>
             {!isMasterDeveloper && (
-              <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 border border-slate-300 dark:border-slate-700">
-                <Lock className="w-3 h-3 text-amber-500" />
-                <span>Client White-Label View</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                <span>Enterprise Fleet Active</span>
               </span>
             )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isMasterDeveloper 
               ? "Creator Governance Mode: Control client-page exposure, set internal-only policies, and review inbound client requests."
-              : `Production-ready agent fleet managed and secured by ${developerCompanyName}. Execution & scoping enabled.`}
+              : "Autonomous enterprise agent fleet with deterministic execution guardrails and live task orchestration."}
           </p>
         </div>
 

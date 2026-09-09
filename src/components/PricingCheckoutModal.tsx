@@ -27,20 +27,16 @@ import {
   Wallet,
   Percent,
   RefreshCw,
+  Crown,
+  Mail,
+  UserCheck,
+  AlertCircle,
+  KeyRound,
+  EyeOff,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { INITIAL_LEGAL_DOCUMENTS } from "../data/initialLegalDocs";
 import { LegalDocumentItem } from "../types";
-import { 
-  initRevenueCat, 
-  getRevenueCatCustomerInfo, 
-  getRevenueCatOfferings, 
-  presentRevenueCatPaywall,
-  checkHasEntitlement,
-  REVENUECAT_API_KEY,
-  getRevenueCatUserId
-} from "../services/revenuecat";
-import type { CustomerInfo, Offerings } from "@revenuecat/purchases-js";
 
 export interface PlanTokenAllocationResult {
   planId: "free" | "starter" | "pro" | "enterprise" | string;
@@ -48,6 +44,15 @@ export interface PlanTokenAllocationResult {
   tokenCreditAmount: number;
   includedTokensMonthly: number;
   platformLicenseFee: number;
+}
+
+export interface FounderRegistrationData {
+  email: string;
+  name: string;
+  password: string;
+  companyName: string;
+  title?: string;
+  planId: string;
 }
 
 export interface PricingPlan {
@@ -84,6 +89,9 @@ interface PricingCheckoutModalProps {
     tokenAllocation?: PlanTokenAllocationResult
   ) => void;
   onOpenAuthModal?: () => void;
+  onRegisterFounder?: (data: FounderRegistrationData) => void;
+  isMasterDeveloper?: boolean;
+  currentAccessLevel?: string;
 }
 
 
@@ -200,6 +208,9 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
   tenantName = "AgentFlow Enterprise",
   onSuccessUpgrade,
   onOpenAuthModal,
+  onRegisterFounder,
+  isMasterDeveloper = false,
+  currentAccessLevel = "client_tenant",
 }) => {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const targetId = initialPlanId || currentPlanId;
@@ -216,107 +227,86 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
   const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
   const [copiedReviewDocId, setCopiedReviewDocId] = useState<string | null>(null);
 
-  // RevenueCat Purchases Integration State
-  const [rcCustomerInfo, setRcCustomerInfo] = useState<CustomerInfo | null>(null);
-  const [rcOfferings, setRcOfferings] = useState<Offerings | null>(null);
-  const [isRcLoading, setIsRcLoading] = useState<boolean>(false);
-  const [rcStatusNotice, setRcStatusNotice] = useState<string | null>(null);
-  const [rcUserId, setRcUserId] = useState<string>(() => getRevenueCatUserId());
-
-  // Load RevenueCat status on modal opening
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    let isMounted = true;
-    const fetchRcData = async () => {
-      try {
-        setIsRcLoading(true);
-        initRevenueCat(userEmailInput || customerEmail);
-        setRcUserId(getRevenueCatUserId());
-        
-        const [info, offs] = await Promise.all([
-          getRevenueCatCustomerInfo(),
-          getRevenueCatOfferings(),
-        ]);
-
-        if (isMounted) {
-          setRcCustomerInfo(info);
-          setRcOfferings(offs);
-          
-          if (info && ("AgentFlow Pro" in info.entitlements.active || "SyncSchedule Pro" in info.entitlements.active)) {
-            setRcStatusNotice("👑 'AgentFlow Pro' active entitlement detected from RevenueCat!");
-          }
-        }
-      } catch (err) {
-        console.warn("RevenueCat load error:", err);
-      } finally {
-        if (isMounted) setIsRcLoading(false);
-      }
-    };
-
-    fetchRcData();
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, userEmailInput, customerEmail]);
-
-  // Handle RevenueCat Paywall Launch
-  const handleLaunchRevenueCatPaywall = async () => {
-    setIsProcessing(true);
-    setRcStatusNotice(null);
+  // Founder Account Setup State (Post-purchase workflow)
+  const [isSettingUpFounder, setIsSettingUpFounder] = useState<boolean>(false);
+  const [founderName, setFounderName] = useState<string>(() => {
     try {
-      initRevenueCat(userEmailInput || customerEmail);
-      const result = await presentRevenueCatPaywall(rcOfferings?.current || undefined);
-      
-      if (result.customerInfo) {
-        setRcCustomerInfo(result.customerInfo);
-      }
-
-      if (result.success) {
-        setPaymentSuccess(true);
-        setStatusMessage("🎉 RevenueCat purchase successful! 'AgentFlow Pro' entitlement unlocked.");
-        if (onSuccessUpgrade) {
-          onSuccessUpgrade("pro");
-        }
-      } else if (result.error) {
-        setRcStatusNotice(`RevenueCat Paywall note: ${result.error}`);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Paywall presentation failed";
-      setRcStatusNotice(`RevenueCat notice: ${msg}`);
-    } finally {
-      setIsProcessing(false);
+      return localStorage.getItem("agentflow_founder_name") || "Alex Mercer";
+    } catch {
+      return "Alex Mercer";
     }
-  };
-
-  // Handle Manual Entitlement Refresh
-  const handleRefreshRevenueCatEntitlements = async () => {
-    setIsRcLoading(true);
-    setRcStatusNotice(null);
+  });
+  const [founderEmailInput, setFounderEmailInput] = useState<string>(() => {
     try {
-      const info = await getRevenueCatCustomerInfo();
-      setRcCustomerInfo(info);
-      const hasAgentFlowPro = await checkHasEntitlement("AgentFlow Pro");
-      
-      if (hasAgentFlowPro) {
-        setRcStatusNotice("✅ 'AgentFlow Pro' Entitlement is ACTIVE!");
-        setPaymentSuccess(true);
-        setStatusMessage("🎉 'AgentFlow Pro' verified active via RevenueCat!");
-        if (onSuccessUpgrade) {
-          onSuccessUpgrade("pro");
-        }
-      } else {
-        const activeKeys = info?.entitlements?.active ? Object.keys(info.entitlements.active) : [];
-        if (activeKeys.length > 0) {
-          setRcStatusNotice(`Active Entitlements: ${activeKeys.join(", ")}`);
-        } else {
-          setRcStatusNotice("No active entitlements found yet for this RevenueCat App User ID.");
-        }
+      return localStorage.getItem("agentflow_founder_email") || customerEmail || "toppgunn321@gmail.com";
+    } catch {
+      return customerEmail || "toppgunn321@gmail.com";
+    }
+  });
+  const [founderPassword, setFounderPassword] = useState<string>("");
+  const [confirmFounderPassword, setConfirmFounderPassword] = useState<string>("");
+  const [showFounderPass, setShowFounderPass] = useState<boolean>(false);
+  const [founderCompany, setFounderCompany] = useState<string>(tenantName || "Guilford Industries");
+  const [founderTitle, setFounderTitle] = useState<string>("Founder & Chief Automation Officer");
+  const [founderSetupError, setFounderSetupError] = useState<string | null>(null);
+  const [founderSetupSuccess, setFounderSetupSuccess] = useState<boolean>(false);
+  const [isSavingFounder, setIsSavingFounder] = useState<boolean>(false);
+  const [copiedLoginDetails, setCopiedLoginDetails] = useState<boolean>(false);
+
+  // Sync email input when customerEmail changes
+  React.useEffect(() => {
+    if (customerEmail && (!founderEmailInput || founderEmailInput === "alex.mercer@enterprise.io")) {
+      setFounderEmailInput(customerEmail);
+    }
+  }, [customerEmail]);
+
+  // Handle saving founder credentials and logging in directly
+  const handleSaveFounderCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFounderSetupError(null);
+
+    const emailTrimmed = founderEmailInput.trim();
+    if (!emailTrimmed || !emailTrimmed.includes("@")) {
+      setFounderSetupError("Please enter a valid email address for your founder account.");
+      return;
+    }
+
+    if (!founderPassword || founderPassword.length < 6) {
+      setFounderSetupError("Master password must be at least 6 characters long.");
+      return;
+    }
+
+    if (founderPassword !== confirmFounderPassword) {
+      setFounderSetupError("Passwords do not match. Please verify and re-enter.");
+      return;
+    }
+
+    setIsSavingFounder(true);
+    try {
+      localStorage.setItem("agentflow_founder_email", emailTrimmed);
+      localStorage.setItem("agentflow_founder_password", founderPassword);
+      localStorage.setItem("agentflow_founder_name", founderName.trim() || "Founder");
+      localStorage.setItem("agentflow_founder_authenticated", "true");
+      localStorage.setItem("agentflow_remember_founder", "true");
+
+      if (onRegisterFounder) {
+        onRegisterFounder({
+          email: emailTrimmed,
+          name: founderName.trim() || "Founder",
+          password: founderPassword,
+          companyName: founderCompany.trim() || "Guilford Industries",
+          title: founderTitle.trim() || "Founder",
+          planId: selectedPlan.id,
+        });
       }
+
+      setFounderSetupSuccess(true);
+      setStatusMessage(`🎉 Founder credentials activated! You are now logged in with Master Developer privileges.`);
     } catch (err) {
-      setRcStatusNotice("Error contacting RevenueCat API.");
+      console.warn("Storage error saving founder:", err);
+      setFounderSetupError("Could not persist founder credentials to browser storage.");
     } finally {
-      setIsRcLoading(false);
+      setIsSavingFounder(false);
     }
   };
 
@@ -407,8 +397,13 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
         }).catch(() => null);
 
         setPaymentSuccess(true);
+        setIsSettingUpFounder(true);
+        setFounderSetupSuccess(false);
+        if (!founderEmailInput || founderEmailInput === "alex.mercer@enterprise.io") {
+          setFounderEmailInput(userEmailInput || customerEmail);
+        }
         setStatusMessage(
-          `🎉 Subscription activated for ${plan.name}! $${tokenCreditVal.toFixed(2)} deposited into your AI token wallet (${tokensVal.toLocaleString()} tokens active).`
+          `🎉 Subscription activated for ${plan.name}! Please configure your master founder credentials below.`
         );
         if (onSuccessUpgrade) {
           onSuccessUpgrade(plan.id, {
@@ -423,8 +418,13 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     } catch (err) {
       console.warn("Failed to create Stripe session, using mock confirmation:", err);
       setPaymentSuccess(true);
+      setIsSettingUpFounder(true);
+      setFounderSetupSuccess(false);
+      if (!founderEmailInput || founderEmailInput === "alex.mercer@enterprise.io") {
+        setFounderEmailInput(userEmailInput || customerEmail);
+      }
       setStatusMessage(
-        `🎉 Subscription activated for ${plan.name}! $${tokenCreditVal.toFixed(2)} deposited into your AI token wallet (${tokensVal.toLocaleString()} tokens active).`
+        `🎉 Subscription activated for ${plan.name}! Please configure your master founder credentials below.`
       );
       if (onSuccessUpgrade) {
         onSuccessUpgrade(plan.id, {
@@ -464,8 +464,15 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     setTimeout(() => {
       setIsProcessing(false);
       setPaymentSuccess(true);
+      if (plan.id !== "free") {
+        setIsSettingUpFounder(true);
+        setFounderSetupSuccess(false);
+        if (!founderEmailInput || founderEmailInput === "alex.mercer@enterprise.io") {
+          setFounderEmailInput(userEmailInput || customerEmail);
+        }
+      }
       setStatusMessage(
-        `🎉 Upgraded to ${plan.name} successfully! $${tokenCreditVal.toFixed(2)} deposited into your AI token wallet (${tokensVal.toLocaleString()} tokens active).`
+        `🎉 Upgraded to ${plan.name} successfully! Please configure your master founder credentials below.`
       );
       if (onSuccessUpgrade) {
         onSuccessUpgrade(plan.id, {
@@ -529,39 +536,55 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
           </div>
         </div>
 
-        {/* BILLING CYCLE SELECTOR */}
+        {/* BILLING CYCLE & FOUNDER SETUP BAR */}
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
-              Billing Interval:
-            </span>
-            <div className="flex items-center p-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setBillingCycle("monthly")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  billingCycle === "monthly"
-                    ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingCycle("annual")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  billingCycle === "annual"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                <span>Annual</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-slate-950 text-[9px] font-black whitespace-nowrap">
-                  Save 20%
-                </span>
-              </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                Interval:
+              </span>
+              <div className="flex items-center p-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle("monthly")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                    billingCycle === "monthly"
+                      ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle("annual")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    billingCycle === "annual"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <span>Annual</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-slate-950 text-[9px] font-black whitespace-nowrap">
+                    Save 20%
+                  </span>
+                </button>
+              </div>
             </div>
+
+            {/* Direct Founder Setup Tab Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsSettingUpFounder(!isSettingUpFounder)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shadow-2xs ${
+                isSettingUpFounder
+                  ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-amber-500/20"
+                  : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-400 hover:text-amber-600"
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>{isSettingUpFounder ? "Hide Founder Setup" : "👑 Set Founder Login"}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
@@ -570,7 +593,7 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
           </div>
         </div>
 
-        {/* PLANS GRID */}
+        {/* MODAL BODY CONTAINER */}
         <div className="p-6 overflow-y-auto space-y-6">
           
           {paymentSuccess && (
@@ -582,6 +605,281 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
                   {statusMessage || `Your workspace is now operating on the ${selectedPlan.name}.`}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* FOUNDER ACCOUNT SETUP & LOGIN ACTIVATION CARD (SHOWN POST-PURCHASE OR ON TOGGLE) */}
+          {isSettingUpFounder && (
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-white border-2 border-indigo-500/60 shadow-2xl space-y-6 animate-in slide-in-from-top-4 duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-orange-500 to-indigo-600 text-slate-950 flex items-center justify-center font-black shadow-lg shrink-0">
+                    <Crown className="w-6 h-6 fill-current text-slate-950" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                        {paymentSuccess ? "Subscription Confirmed ✓" : "Executive Entitlement"}
+                      </span>
+                      <span className="text-xs text-slate-300">
+                        Tier: <strong className="text-white">{selectedPlan.name}</strong>
+                      </span>
+                    </div>
+                    <h3 className="font-black text-lg text-white mt-0.5">
+                      {founderSetupSuccess ? "Master Founder Access Activated" : "Step 2 of 2: Set Master Founder Account & Login"}
+                    </h3>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSettingUpFounder(false);
+                      setFounderSetupSuccess(false);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-slate-200 transition-colors"
+                  >
+                    Close Setup Panel
+                  </button>
+                </div>
+              </div>
+
+              {!founderSetupSuccess ? (
+                <form onSubmit={handleSaveFounderCredentials} className="space-y-5">
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                    As the subscribing client, you are designated full <strong>Master Founder Privileges</strong>. Define your executive login credentials below. You can log in anytime using the <strong>Master Access Gate</strong> to administer White-Label branding, team workspaces, API keys, and autonomous agent tasks.
+                  </p>
+
+                  {founderSetupError && (
+                    <div className="p-3.5 rounded-2xl bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>{founderSetupError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Founder Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Founder Full Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={founderName}
+                        onChange={(e) => setFounderName(e.target.value)}
+                        placeholder="e.g. Alex Mercer"
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-indigo-400 focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Founder Login Email */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Founder Master Email (Login ID)</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={founderEmailInput}
+                        onChange={(e) => setFounderEmailInput(e.target.value)}
+                        placeholder="e.g. founder@enterprise.com"
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-emerald-400 focus:outline-hidden font-mono"
+                      />
+                    </div>
+
+                    {/* Company / Enterprise Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Organization / Company Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={founderCompany}
+                        onChange={(e) => setFounderCompany(e.target.value)}
+                        placeholder="e.g. Guilford Industries"
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-purple-400 focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Executive Title */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Designated Founder Title</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={founderTitle}
+                        onChange={(e) => setFounderTitle(e.target.value)}
+                        placeholder="e.g. Founder & Chief Automation Officer"
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Founder Password */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Master Founder Password</span>
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-medium">Min 6 characters</span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showFounderPass ? "text" : "password"}
+                          value={founderPassword}
+                          onChange={(e) => setFounderPassword(e.target.value)}
+                          placeholder="Set secure master password"
+                          required
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowFounderPass(!showFounderPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                        >
+                          {showFounderPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {founderPassword && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden flex">
+                            <div
+                              className={`h-full transition-all ${
+                                founderPassword.length < 6
+                                  ? "w-1/4 bg-rose-500"
+                                  : founderPassword.length < 8
+                                  ? "w-2/4 bg-amber-500"
+                                  : "w-full bg-emerald-500"
+                              }`}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-300">
+                            {founderPassword.length < 6
+                              ? "Too short"
+                              : founderPassword.length < 8
+                              ? "Moderate"
+                              : "Strong ✓"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Confirm Master Password</span>
+                        </label>
+                        {confirmFounderPassword && (
+                          <span className={`text-[10px] font-bold ${founderPassword === confirmFounderPassword ? "text-emerald-400" : "text-rose-400"}`}>
+                            {founderPassword === confirmFounderPassword ? "✓ Passwords Match" : "✕ Must match"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showFounderPass ? "text" : "password"}
+                          value={confirmFounderPassword}
+                          onChange={(e) => setConfirmFounderPassword(e.target.value)}
+                          placeholder="Confirm master password"
+                          required
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-indigo-400 focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSavingFounder}
+                      className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-indigo-600 hover:from-amber-300 hover:to-indigo-500 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 active:scale-95 transition-all"
+                    >
+                      {isSavingFounder ? (
+                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 fill-current" />
+                      )}
+                      <span>Save Founder Credentials & Log In Now</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsSettingUpFounder(false)}
+                      className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs transition-colors"
+                    >
+                      Browse Plans First
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* CONFIRMATION CARD */
+                <div className="space-y-5 animate-in fade-in">
+                  <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-white">Founder Credentials Saved & Authenticated!</h4>
+                      <p className="text-xs text-emerald-200/90 mt-0.5">
+                        Your master founder profile is now linked to <strong>{selectedPlan.name}</strong>. You are currently logged in with full executive developer privileges.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Founder Login Email</span>
+                      <span className="font-mono font-bold text-white text-sm">{founderEmailInput}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Organization</span>
+                      <span className="font-bold text-white text-sm">{founderCompany}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Assigned Role</span>
+                      <span className="font-bold text-amber-300 text-sm">{founderTitle}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Subscription Tier</span>
+                      <span className="font-bold text-emerald-400 text-sm">{selectedPlan.name} (Active)</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const loginText = `AgentFlow Founder Login:\nEmail: ${founderEmailInput}\nPassword: ${founderPassword}\nCompany: ${founderCompany}`;
+                        navigator.clipboard.writeText(loginText);
+                        setCopiedLoginDetails(true);
+                        setTimeout(() => setCopiedLoginDetails(false), 2500);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      {copiedLoginDetails ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLoginDetails ? "Credentials Copied!" : "Copy Founder Credentials"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                    >
+                      <Sparkles className="w-4 h-4 fill-current" />
+                      <span>Enter Founder Command Suite</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -847,121 +1145,101 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
             </div>
           </div>
 
-          {/* REVENUECAT PURCHASES INTEGRATION CARD */}
+          {/* MASTER FOUNDER PRIVILEGES & SUBSCRIBER ACCESS CARD */}
           <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-indigo-950/30 border-2 border-amber-300 dark:border-amber-700/60 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-md font-bold shrink-0">
-                  <Sparkles className="w-5 h-5" />
+                  <Crown className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      RevenueCat Web Paywall & Entitlements
+                      Executive Founder Account & Master Privileges
                     </h4>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40">
-                      @revenuecat/purchases-js
+                      Client Entitlement
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
-                      API: {REVENUECAT_API_KEY.slice(0, 10)}...
+                      Tier: {selectedPlan.name}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Universal in-app subscriptions, web paywalls, and cross-platform entitlement verification for <strong>AgentFlow Pro</strong>.
+                    Upon purchasing or upgrading any subscription tier, you can immediately set your founder email and password to log in with master administrative developer access.
                   </p>
                 </div>
               </div>
 
-              {/* Status / App User ID */}
+              {/* Status / Saved Founder Email */}
               <div className="text-left sm:text-right shrink-0">
-                <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">RevenueCat App User</div>
-                <div className="text-xs font-mono font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]" title={rcUserId}>
-                  {rcUserId}
-                </div>
-              </div>
-            </div>
-
-            {/* Status notice if any */}
-            {rcStatusNotice && (
-              <div className="p-3 rounded-2xl bg-amber-100/70 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span>{rcStatusNotice}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRcStatusNotice(null)}
-                  className="text-amber-700 dark:text-amber-400 hover:underline text-[11px]"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-
-            {/* Active Entitlements Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Entitlement Target</span>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white">AgentFlow Pro</span>
-                  {rcCustomerInfo && ("AgentFlow Pro" in rcCustomerInfo.entitlements.active || "SyncSchedule Pro" in rcCustomerInfo.entitlements.active) ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                      ACTIVE
+                <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Current Access Mode</div>
+                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {isMasterDeveloper ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 sm:justify-end">
+                      <Crown className="w-3 h-3" /> Master Developer (Founder)
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                      Ready to Unlock
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Client Tenant Mode
                     </span>
                   )}
                 </div>
               </div>
+            </div>
 
+            {/* Founder Access Highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Active Entitlements</span>
-                <div className="font-bold text-slate-900 dark:text-white truncate">
-                  {rcCustomerInfo?.entitlements?.active && Object.keys(rcCustomerInfo.entitlements.active).length > 0
-                    ? Object.keys(rcCustomerInfo.entitlements.active).join(", ")
-                    : "None active"}
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Founder Login ID</span>
+                <div className="font-mono font-bold text-slate-900 dark:text-white truncate">
+                  {founderEmailInput || customerEmail}
                 </div>
               </div>
 
               <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Offering</span>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Organization</span>
                 <div className="font-bold text-slate-900 dark:text-white truncate">
-                  {rcOfferings?.current ? rcOfferings.current.identifier : "Default Project Offering"}
+                  {founderCompany || tenantName}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Admin Gate Status</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Ready to Authenticate</span>
+                  <Lock className="w-3.5 h-3.5 text-amber-500" />
                 </div>
               </div>
             </div>
 
-            {/* RevenueCat Action Buttons */}
+            {/* Founder Action Buttons */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <button
                 type="button"
-                onClick={handleLaunchRevenueCatPaywall}
-                disabled={isProcessing}
+                onClick={() => {
+                  setIsSettingUpFounder(true);
+                  setFounderSetupSuccess(false);
+                }}
                 className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 shrink-0"
               >
-                <Sparkles className="w-4 h-4 text-slate-950 fill-current" />
-                <span>Present RevenueCat Paywall</span>
+                <Crown className="w-4 h-4 text-slate-950 fill-current" />
+                <span>Configure / Update Founder Login</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleRefreshRevenueCatEntitlements}
-                disabled={isRcLoading}
-                className="px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-300 dark:border-slate-700 flex items-center gap-2 transition-all shrink-0 shadow-2xs"
-              >
-                {isRcLoading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                )}
-                <span>Check Entitlements</span>
-              </button>
+              {onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-300 dark:border-slate-700 flex items-center gap-2 transition-all shrink-0 shadow-2xs"
+                >
+                  <KeyRound className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <span>Open Client Login Portal</span>
+                </button>
+              )}
 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 ml-auto flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                <span>RevenueCat SDK v1.53 Initialized</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Executive Privileges Protected</span>
               </div>
             </div>
           </div>

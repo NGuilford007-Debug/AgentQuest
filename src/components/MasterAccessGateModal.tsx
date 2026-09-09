@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ShieldCheck,
   Lock,
@@ -8,9 +8,19 @@ import {
   Users,
   Building2,
   Mail,
-  Check
+  Check,
+  LogOut,
+  AlertCircle,
+  KeyRound,
+  Eye,
+  EyeOff,
+  X,
+  Shield,
+  Key,
+  HelpCircle
 } from "lucide-react";
 import { AccessLevel, MasterAccessSettings } from "../types";
+import { PasswordRecoveryModal } from "./PasswordRecoveryModal";
 
 interface MasterAccessGateModalProps {
   isOpen: boolean;
@@ -21,32 +31,107 @@ interface MasterAccessGateModalProps {
   whiteLabelBrandName?: string;
 }
 
+const DEFAULT_FOUNDER_PASSWORD = "AgentFlow2026!";
+
 export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
   isOpen,
   onClose,
   accessSettings = {
-    currentAccessLevel: "master_developer",
+    currentAccessLevel: "client_tenant",
     founderEmail: "toppgunn321@gmail.com",
     developerCompanyName: "Guilford Industries",
-    isSimulatingClientView: false,
-    clientLockEnforced: false,
+    isSimulatingClientView: true,
+    clientLockEnforced: true,
     detectedEnvironment: "standalone_web_app",
   },
   onUpdateAccessSettings,
   developerCompanyName = "Guilford Industries",
-  whiteLabelBrandName = "Guilford Enterprise",
+  whiteLabelBrandName = "AgentFlow Enterprise",
 }) => {
+  const founderEmail = 
+    (typeof window !== "undefined" && localStorage.getItem("agentflow_founder_email")) || 
+    accessSettings?.founderEmail || 
+    "toppgunn321@gmail.com";
+
+  // Check persistent authentication status
+  const [isFounderAuthenticated, setIsFounderAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("agentflow_founder_authenticated") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Login form state
+  const [inputEmail, setInputEmail] = useState<string>(founderEmail);
+  const [inputPassword, setInputPassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showDemoHint, setShowDemoHint] = useState<boolean>(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
+
+  // Change password drawer state
+  const [isChangingPassword, setIsChangingPassword] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState<string>("");
+  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        setIsFounderAuthenticated(localStorage.getItem("agentflow_founder_authenticated") === "true");
+        const activeFounderEmail = localStorage.getItem("agentflow_founder_email") || founderEmail;
+        setInputEmail(activeFounderEmail);
+      } catch {
+        // fallback
+      }
+      setAuthError(null);
+      setSuccessMsg(null);
+      setInputPassword("");
+    }
+  }, [isOpen, founderEmail]);
 
   if (!isOpen) return null;
 
-  const currentLevel = accessSettings?.currentAccessLevel ?? "master_developer";
-  const isMaster = currentLevel === "master_developer";
+  const currentLevel = accessSettings?.currentAccessLevel ?? "client_tenant";
+  const isMaster = currentLevel === "master_developer" && isFounderAuthenticated;
   const isOperator = currentLevel === "team_operator";
-  const isClient = currentLevel === "client_tenant";
-  const founderEmail = accessSettings?.founderEmail || "toppgunn321@gmail.com";
+  const isClient = currentLevel === "client_tenant" || !isFounderAuthenticated;
 
+  const getStoredFounderPassword = () => {
+    try {
+      return localStorage.getItem("agentflow_founder_password") || DEFAULT_FOUNDER_PASSWORD;
+    } catch {
+      return DEFAULT_FOUNDER_PASSWORD;
+    }
+  };
+
+  // Password strength calculation
+  const calculatePasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: "None", color: "bg-slate-200 dark:bg-slate-700" };
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+    if (score <= 1) return { score: 1, label: "Weak", color: "bg-rose-500", text: "text-rose-500" };
+    if (score <= 3) return { score: 2, label: "Good", color: "bg-amber-500", text: "text-amber-500" };
+    return { score: 3, label: "Strong", color: "bg-emerald-500", text: "text-emerald-500" };
+  };
+
+  const strength = calculatePasswordStrength(inputPassword);
+
+  // Handle direct switch when founder is verified
   const handleSwitchRole = (newLevel: AccessLevel) => {
+    if (newLevel === "master_developer" && !isFounderAuthenticated) {
+      setAuthError("You must authenticate with your founder password to access Master Founder Mode.");
+      return;
+    }
+
     onUpdateAccessSettings({
       ...accessSettings,
       currentAccessLevel: newLevel,
@@ -58,214 +143,597 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
         ? "Master Founder / Admin Mode" 
         : newLevel === "team_operator" 
         ? "Team Operator Mode" 
-        : `Standard Member Mode (${whiteLabelBrandName})`;
+        : "Standard Client Member View";
 
-    setSuccessMsg(`Switched active workspace to ${roleName}`);
+    setSuccessMsg(`Switched workspace role to ${roleName}`);
     setTimeout(() => {
       setSuccessMsg(null);
       onClose();
     }, 600);
   };
 
+  // Handle founder login with email AND password
+  const handleFounderAuth = (e?: React.FormEvent, overridePass?: string) => {
+    if (e) e.preventDefault();
+    setAuthError(null);
+
+    const emailToVerify = inputEmail.trim().toLowerCase();
+    const passToVerify = overridePass ?? inputPassword;
+    const currentFounderPassword = getStoredFounderPassword();
+
+    if (!emailToVerify) {
+      setAuthError("Please enter your founder email address.");
+      return;
+    }
+
+    if (emailToVerify !== founderEmail.toLowerCase()) {
+      setAuthError(`Access restricted. Only the authorized platform founder (${founderEmail}) can access Founder Mode.`);
+      return;
+    }
+
+    if (!passToVerify) {
+      setAuthError("Please enter your founder password to authenticate.");
+      return;
+    }
+
+    if (passToVerify !== currentFounderPassword) {
+      setAuthError("Incorrect password. Please verify your credentials or click 'Need Password Help?' below.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    setTimeout(() => {
+      try {
+        localStorage.setItem("agentflow_founder_authenticated", "true");
+        localStorage.setItem("agentflow_founder_email", founderEmail);
+        if (rememberMe) {
+          localStorage.setItem("agentflow_remember_founder", "true");
+        }
+      } catch (err) {
+        console.warn("Could not save founder auth state:", err);
+      }
+
+      setIsFounderAuthenticated(true);
+      setIsSubmitting(false);
+      setAuthError(null);
+      setSuccessMsg(`Authenticated successfully as Founder (${founderEmail}). Session encrypted.`);
+
+      onUpdateAccessSettings({
+        ...accessSettings,
+        currentAccessLevel: "master_developer",
+        isSimulatingClientView: false,
+      });
+
+      setTimeout(() => {
+        setSuccessMsg(null);
+        onClose();
+      }, 700);
+    }, 400);
+  };
+
+  // Quick fill with valid demo credentials
+  const handleQuickFill = () => {
+    const validPass = getStoredFounderPassword();
+    setInputEmail(founderEmail);
+    setInputPassword(validPass);
+    setAuthError(null);
+  };
+
+  // Handle sign out of founder mode (back to client view)
+  const handleSignOutOfFounder = () => {
+    try {
+      localStorage.removeItem("agentflow_founder_authenticated");
+    } catch (e) {
+      console.warn("Could not remove founder auth:", e);
+    }
+
+    setIsFounderAuthenticated(false);
+    onUpdateAccessSettings({
+      ...accessSettings,
+      currentAccessLevel: "client_tenant",
+      isSimulatingClientView: true,
+    });
+
+    setSuccessMsg("Signed out of Founder Mode. Viewing as Standard Client.");
+    setTimeout(() => {
+      setSuccessMsg(null);
+      onClose();
+    }, 600);
+  };
+
+  // Handle password update
+  const handleUpdatePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setAuthError("New password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setAuthError("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    try {
+      localStorage.setItem("agentflow_founder_password", newPassword);
+      setSuccessMsg("Founder password updated securely!");
+      setIsChangingPassword(false);
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setAuthError(null);
+    } catch (err) {
+      setAuthError("Failed to update password in local storage.");
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-xl w-full flex flex-col overflow-hidden animate-in zoom-in-95">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full flex flex-col overflow-hidden animate-in zoom-in-95 my-auto">
+        
         {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md ${
               isMaster 
                 ? "bg-gradient-to-tr from-purple-600 to-indigo-600 shadow-purple-500/20" 
                 : isOperator
                 ? "bg-gradient-to-tr from-blue-600 to-cyan-600 shadow-blue-500/20"
-                : "bg-gradient-to-tr from-amber-600 to-orange-600 shadow-amber-500/20"
+                : "bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/20"
             }`}>
               {isMaster ? <ShieldCheck className="w-5 h-5" /> : isOperator ? <Users className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Workspace Role & View Switcher
+                  Workspace Role & Access Control
                 </h2>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
                   isMaster 
                     ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
                     : isOperator
                     ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                    : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                    : "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                 }`}>
-                  {isMaster ? "👑 Master Founder" : isOperator ? "👥 Team Operator" : "👤 Standard Member"}
+                  {isMaster ? "👑 Founder Mode" : isOperator ? "👥 Team Operator" : "🏢 Standard Client"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isMaster 
-                  ? `Authenticated as Master Founder (${developerCompanyName})`
+                  ? `Authenticated as Platform Founder (${developerCompanyName})`
                   : isOperator
-                  ? `Testing workspace as Internal Team Operator (${whiteLabelBrandName})`
-                  : `Testing workspace as Standard Member (${whiteLabelBrandName})`}
+                  ? `Active as Internal Team Operator (${whiteLabelBrandName})`
+                  : `Active as Standard Client Member (${whiteLabelBrandName})`}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-200/60 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-sm font-bold transition-all"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm font-bold transition-all"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
+        {/* Body Content */}
         <div className="p-6 space-y-5 text-xs text-slate-600 dark:text-slate-300 max-h-[75vh] overflow-y-auto">
-          {/* Account Authentication Banner */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 border border-purple-200 dark:border-purple-800/80 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-purple-600 text-white shadow-2xs">
-                <Mail className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                  Direct Founder Access Active
-                </span>
-                <span className="text-[11px] text-purple-700 dark:text-purple-300 font-mono">
-                  {founderEmail}
-                </span>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
-              <Check className="w-3 h-3" />
-              <span>Direct Access</span>
-            </span>
-          </div>
-
-          {/* Active Role Selector / Switcher */}
-          <div className="space-y-2">
-            <label className="font-bold text-slate-900 dark:text-white text-xs block">
-              Select Workspace Mode to Preview or Operate:
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleSwitchRole("master_developer")}
-                className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-                  isMaster
-                    ? "bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/20 shadow-xs"
-                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5 text-xs">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Master Founder</span>
-                  </span>
-                  {isMaster && <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                  Full admin privileges, White-Label Studio, Monetization Hub & prompt controls.
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchRole("team_operator")}
-                className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-                  isOperator
-                    ? "bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 ring-2 ring-blue-500/20 shadow-xs"
-                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 text-xs">
-                    <Users className="w-4 h-4" />
-                    <span>Team Operator</span>
-                  </span>
-                  {isOperator && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                  Internal staff view. Orchestrate workflows, test automations, manage tasks.
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchRole("client_tenant")}
-                className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-                  isClient
-                    ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 ring-2 ring-amber-500/20 shadow-xs"
-                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 text-xs">
-                    <Users className="w-4 h-4" />
-                    <span>Standard Member</span>
-                  </span>
-                  {isClient && <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                  Individual profile view. Run personal agents and workflows with direct account billing.
-                </div>
-              </button>
-            </div>
-          </div>
-
+          
           {successMsg && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>{successMsg}</span>
+            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span className="font-medium">{successMsg}</span>
             </div>
           )}
 
-          {/* Role Permissions Matrix Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
-            <div className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <span>Permission Guardrails & Isolation</span>
+          {authError && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="font-medium">{authError}</span>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                <div className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Master Founder Privileges</span>
+          {/* Section 1: When authenticated as founder */}
+          {isFounderAuthenticated ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 border border-purple-200 dark:border-purple-800/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-600 text-white shadow-2xs">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      Founder Security Verified
+                    </span>
+                    <span className="text-[11px] text-purple-700 dark:text-purple-300 font-mono">
+                      {founderEmail}
+                    </span>
+                  </div>
                 </div>
-                <ul className="text-slate-500 dark:text-slate-400 space-y-0.5 list-disc list-inside text-[10px]">
-                  <li>White-Label Branding & Domain Studio</li>
-                  <li>Developer Rate Cards & Stripe Payouts</li>
-                  <li>Full Agent Prompt & Model Editing</li>
-                  <li>Tenant Provisioning & Privacy Controls</li>
-                </ul>
+                <button
+                  type="button"
+                  onClick={handleSignOutOfFounder}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                <div className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Client / Tenant Sandbox</span>
+              {/* Role Simulation Switcher */}
+              <div>
+                <label className="font-bold text-slate-900 dark:text-white text-xs block mb-2">
+                  Switch Active View (Simulate What Users See):
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole("master_developer")}
+                    className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                      isMaster
+                        ? "bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/20 shadow-xs"
+                        : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white text-xs">
+                          Master Founder & Creator View
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Full admin controls, White-Label Studio, and Monetization packaging.
+                        </div>
+                      </div>
+                    </div>
+                    {isMaster && <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole("team_operator")}
+                    className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                      isOperator
+                        ? "bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 ring-2 ring-blue-500/20 shadow-xs"
+                        : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white text-xs">
+                          Internal Team Operator View
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Orchestrate workflows, monitor agent telemetry, run automated tests.
+                        </div>
+                      </div>
+                    </div>
+                    {isOperator && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole("client_tenant")}
+                    className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                      isClient
+                        ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 ring-2 ring-emerald-500/20 shadow-xs"
+                        : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white text-xs">
+                          Standard Client / External Visitor View
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Clean product experience without developer backdoors or pricing margins.
+                        </div>
+                      </div>
+                    </div>
+                    {isClient && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                  </button>
                 </div>
-                <ul className="text-slate-500 dark:text-slate-400 space-y-0.5 list-disc list-inside text-[10px]">
-                  <li>White-Label Studio is hidden</li>
-                  <li>Monetization & profit markups hidden</li>
-                  <li>Agent prompts & backends protected</li>
-                  <li>Clean customer execution environment</li>
-                </ul>
+              </div>
+
+              {/* Password Management Drawer for Verified Founder */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="font-bold text-slate-900 dark:text-white text-xs">
+                      Founder Password Security
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingPassword(!isChangingPassword)}
+                    className="text-xs text-purple-600 dark:text-purple-400 hover:underline font-semibold"
+                  >
+                    {isChangingPassword ? "Cancel" : "Change Password"}
+                  </button>
+                </div>
+
+                {isChangingPassword ? (
+                  <form onSubmit={handleUpdatePassword} className="space-y-3 pt-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                        New Founder Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="At least 6 characters"
+                          className="w-full pl-3 pr-9 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        placeholder="Re-enter password"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsChangingPassword(false)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-xs transition-colors"
+                      >
+                        Save New Password
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Your founder portal is protected by your master password. Keep it secure to protect white-label and developer settings.
+                  </p>
+                )}
               </div>
             </div>
-          </div>
+          ) : (
+            /* Section 2: Standard Visitor / Non-founder view */
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Standard Client Access Active</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  You are currently logged in with standard client workspace permissions. You can chat with agents, launch workflows, run automated pipelines, and review ROI analytics.
+                </p>
+              </div>
+
+              {/* Full Password-Protected Founder Authentication Gateway */}
+              <div className="p-5 rounded-3xl bg-gradient-to-br from-purple-50/80 via-white to-indigo-50/80 dark:from-purple-950/40 dark:via-slate-900 dark:to-indigo-950/40 border border-purple-200 dark:border-purple-800/80 shadow-md space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-purple-600 text-white shadow-2xs">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-xs">
+                        Founder & Administrator Sign In
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Secure password-authenticated access
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2.5 py-1 rounded-full border border-purple-200 dark:border-purple-800">
+                    <Shield className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                    <span>256-Bit Encrypted</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleFounderAuth} className="space-y-3.5">
+                  {/* Email Field */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Founder Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="email"
+                        id="input-founder-email-auth"
+                        required
+                        value={inputEmail}
+                        onChange={(e) => setInputEmail(e.target.value)}
+                        placeholder={`e.g. ${founderEmail}`}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password Field with Show/Hide Toggle */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Master Password
+                      </label>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setIsRecoveryModalOpen(true)}
+                          className="text-purple-600 dark:text-purple-400 hover:underline font-bold flex items-center gap-1"
+                        >
+                          <Mail className="w-3 h-3" />
+                          <span>Forgot Password?</span>
+                        </button>
+                        <span className="text-slate-300 dark:text-slate-700">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowDemoHint(!showDemoHint)}
+                          className="text-slate-500 dark:text-slate-400 hover:underline flex items-center gap-1"
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                          <span>Credentials Guide</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        id="input-founder-password-auth"
+                        required
+                        value={inputPassword}
+                        onChange={(e) => setInputPassword(e.target.value)}
+                        placeholder="Enter master password"
+                        className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        id="btn-toggle-founder-password"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Live Password Strength Meter */}
+                    {inputPassword && (
+                      <div className="pt-1.5 space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Security strength:</span>
+                          <span className={`font-bold ${strength.text}`}>{strength.label}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1 h-1.5">
+                          <div className={`rounded-full ${strength.score >= 1 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                          <div className={`rounded-full ${strength.score >= 2 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                          <div className={`rounded-full ${strength.score >= 3 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Password Help / Demo Helper Callout */}
+                  {showDemoHint && (
+                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200 space-y-1.5 animate-in fade-in">
+                      <div className="flex items-center justify-between font-bold">
+                        <span>Founder Credentials Guide:</span>
+                        <span className="font-mono bg-purple-200 dark:bg-purple-900 px-1.5 py-0.5 rounded text-[10px]">
+                          DEFAULT KEY
+                        </span>
+                      </div>
+                      <p className="text-purple-800 dark:text-purple-300 leading-relaxed">
+                        Default master passkey for <strong>{founderEmail}</strong> is:
+                        <code className="mx-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-700 font-mono font-bold text-purple-700 dark:text-purple-300">
+                          {getStoredFounderPassword()}
+                        </code>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleQuickFill}
+                        className="text-[11px] font-bold text-purple-700 dark:text-purple-300 underline hover:text-purple-900"
+                      >
+                        Click to auto-fill credentials
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Remember Me Checkbox */}
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+                      />
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                        Remember authentication on this device
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    id="btn-submit-founder-login"
+                    disabled={isSubmitting}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Lock className="w-3.5 h-3.5" />
+                    )}
+                    <span>Authenticate & Enter Founder Mode</span>
+                  </button>
+
+                  {/* 1-Click Quick Demo Sign-in for authorized founder */}
+                  <button
+                    type="button"
+                    id="btn-quick-auth-founder-autofill"
+                    onClick={handleQuickFill}
+                    className="w-full text-center py-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800/60 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <span>Autofill Founder Credentials ({founderEmail})</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
-          <div className="text-slate-500 dark:text-slate-400 text-[11px] flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            <span>Instant view switching • No PIN required</span>
-          </div>
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl text-xs font-bold transition-all shadow-xs"
+            className="px-5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors"
           >
-            Done
+            Close
           </button>
         </div>
+
       </div>
+
+      {/* Real Password Recovery Modal & SMTP Handshake */}
+      <PasswordRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        initialEmail={inputEmail || founderEmail}
+        onPasswordResetSuccess={(updatedEmail, newPass) => {
+          setInputEmail(updatedEmail);
+          setInputPassword(newPass);
+          setSuccessMsg("Founder password updated via email verification! You can now log in.");
+          setTimeout(() => setSuccessMsg(null), 6000);
+        }}
+      />
     </div>
   );
 };

@@ -547,16 +547,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Master Access Switch Button */}
         <button
           onClick={onOpenMasterAccessGate}
-          className={`w-full p-2 rounded-xl border text-left flex items-center ${
+          className={`w-full p-2.5 rounded-2xl border text-left flex items-center ${
             isCollapsed ? "justify-center" : "justify-between"
           } transition-all ${
             isMasterDeveloper
               ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 hover:bg-purple-100"
               : accessLevel === "team_operator"
               ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 hover:bg-blue-100"
-              : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100"
+              : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800"
           }`}
-          title={isMasterDeveloper ? "Master Founder Mode (Click to switch view)" : accessLevel === "team_operator" ? "Team Operator Mode (Click to switch view)" : "Client Portal Mode (Click to switch view)"}
+          title={isMasterDeveloper ? "Master Founder Mode (Click to switch view)" : accessLevel === "team_operator" ? "Team Operator Mode (Click to switch view)" : "Workspace Access & Roles (Click to view or sign in as founder)"}
         >
           <div className="flex items-center gap-2 min-w-0">
             <div
@@ -565,23 +565,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? "bg-purple-500 animate-pulse"
                   : accessLevel === "team_operator"
                   ? "bg-blue-500"
-                  : "bg-amber-500"
+                  : "bg-emerald-500"
               }`}
             />
             {!isCollapsed && (
               <div className="truncate">
                 <div className="text-[11px] font-bold leading-tight truncate">
-                  {isMasterDeveloper ? "Master Founder" : accessLevel === "team_operator" ? "Team Operator" : "Client Portal"}
+                  {isMasterDeveloper ? "Master Founder" : accessLevel === "team_operator" ? "Team Operator" : "Workspace Member"}
                 </div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
-                  {isMasterDeveloper ? "Full Admin Access" : accessLevel === "team_operator" ? "Operational Mode" : "Locked Client Mode"}
+                  {isMasterDeveloper ? "Full Admin Access" : accessLevel === "team_operator" ? "Operational Mode" : "Standard Client View"}
                 </div>
               </div>
             )}
           </div>
           {!isCollapsed && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
-              {isMasterDeveloper ? "FOUNDER" : accessLevel === "team_operator" ? "STAFF" : "CLIENT"}
+              {isMasterDeveloper ? "FOUNDER" : accessLevel === "team_operator" ? "STAFF" : "MEMBER"}
             </span>
           )}
         </button>

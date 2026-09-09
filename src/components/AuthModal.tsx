@@ -22,6 +22,7 @@ import {
   HelpCircle
 } from "lucide-react";
 import { EmployeeProfile, Department } from "../types";
+import { PasswordRecoveryModal } from "./PasswordRecoveryModal";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ interface AuthModalProps {
   userProfile: EmployeeProfile;
   onAuthSuccess: (updatedProfile: Partial<EmployeeProfile>, chosenPlan?: "free" | "starter" | "pro" | "enterprise") => void;
   onOpenPricingPlans: () => void;
+  onOpenPasswordRecovery?: (email?: string) => void;
   initialMode?: "signup" | "signin";
   initialPlan?: "free" | "starter" | "pro" | "enterprise";
 }
@@ -50,6 +52,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   userProfile,
   onAuthSuccess,
   onOpenPricingPlans,
+  onOpenPasswordRecovery,
   initialMode = "signup",
   initialPlan = "free"
 }) => {
@@ -57,16 +60,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedTier, setSelectedTier] = useState<"free" | "starter" | "pro" | "enterprise">(initialPlan);
   const [fullName, setFullName] = useState<string>(userProfile.name || "Alex Mercer");
   const [email, setEmail] = useState<string>(userProfile.email || "alex.mercer@enterprise.io");
-  const [password, setPassword] = useState<string>("••••••••••••");
+  const [password, setPassword] = useState<string>("Enterprise2026!");
+  const [confirmPassword, setConfirmPassword] = useState<string>("Enterprise2026!");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
   const [companyName, setCompanyName] = useState<string>(userProfile.organizationName || "AgentFlow Enterprise");
   const [department, setDepartment] = useState<Department>(userProfile.department || "DevOps & SecOps");
   const [agreeTerms, setAgreeTerms] = useState<boolean>(true);
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetSentEmail, setResetSentEmail] = useState<string | null>(null);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
 
   if (!isOpen) return null;
+
+  // Password strength calculation
+  const calculatePasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: "None", color: "bg-slate-200 dark:bg-slate-700", text: "text-slate-400" };
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+    if (score <= 1) return { score: 1, label: "Weak", color: "bg-rose-500", text: "text-rose-500" };
+    if (score <= 3) return { score: 2, label: "Good", color: "bg-amber-500", text: "text-amber-500" };
+    return { score: 3, label: "Strong", color: "bg-emerald-500", text: "text-emerald-500" };
+  };
+
+  const strength = calculatePasswordStrength(password);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,13 +100,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMessage("Please enter a valid email address.");
       return;
     }
-    if (mode === "signup" && (!fullName || fullName.trim().length < 2)) {
-      setErrorMessage("Please enter your full name.");
+    if (!password || password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
       return;
     }
-    if (mode === "signup" && !agreeTerms) {
-      setErrorMessage("Please accept the terms of service to proceed.");
-      return;
+    if (mode === "signup") {
+      if (!fullName || fullName.trim().length < 2) {
+        setErrorMessage("Please enter your full name.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage("Passwords do not match. Please re-enter.");
+        return;
+      }
+      if (!agreeTerms) {
+        setErrorMessage("Please accept the terms of service to proceed.");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -435,26 +469,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px] flex items-center justify-between">
-                <span className="flex items-center gap-1">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1">
                   <Lock className="w-3 h-3 text-slate-400" />
-                  <span>Password</span>
-                </span>
+                  <span>{mode === "signup" ? "Create Password" : "Password"}</span>
+                </label>
                 {mode === "signin" && (
                   <button
                     type="button"
-                    onClick={() => alert("Password reset link sent to your registered email.")}
-                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+                    onClick={() => {
+                      if (onOpenPasswordRecovery) {
+                        onOpenPasswordRecovery(email);
+                      } else {
+                        setIsRecoveryModalOpen(true);
+                      }
+                    }}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
                   >
                     Forgot password?
                   </button>
                 )}
-              </label>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="••••••••••••"
+                  placeholder={mode === "signup" ? "At least 6 characters" : "Enter account password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500"
@@ -463,10 +503,83 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
+
+              {/* Password Strength Indicator */}
+              {password && (
+                <div className="pt-1 space-y-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-400">Password strength:</span>
+                    <span className={`font-bold ${strength.text}`}>{strength.label}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 h-1">
+                    <div className={`rounded-full ${strength.score >= 1 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                    <div className={`rounded-full ${strength.score >= 2 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                    <div className={`rounded-full ${strength.score >= 3 ? strength.color : "bg-slate-200 dark:bg-slate-700"}`} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Confirm Password field on Signup */}
+            {mode === "signup" && (
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-slate-400" />
+                    <span>Confirm Password</span>
+                  </span>
+                  {confirmPassword && password && (
+                    <span className={`text-[10px] font-bold ${password === confirmPassword ? "text-emerald-500" : "text-rose-500"}`}>
+                      {password === confirmPassword ? "✓ Passwords match" : "✗ Passwords do not match"}
+                    </span>
+                  )}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    placeholder="Re-enter your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    title={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {resetSentEmail && (
+              <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
+                <span>Password reset token dispatched to <strong>{resetSentEmail}</strong>.</span>
+              </div>
+            )}
+
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-blue-500 mt-0.5"
+                />
+                <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                  Keep me securely logged in on this browser
+                </span>
+              </label>
             </div>
 
             {mode === "signup" && (
@@ -552,6 +665,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
               </button>
             </div>
+
+            {mode === "signin" && (
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail("alex.mercer@enterprise.io");
+                    setPassword("Enterprise2026!");
+                    setErrorMessage(null);
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 underline transition-colors"
+                >
+                  Quick-fill Demo Member Credentials (alex.mercer@enterprise.io)
+                </button>
+              </div>
+            )}
           </form>
 
         </div>
@@ -575,6 +704,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
       </div>
+
+      {/* Real Password Recovery Modal & SMTP Handshake */}
+      <PasswordRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        initialEmail={email}
+        onPasswordResetSuccess={(updatedEmail, newPass) => {
+          setEmail(updatedEmail);
+          setPassword(newPass);
+          setConfirmPassword(newPass);
+          setSuccessMessage("Password reset successfully! You can now sign in with your updated credentials.");
+          setTimeout(() => setSuccessMessage(null), 6000);
+        }}
+        onSwitchToSignIn={() => {
+          setMode("signin");
+        }}
+      />
     </div>
   );
 };
