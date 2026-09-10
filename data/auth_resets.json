@@ -1,0 +1,12 @@
+[
+  {
+    "email": "toppgunn321@gmai.com",
+    "token": "ea36b3ded2cee9792b694b498472334d0c4ec2865374d6b5558183c0277d8d5d",
+    "otp": "171660",
+    "expiresAt": 1789056960889,
+    "createdAt": 1789056060889,
+    "used": false,
+    "attempts": 0,
+    "ip": "127.0.0.1"
+  }
+]

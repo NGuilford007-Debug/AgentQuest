@@ -83,6 +83,7 @@ export const ROIReportPdfModal: React.FC<ROIReportPdfModalProps> = ({
   const [includeDepartmentBreakdown, setIncludeDepartmentBreakdown] = useState(true);
   const [includeQualityAudit, setIncludeQualityAudit] = useState(true);
   const [includeAgentRoster, setIncludeAgentRoster] = useState(true);
+  const [includeCategorizationBreakdown, setIncludeCategorizationBreakdown] = useState(true);
 
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
@@ -152,6 +153,7 @@ export const ROIReportPdfModal: React.FC<ROIReportPdfModalProps> = ({
     includeDepartmentBreakdown,
     includeQualityAudit,
     includeAgentRoster,
+    includeCategorizationBreakdown,
     notes: customNotes,
   };
 
@@ -786,6 +788,7 @@ export const ROIReportPdfModal: React.FC<ROIReportPdfModalProps> = ({
                     { label: "Predictive 12-Month ROI Financial Forecast", state: includeForecastSection, set: setIncludeForecastSection },
                     { label: "Departmental Labor Distribution Table", state: includeDepartmentBreakdown, set: setIncludeDepartmentBreakdown },
                     { label: "Agent Fleet Operational Roster", state: includeAgentRoster, set: setIncludeAgentRoster },
+                    { label: "Client & Project Attribution Breakdown", state: includeCategorizationBreakdown, set: setIncludeCategorizationBreakdown },
                     { label: "Quality Audit & Spec Compliance Summary", state: includeQualityAudit, set: setIncludeQualityAudit },
                     { label: "Full-Time Employee (FTE) Equivalence", state: includeHistoricalMetrics, set: setIncludeHistoricalMetrics },
                   ].map((item, idx) => (

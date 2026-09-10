@@ -15,6 +15,7 @@ export interface PDFReportConfig {
   includeDepartmentBreakdown: boolean;
   includeQualityAudit: boolean;
   includeAgentRoster: boolean;
+  includeCategorizationBreakdown?: boolean;
   notes?: string;
 }
 
@@ -258,7 +259,10 @@ export async function generateEnterprisePdfReport(
     currentY += 6.5;
   });
 
-  addFooter(1, 2);
+  const shouldIncludeCategorization = config.includeCategorizationBreakdown !== false;
+  const totalPages = shouldIncludeCategorization ? 3 : 2;
+
+  addFooter(1, totalPages);
 
   // ==========================================
   // PAGE 2: PREDICTIVE ROI FORECAST & GROWTH TRAJECTORY
@@ -397,7 +401,241 @@ export async function generateEnterprisePdfReport(
   doc.text("Verified by AI Center of Excellence: ___________________", margin + 4, currentY + 30);
   doc.text("Approved for Budget Allocation: ___________________", margin + 95, currentY + 30);
 
-  addFooter(2, 2);
+  addFooter(2, totalPages);
+
+  if (shouldIncludeCategorization) {
+    // ==========================================
+    // PAGE 3: CLIENT & PROJECT CATEGORIZATION BREAKDOWN
+    // ==========================================
+    doc.addPage();
+    currentY = margin;
+    addHeader("CLIENT & PROJECT ATTRIBUTION", "ENTERPRISE WORKLOAD ALLOCATION & TAXONOMY");
+
+    // Extract client summaries
+    const clientMap = new Map<string, { totalTasks: number; hoursSaved: number; costSaved: number; projects: Set<string> }>();
+    const projectMap = new Map<string, { client?: string; totalTasks: number; hoursSaved: number; costSaved: number }>();
+    const tagMap = new Map<string, { totalTasks: number; hoursSaved: number; costSaved: number }>();
+
+    executionHistory.forEach((rec) => {
+      const clientName = rec.client && rec.client.trim() ? rec.client.trim() : "Internal Operations";
+      const hours = rec.hoursSaved || 0.6;
+      const cost = Math.round(hours * config.hourlyRate);
+
+      const cData = clientMap.get(clientName) || { totalTasks: 0, hoursSaved: 0, costSaved: 0, projects: new Set<string>() };
+      cData.totalTasks += 1;
+      cData.hoursSaved += hours;
+      cData.costSaved += cost;
+      if (rec.project) cData.projects.add(rec.project);
+      clientMap.set(clientName, cData);
+
+      if (rec.project && rec.project.trim()) {
+        const prjName = rec.project.trim();
+        const pData = projectMap.get(prjName) || { client: rec.client, totalTasks: 0, hoursSaved: 0, costSaved: 0 };
+        pData.totalTasks += 1;
+        pData.hoursSaved += hours;
+        pData.costSaved += cost;
+        if (rec.client && !pData.client) pData.client = rec.client;
+        projectMap.set(prjName, pData);
+      }
+
+      if (rec.tags && rec.tags.length > 0) {
+        rec.tags.forEach((tag) => {
+          const tData = tagMap.get(tag) || { totalTasks: 0, hoursSaved: 0, costSaved: 0 };
+          tData.totalTasks += 1;
+          tData.hoursSaved += hours;
+          tData.costSaved += cost;
+          tagMap.set(tag, tData);
+        });
+      }
+    });
+
+    const clientSummaries = Array.from(clientMap.entries())
+      .map(([name, d]) => ({ name, ...d, hoursSaved: Number(d.hoursSaved.toFixed(1)) }))
+      .sort((a, b) => b.costSaved - a.costSaved);
+
+    const projectSummaries = Array.from(projectMap.entries())
+      .map(([name, d]) => ({ name, ...d, hoursSaved: Number(d.hoursSaved.toFixed(1)) }))
+      .sort((a, b) => b.costSaved - a.costSaved);
+
+    const tagSummaries = Array.from(tagMap.entries())
+      .map(([name, d]) => ({ name, ...d, hoursSaved: Number(d.hoursSaved.toFixed(1)) }))
+      .sort((a, b) => b.totalTasks - a.totalTasks);
+
+    // Title / Synopsis banner
+    doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+    doc.roundedRect(margin, currentY, contentWidth, 20, 3, 3, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, currentY, contentWidth, 20, 3, 3, "D");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("Strategic Client Attribution & Initiative Workload Ledger", margin + 4, currentY + 7);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+    doc.text(
+      `Classification audit: ${clientSummaries.length} client accounts • ${projectSummaries.length} strategic projects • ${tagSummaries.length} tracked task tags`,
+      margin + 4,
+      currentY + 14
+    );
+
+    currentY += 24;
+
+    // 4 Attribution Metric Cards
+    const aCardWidth = (contentWidth - 9) / 4;
+    const aCards = [
+      { label: "Active Clients", val: `${clientSummaries.length}`, sub: "Accounts Serviced", color: blueAccent },
+      { label: "Tracked Projects", val: `${projectSummaries.length}`, sub: "Initiatives Automated", color: [6, 182, 212] }, // cyan
+      { label: "Tag Taxonomy", val: `${tagSummaries.length}`, sub: "Metadata Categories", color: [147, 51, 234] }, // purple
+      { label: "Attributed ROI", val: `$${clientSummaries.reduce((a, c) => a + c.costSaved, 0).toLocaleString()}`, sub: `@ $${config.hourlyRate}/hr Loaded`, color: emeraldAccent },
+    ];
+
+    aCards.forEach((c, idx) => {
+      const x = margin + idx * (aCardWidth + 3);
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(x, currentY, aCardWidth, 20, 2, 2, "FD");
+
+      // Top strip
+      doc.setFillColor(c.color[0], c.color[1], c.color[2]);
+      doc.roundedRect(x, currentY, aCardWidth, 1.5, 1, 1, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.5);
+      doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+      doc.text(c.label.toUpperCase(), x + 3, currentY + 6);
+
+      doc.setFontSize(11);
+      doc.setTextColor(c.color[0], c.color[1], c.color[2]);
+      doc.text(c.val, x + 3, currentY + 12.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(c.sub, x + 3, currentY + 17);
+    });
+
+    currentY += 25;
+
+    // Section 1: Client Account Attribution Table
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("Client Account Value Realization & Labor Savings", margin, currentY);
+    currentY += 4;
+
+    // Table header
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, currentY, contentWidth, 6.5, "F");
+    doc.setFontSize(7.5);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("CLIENT ACCOUNT", margin + 3, currentY + 4.5);
+    doc.text("PROJECTS", margin + 65, currentY + 4.5);
+    doc.text("TASKS", margin + 110, currentY + 4.5);
+    doc.text("HOURS SAVED", margin + 130, currentY + 4.5);
+    doc.text("VALUE CREATED", margin + 155, currentY + 4.5);
+    currentY += 6.5;
+
+    clientSummaries.slice(0, 5).forEach((client, i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(margin, currentY, contentWidth, 6, "F");
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+      doc.text(client.name.slice(0, 32), margin + 3, currentY + 4.2);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+      const prjList = Array.from(client.projects).slice(0, 2).join(", ") || "General";
+      doc.text(prjList.slice(0, 25), margin + 65, currentY + 4.2);
+
+      doc.setFontSize(7.5);
+      doc.text(`${client.totalTasks}`, margin + 110, currentY + 4.2);
+      doc.text(`${client.hoursSaved}h`, margin + 130, currentY + 4.2);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(emeraldAccent[0], emeraldAccent[1], emeraldAccent[2]);
+      doc.text(`$${client.costSaved.toLocaleString()}`, margin + 155, currentY + 4.2);
+
+      currentY += 6;
+    });
+
+    currentY += 6;
+
+    // Section 2: Project Workload Allocation Table
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("Project Initiative Workload Allocation", margin, currentY);
+    currentY += 4;
+
+    // Table header
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, currentY, contentWidth, 6.5, "F");
+    doc.setFontSize(7.5);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("PROJECT INITIATIVE", margin + 3, currentY + 4.5);
+    doc.text("CLIENT / DOMAIN", margin + 65, currentY + 4.5);
+    doc.text("TASKS", margin + 110, currentY + 4.5);
+    doc.text("HOURS SAVED", margin + 130, currentY + 4.5);
+    doc.text("VALUE CREATED", margin + 155, currentY + 4.5);
+    currentY += 6.5;
+
+    projectSummaries.slice(0, 5).forEach((project, i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(margin, currentY, contentWidth, 6, "F");
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+      doc.text(project.name.slice(0, 32), margin + 3, currentY + 4.2);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+      doc.text((project.client || "Internal").slice(0, 25), margin + 65, currentY + 4.2);
+
+      doc.setFontSize(7.5);
+      doc.text(`${project.totalTasks}`, margin + 110, currentY + 4.2);
+      doc.text(`${project.hoursSaved}h`, margin + 130, currentY + 4.2);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(emeraldAccent[0], emeraldAccent[1], emeraldAccent[2]);
+      doc.text(`$${project.costSaved.toLocaleString()}`, margin + 155, currentY + 4.2);
+
+      currentY += 6;
+    });
+
+    currentY += 6;
+
+    // Section 3: Tag Taxonomy Distribution Bar / Pill Matrix
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("Task Tag Taxonomy & Categorization Index", margin, currentY);
+    currentY += 4;
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, currentY, contentWidth, 18, 2, 2, "F");
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(margin, currentY, contentWidth, 18, 2, 2, "D");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+
+    const tagStrings = tagSummaries.slice(0, 8).map(t => `#${t.name} (${t.totalTasks} runs • ${t.hoursSaved}h)`).join("   |   ");
+    const splitTags = doc.splitTextToSize(tagStrings || "No tags cataloged yet.", contentWidth - 8);
+    doc.text(splitTags, margin + 4, currentY + 6);
+
+    addFooter(3, totalPages);
+  }
 
   // Trigger download
   const cleanCompanyName = (config.companyName || "Apex_Enterprise").replace(/[^a-zA-Z0-9]/g, "_");

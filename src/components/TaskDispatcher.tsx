@@ -55,13 +55,18 @@ import {
   FastForward,
   RefreshCw,
   PlayCircle,
-  Plus
+  Plus,
+  Tag,
+  Building2,
+  Briefcase
 } from "lucide-react";
 import { DynamicIcon } from "./DynamicIcon";
 import { fireCelebration } from "../utils/confetti";
 import { TaskTroubleshootModal } from "./TaskTroubleshootModal";
 import { AiTextEnhancer } from "./AiTextEnhancer";
 import { ExecutionStatusBadge } from "./ExecutionStatusBadge";
+import { TaskTaggingModal } from "./TaskTaggingModal";
+import { TaskTagBadges } from "./TaskTagBadges";
 
 interface TaskDispatcherProps {
   agents: Agent[];
@@ -159,6 +164,50 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
   const [isTroubleshootOpen, setIsTroubleshootOpen] = useState<boolean>(false);
   const [troubleshootRecord, setTroubleshootRecord] = useState<TaskExecutionRecord | null>(null);
 
+  // Categorization & Tagging state
+  const [selectedClient, setSelectedClient] = useState<string>("");
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagInputText, setTagInputText] = useState<string>("");
+  const [showTaggingSection, setShowTaggingSection] = useState<boolean>(false);
+  const [isTaggingModalOpen, setIsTaggingModalOpen] = useState<boolean>(false);
+  const [taggingTargetTask, setTaggingTargetTask] = useState<TaskExecutionRecord | null>(null);
+
+  const existingClients = React.useMemo(() => {
+    const clientsSet = new Set<string>();
+    executionHistory.forEach((r) => {
+      if (r.client && r.client.trim()) clientsSet.add(r.client.trim());
+    });
+    return Array.from(clientsSet).sort();
+  }, [executionHistory]);
+
+  const existingProjects = React.useMemo(() => {
+    const projectsSet = new Set<string>();
+    executionHistory.forEach((r) => {
+      if (r.project && r.project.trim()) projectsSet.add(r.project.trim());
+    });
+    return Array.from(projectsSet).sort();
+  }, [executionHistory]);
+
+  const existingTags = React.useMemo(() => {
+    const tagsSet = new Set<string>();
+    executionHistory.forEach((r) => {
+      if (r.tags) {
+        r.tags.forEach((t) => tagsSet.add(t));
+      }
+    });
+    return Array.from(tagsSet).sort();
+  }, [executionHistory]);
+
+  const handleSaveTags = (updatedTask: TaskExecutionRecord) => {
+    if (currentExecution && currentExecution.id === updatedTask.id) {
+      setCurrentExecution(updatedTask);
+    }
+    if (onUpdateExecution) {
+      onUpdateExecution(updatedTask);
+    }
+  };
+
   const isBreakerTripped = circuitBreakerState.status === "tripped";
   const isEmergencyStopped = circuitBreakerState.status === "emergency_stopped";
   const isBlockedByBreaker = isBreakerTripped || isEmergencyStopped;
@@ -195,6 +244,10 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
     setExtraContext("");
     setShowExtraContext(false);
     setActivePresetId(null);
+    setSelectedClient("");
+    setSelectedProject("");
+    setSelectedTags([]);
+    setTagInputText("");
   };
 
   const handleClearContext = () => {
@@ -410,6 +463,9 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
         xpEarned: boostedXp,
         timestamp: "Just now",
         isSimulated: data.isSimulated,
+        client: selectedClient.trim() || undefined,
+        project: selectedProject.trim() || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
       };
 
       setCurrentExecution(record);
@@ -583,6 +639,9 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
       hoursSaved: 0.2,
       xpEarned: 30,
       timestamp: "Just now",
+      client: selectedClient.trim() || undefined,
+      project: selectedProject.trim() || undefined,
+      tags: selectedTags.length > 0 ? selectedTags : undefined,
     };
 
     setCurrentExecution(simulatedFailedRecord);
@@ -935,6 +994,160 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
             )}
           </div>
 
+          {/* Optional Client, Project & Tags Attribution Accordion */}
+          <div>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                id="btn-toggle-dispatcher-tagging"
+                onClick={() => setShowTaggingSection(!showTaggingSection)}
+                className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline"
+              >
+                {showTaggingSection ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                <Tag className="w-3 h-3 text-purple-500" />
+                <span>
+                  {showTaggingSection ? "Hide Client & Project Categorization" : "+ Assign Client, Project & Tags (Optional)"}
+                </span>
+                {(selectedClient || selectedProject || selectedTags.length > 0) && (
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold font-mono">
+                    {[selectedClient, selectedProject, ...selectedTags].filter(Boolean).length} set
+                  </span>
+                )}
+              </button>
+
+              {(selectedClient || selectedProject || selectedTags.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedClient("");
+                    setSelectedProject("");
+                    setSelectedTags([]);
+                  }}
+                  className="text-[10px] font-semibold text-slate-400 hover:text-red-500 flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Metadata</span>
+                </button>
+              )}
+            </div>
+
+            {showTaggingSection && (
+              <div className="mt-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3 animate-in fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-blue-500" /> Client / Customer Account
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedClient}
+                      onChange={(e) => setSelectedClient(e.target.value)}
+                      placeholder="e.g. Acme Corp, Internal"
+                      list="dispatcher-clients-list"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <datalist id="dispatcher-clients-list">
+                      {existingClients.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3 text-indigo-500" /> Project / Initiative
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedProject}
+                      onChange={(e) => setSelectedProject(e.target.value)}
+                      placeholder="e.g. Cloud Migration, Q3 Sprint"
+                      list="dispatcher-projects-list"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <datalist id="dispatcher-projects-list">
+                      {existingProjects.map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Tags input */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-purple-500" /> Task Tags
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={tagInputText}
+                      onChange={(e) => setTagInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
+                          const clean = tagInputText.trim().replace(/^#/, "");
+                          if (clean && !selectedTags.includes(clean)) {
+                            setSelectedTags([...selectedTags, clean]);
+                          }
+                          setTagInputText("");
+                        }
+                      }}
+                      placeholder="Type tag & press Enter (e.g. security, api, urgent)..."
+                      className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const clean = tagInputText.trim().replace(/^#/, "");
+                        if (clean && !selectedTags.includes(clean)) {
+                          setSelectedTags([...selectedTags, clean]);
+                        }
+                        setTagInputText("");
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors"
+                    >
+                      Add Tag
+                    </button>
+                  </div>
+
+                  {/* Selected Tags list */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {selectedTags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-[11px] font-medium"
+                      >
+                        #{t}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTags(selectedTags.filter((x) => x !== t))}
+                          className="hover:text-red-500"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+
+                    {existingTags
+                      .filter((t) => !selectedTags.includes(t))
+                      .slice(0, 5)
+                      .map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setSelectedTags([...selectedTags, t])}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-[10px] text-slate-600 dark:text-slate-400 font-mono transition-colors"
+                        >
+                          +{t}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Preset Enterprise Scenarios */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between mb-1.5">
@@ -1167,6 +1380,29 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         Agent: <strong>{currentExecution.agentName}</strong> • {currentExecution.department}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <TaskTagBadges
+                          task={currentExecution}
+                          onEditTags={(t) => {
+                            setTaggingTargetTask(t);
+                            setIsTaggingModalOpen(true);
+                          }}
+                          compact
+                        />
+                        <button
+                          id="btn-edit-current-task-tags"
+                          type="button"
+                          onClick={() => {
+                            setTaggingTargetTask(currentExecution);
+                            setIsTaggingModalOpen(true);
+                          }}
+                          className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 transition-colors"
+                          title="Assign Client, Project, or Tags"
+                        >
+                          <Tag className="w-2.5 h-2.5" />
+                          <span>{currentExecution.client || currentExecution.project || (currentExecution.tags && currentExecution.tags.length > 0) ? "Edit Tags" : "+ Categorize"}</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1656,6 +1892,29 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
                           <span>•</span>
                           <span className="font-mono text-[10px] text-slate-400">{rec.timestamp}</span>
                         </div>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <TaskTagBadges
+                            task={rec}
+                            onEditTags={(t) => {
+                              setTaggingTargetTask(t);
+                              setIsTaggingModalOpen(true);
+                            }}
+                            compact
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTaggingTargetTask(rec);
+                              setIsTaggingModalOpen(true);
+                            }}
+                            className="opacity-70 group-hover:opacity-100 text-[10px] text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-0.5 px-1 py-0.5 rounded transition-all"
+                            title="Assign client, project or tags"
+                          >
+                            <Tag className="w-2.5 h-2.5" />
+                            <span>{rec.client || rec.project || (rec.tags && rec.tags.length > 0) ? "Edit" : "+ Tag"}</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
@@ -1711,6 +1970,22 @@ export const TaskDispatcher: React.FC<TaskDispatcherProps> = ({
           }
         }}
       />
+
+      {/* Task Tagging & Categorization Modal */}
+      {taggingTargetTask && (
+        <TaskTaggingModal
+          isOpen={isTaggingModalOpen}
+          onClose={() => {
+            setIsTaggingModalOpen(false);
+            setTaggingTargetTask(null);
+          }}
+          task={taggingTargetTask}
+          onSave={handleSaveTags}
+          existingClients={existingClients}
+          existingProjects={existingProjects}
+          existingTags={existingTags}
+        />
+      )}
     </div>
   );
 };

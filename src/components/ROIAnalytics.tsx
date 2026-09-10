@@ -26,7 +26,15 @@ import {
   RefreshCw,
   Award,
   FileDown,
-  Compass
+  Compass,
+  Building2,
+  Folder,
+  Tag,
+  Tags,
+  Search,
+  Layers,
+  Briefcase,
+  X
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -52,6 +60,9 @@ import { ROIReportPdfModal } from "./ROIReportPdfModal";
 import { ForecastSummaryData, generateRoiExecutiveSummaryPdfReport } from "../utils/pdfExport";
 import { ExecutionStatusBadge } from "./ExecutionStatusBadge";
 import { ROISummaryModal, RoiExecutiveReport } from "./ROISummaryModal";
+import { TaskTaggingModal } from "./TaskTaggingModal";
+import { TaskTagBadges } from "./TaskTagBadges";
+import { exportEnterpriseAnalyticsCsv } from "../utils/csvExport";
 
 interface ROIAnalyticsProps {
   agents: Agent[];
@@ -170,6 +181,15 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<string>("all");
   const [forecastSummaryData, setForecastSummaryData] = useState<ForecastSummaryData | null>(null);
+
+  // Categorization and tagging states
+  const [viewTab, setViewTab] = useState<"overview" | "categorization" | "audit">("overview");
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>("all");
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>("all");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [taggingModalTask, setTaggingModalTask] = useState<TaskExecutionRecord | null>(null);
+  const [isTaggingModalOpen, setIsTaggingModalOpen] = useState<boolean>(false);
 
   // Gemini AI Executive Summary states
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
@@ -350,24 +370,215 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
     }
   };
 
-  // Filtered task audits for the review list
+  // Categorization unique collections
+  const allProjects = useMemo(() => {
+    return Array.from(new Set(executionHistory.map((e) => e.project).filter(Boolean) as string[])).sort();
+  }, [executionHistory]);
+
+  const allClients = useMemo(() => {
+    return Array.from(new Set(executionHistory.map((e) => e.client).filter(Boolean) as string[])).sort();
+  }, [executionHistory]);
+
+  const allTags = useMemo(() => {
+    return Array.from(new Set(executionHistory.flatMap((e) => e.tags || []))).sort();
+  }, [executionHistory]);
+
+  // Aggregated Client Reporting Summary
+  const clientReportSummaries = useMemo(() => {
+    const map: Record<string, {
+      name: string;
+      totalTasks: number;
+      hoursSaved: number;
+      costSaved: number;
+      approvedCount: number;
+      projects: Set<string>;
+      tags: Set<string>;
+    }> = {};
+
+    executionHistory.forEach((rec) => {
+      const clientName = rec.client?.trim() || "Unassigned / Internal";
+      if (!map[clientName]) {
+        map[clientName] = {
+          name: clientName,
+          totalTasks: 0,
+          hoursSaved: 0,
+          costSaved: 0,
+          approvedCount: 0,
+          projects: new Set<string>(),
+          tags: new Set<string>(),
+        };
+      }
+      const entry = map[clientName];
+      entry.totalTasks += 1;
+      const h = rec.hoursSaved || 0;
+      entry.hoursSaved += h;
+      entry.costSaved += Math.round(h * blendedHourlyCost);
+      if (rec.status === "approved" || rec.status === "resolved" || rec.feedback?.isApproved) {
+        entry.approvedCount += 1;
+      }
+      if (rec.project) entry.projects.add(rec.project);
+      (rec.tags || []).forEach((t) => entry.tags.add(t));
+    });
+
+    return Object.values(map).map((c) => ({
+      ...c,
+      hoursSaved: parseFloat(c.hoursSaved.toFixed(1)),
+      qualityRate: c.totalTasks > 0 ? parseFloat(((c.approvedCount / c.totalTasks) * 100).toFixed(1)) : 100,
+      associatedProjects: Array.from(c.projects),
+      tags: Array.from(c.tags),
+    })).sort((a, b) => b.hoursSaved - a.hoursSaved);
+  }, [executionHistory, blendedHourlyCost]);
+
+  // Aggregated Project Reporting Summary
+  const projectReportSummaries = useMemo(() => {
+    const map: Record<string, {
+      name: string;
+      client: string;
+      totalTasks: number;
+      hoursSaved: number;
+      costSaved: number;
+      approvedCount: number;
+      tags: Set<string>;
+    }> = {};
+
+    executionHistory.forEach((rec) => {
+      const projectName = rec.project?.trim() || "Unassigned / General";
+      if (!map[projectName]) {
+        map[projectName] = {
+          name: projectName,
+          client: rec.client || "Unassigned",
+          totalTasks: 0,
+          hoursSaved: 0,
+          costSaved: 0,
+          approvedCount: 0,
+          tags: new Set<string>(),
+        };
+      }
+      const entry = map[projectName];
+      entry.totalTasks += 1;
+      const h = rec.hoursSaved || 0;
+      entry.hoursSaved += h;
+      entry.costSaved += Math.round(h * blendedHourlyCost);
+      if (rec.status === "approved" || rec.status === "resolved" || rec.feedback?.isApproved) {
+        entry.approvedCount += 1;
+      }
+      (rec.tags || []).forEach((t) => entry.tags.add(t));
+    });
+
+    return Object.values(map).map((p) => ({
+      ...p,
+      hoursSaved: parseFloat(p.hoursSaved.toFixed(1)),
+      qualityRate: p.totalTasks > 0 ? parseFloat(((p.approvedCount / p.totalTasks) * 100).toFixed(1)) : 100,
+      tags: Array.from(p.tags),
+    })).sort((a, b) => b.hoursSaved - a.hoursSaved);
+  }, [executionHistory, blendedHourlyCost]);
+
+  // Aggregated Tag Distribution Summary
+  const tagReportSummaries = useMemo(() => {
+    const map: Record<string, { name: string; totalTasks: number; hoursSaved: number; costSaved: number }> = {};
+    executionHistory.forEach((rec) => {
+      (rec.tags || []).forEach((t) => {
+        if (!map[t]) {
+          map[t] = { name: t, totalTasks: 0, hoursSaved: 0, costSaved: 0 };
+        }
+        map[t].totalTasks += 1;
+        const h = rec.hoursSaved || 0;
+        map[t].hoursSaved += h;
+        map[t].costSaved += Math.round(h * blendedHourlyCost);
+      });
+    });
+
+    return Object.values(map).map((t) => ({
+      ...t,
+      hoursSaved: parseFloat(t.hoursSaved.toFixed(1)),
+    })).sort((a, b) => b.totalTasks - a.totalTasks);
+  }, [executionHistory, blendedHourlyCost]);
+
+  // Coverage percentage
+  const categorizedTasksCount = useMemo(() => {
+    return executionHistory.filter((e) => Boolean(e.client || e.project || (e.tags && e.tags.length > 0))).length;
+  }, [executionHistory]);
+
+  const categorizationCoverage = useMemo(() => {
+    if (executionHistory.length === 0) return 100;
+    return Math.round((categorizedTasksCount / executionHistory.length) * 100);
+  }, [categorizedTasksCount, executionHistory.length]);
+
+  // Filtered task audits for the review list & ledger
   const filteredAudits = useMemo(() => {
     return executionHistory.filter((rec) => {
-      if (auditFilter === "resolved") {
-        return rec.status === "resolved";
+      // 1. Status Filter
+      if (auditFilter === "resolved" && rec.status !== "resolved") return false;
+      if (auditFilter === "needs_review" && rec.status !== "needs_review") return false;
+      if (auditFilter === "discrepancies" && !(rec.status === "discrepancy" || rec.status === "rejected" || rec.status === "failed" || rec.feedback?.isApproved === false)) return false;
+      if (auditFilter === "approved" && !(rec.status === "approved" || rec.feedback?.isApproved === true)) return false;
+
+      // 2. Client Filter
+      if (selectedClientFilter !== "all") {
+        if (selectedClientFilter === "unassigned") {
+          if (rec.client) return false;
+        } else if (rec.client !== selectedClientFilter) {
+          return false;
+        }
       }
-      if (auditFilter === "needs_review") {
-        return rec.status === "needs_review";
+
+      // 3. Project Filter
+      if (selectedProjectFilter !== "all") {
+        if (selectedProjectFilter === "unassigned") {
+          if (rec.project) return false;
+        } else if (rec.project !== selectedProjectFilter) {
+          return false;
+        }
       }
-      if (auditFilter === "discrepancies") {
-        return rec.status === "discrepancy" || rec.status === "rejected" || rec.status === "failed" || rec.feedback?.isApproved === false;
+
+      // 4. Tag Filter
+      if (selectedTagFilter !== "all") {
+        if (!rec.tags || !rec.tags.includes(selectedTagFilter)) {
+          return false;
+        }
       }
-      if (auditFilter === "approved") {
-        return rec.status === "approved" || rec.feedback?.isApproved === true;
+
+      // 5. Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = rec.title?.toLowerCase().includes(q);
+        const matchAgent = rec.agentName?.toLowerCase().includes(q);
+        const matchDept = rec.department?.toLowerCase().includes(q);
+        const matchSummary = rec.summary?.toLowerCase().includes(q);
+        const matchClient = rec.client?.toLowerCase().includes(q);
+        const matchProject = rec.project?.toLowerCase().includes(q);
+        const matchTags = rec.tags?.some((t) => t.toLowerCase().includes(q));
+
+        if (!matchTitle && !matchAgent && !matchDept && !matchSummary && !matchClient && !matchProject && !matchTags) {
+          return false;
+        }
       }
+
       return true;
     });
-  }, [executionHistory, auditFilter]);
+  }, [executionHistory, auditFilter, selectedClientFilter, selectedProjectFilter, selectedTagFilter, searchQuery]);
+
+  const handleExportCsv = () => {
+    exportEnterpriseAnalyticsCsv({
+      config: {
+        companyName: "Enterprise Operations",
+        preparedFor: "Executive Leadership & Department Stakeholders",
+        preparedBy: "AgentFlow AI Intelligence Suite",
+        timeHorizon: timeHorizon,
+        forecastHorizonMonths: 12,
+        hourlyRate: 85,
+        includeExecutiveSummary: true,
+        includeHistoricalMetrics: true,
+        includeForecastSection: true,
+        includeDepartmentBreakdown: true,
+        includeQualityAudit: true,
+        includeAgentRoster: true,
+      },
+      summaryData: activeForecastData,
+      agents: agents,
+      executionHistory: executionHistory,
+    });
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-slate-50 dark:bg-slate-950">
@@ -509,6 +720,430 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
         </div>
       </div>
 
+      {/* VIEW SWITCHER TABS: OVERVIEW vs CLIENT & PROJECT REPORTING vs TASK LEDGER */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            id="tab-roi-overview"
+            type="button"
+            onClick={() => setViewTab("overview")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              viewTab === "overview"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Executive Overview</span>
+          </button>
+
+          <button
+            id="tab-roi-categorization"
+            type="button"
+            onClick={() => setViewTab("categorization")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              viewTab === "categorization"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Briefcase className="w-4 h-4" />
+            <span>Client & Project Reporting</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                viewTab === "categorization"
+                  ? "bg-white/20 text-white"
+                  : "bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300"
+              }`}
+            >
+              {allClients.length} Clients • {allProjects.length} Projects
+            </span>
+          </button>
+
+          <button
+            id="tab-roi-audit"
+            type="button"
+            onClick={() => setViewTab("audit")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              viewTab === "audit"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Tags className="w-4 h-4" />
+            <span>Task Ledger & Tagging ({executionHistory.length})</span>
+          </button>
+        </div>
+
+        {/* Quick Categorization Coverage Indicator */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 text-xs">
+          <Tag className="w-3.5 h-3.5 text-blue-500" />
+          <span className="text-slate-500 dark:text-slate-400">Categorization Coverage:</span>
+          <span className="font-bold text-slate-900 dark:text-white font-mono">{categorizationCoverage}%</span>
+          <div className="w-16 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden hidden sm:block">
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all"
+              style={{ width: `${categorizationCoverage}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* TAB 2: CLIENT & PROJECT CATEGORIZED REPORTING SUITE */}
+      {/* ------------------------------------------------------------------- */}
+      {viewTab === "categorization" && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Banner with summary metrics */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md relative overflow-hidden space-y-4">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-bold uppercase tracking-wider font-mono">
+                    Categorized ROI Studio
+                  </span>
+                  <span className="text-xs text-slate-300">
+                    Client & Project Attribution
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                  Client & Project Telemetry Ledger
+                </h2>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Every automated task execution is mapped to strategic enterprise initiatives and client deliverables to ensure precise OpEx billing, contractual SLA reporting, and milestone tracking.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+                >
+                  <FileDown className="w-4 h-4 text-emerald-300" />
+                  <span>Export Categorized CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Quick Attribution Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 relative z-10">
+              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
+                <div className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider">Active Clients</div>
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-white mt-0.5">
+                  {clientReportSummaries.length}
+                </div>
+                <div className="text-[10px] text-emerald-300 mt-0.5">
+                  ${clientReportSummaries.reduce((a, c) => a + c.costSaved, 0).toLocaleString()} Saved
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
+                <div className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider">Active Projects</div>
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-white mt-0.5">
+                  {projectReportSummaries.length}
+                </div>
+                <div className="text-[10px] text-blue-300 mt-0.5">
+                  {projectReportSummaries.reduce((a, p) => a + p.hoursSaved, 0).toFixed(1)} hrs Tracked
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
+                <div className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider">Unique Tags</div>
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-white mt-0.5">
+                  {allTags.length}
+                </div>
+                <div className="text-[10px] text-purple-300 mt-0.5">
+                  {tagReportSummaries.reduce((a, t) => a + t.totalTasks, 0)} Tag Usages
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
+                <div className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider">Coverage Rate</div>
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-white mt-0.5">
+                  {categorizationCoverage}%
+                </div>
+                <div className="text-[10px] text-amber-300 mt-0.5">
+                  {categorizedTasksCount} / {executionHistory.length} Classified
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CLIENT BREAKDOWN SECTION */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Client Value Realization & Labor Savings
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Breakdown of autonomous agent task executions and liberated dollars per client account.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {clientReportSummaries.map((client) => (
+                <div
+                  key={client.name}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Client Account
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{client.name}</span>
+                      </h4>
+                    </div>
+                    <span className="text-xs font-extrabold font-mono px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                      ${client.costSaved.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-200/60 dark:border-slate-800/60 text-center">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Tasks</div>
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200 font-mono">
+                        {client.totalTasks}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Hours</div>
+                      <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {client.hoursSaved}h
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Quality</div>
+                      <div className="text-xs font-bold text-purple-600 dark:text-purple-400 font-mono">
+                        {client.qualityRate}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Associated Projects */}
+                  {client.associatedProjects.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-slate-400">Projects:</div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {client.associatedProjects.map((prj) => (
+                          <button
+                            key={prj}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProjectFilter(prj);
+                              setViewTab("audit");
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 transition-colors cursor-pointer"
+                          >
+                            {prj}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tags */}
+                  {client.tags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-slate-400">Tags:</div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {client.tags.slice(0, 4).map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTagFilter(tag);
+                              setViewTab("audit");
+                            }}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jump to Audit Ledger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedClientFilter(client.name);
+                      setSelectedProjectFilter("all");
+                      setSelectedTagFilter("all");
+                      setViewTab("audit");
+                    }}
+                    className="w-full py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <span>View Client Tasks in Ledger</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PROJECT BREAKDOWN SECTION */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold">
+                  <Folder className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Project Workload Allocation & Velocity
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Execution volume, saved time, and accuracy across strategic internal and client projects.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projectReportSummaries.map((project) => (
+                <div
+                  key={project.name}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-cyan-300 dark:hover:border-cyan-700 transition-all space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                        {project.client ? `Client: ${project.client}` : "Internal Initiative"}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Folder className="w-3.5 h-3.5 text-cyan-500" />
+                        <span>{project.name}</span>
+                      </h4>
+                    </div>
+                    <span className="text-xs font-extrabold font-mono px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300">
+                      ${project.costSaved.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-200/60 dark:border-slate-800/60 text-center">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Tasks</div>
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200 font-mono">
+                        {project.totalTasks}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Hours</div>
+                      <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {project.hoursSaved}h
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-medium">Quality</div>
+                      <div className="text-xs font-bold text-purple-600 dark:text-purple-400 font-mono">
+                        {project.qualityRate}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Project Tags */}
+                  {project.tags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-slate-400">Tags:</div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {project.tags.slice(0, 4).map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTagFilter(tag);
+                              setViewTab("audit");
+                            }}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jump to Audit Ledger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectFilter(project.name);
+                      setSelectedClientFilter("all");
+                      setSelectedTagFilter("all");
+                      setViewTab("audit");
+                    }}
+                    className="w-full py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <span>View Project Tasks in Ledger</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TAG MATRIX & TAXONOMY SECTION */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                  <Tags className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Task Tag Distribution & Impact Analysis
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Click any tag badge to immediately filter all matching completions in the audit ledger.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+              {tagReportSummaries.map((tag) => (
+                <button
+                  key={tag.name}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTagFilter(tag.name);
+                    setViewTab("audit");
+                  }}
+                  className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 hover:border-purple-400 hover:bg-purple-50/50 dark:hover:bg-purple-950/30 text-left transition-all cursor-pointer group"
+                >
+                  <div className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-300 truncate">
+                    #{tag.name}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-1">
+                    {tag.totalTasks} {tag.totalTasks === 1 ? "task" : "tasks"}
+                  </div>
+                  <div className="text-[11px] font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    {tag.hoursSaved}h (${tag.costSaved.toLocaleString()})
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* TAB 1: EXECUTIVE OVERVIEW TELEMETRY & PREDICTIVE GROWTH */}
+      {/* ------------------------------------------------------------------- */}
+      {viewTab === "overview" && (
+        <>
       {/* GEMINI AI EXECUTIVE SUMMARY BANNER (IF AVAILABLE) */}
       {roiSummary && (
         <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-purple-950/40 border border-blue-200/90 dark:border-blue-800/60 shadow-xs space-y-3 animate-in fade-in duration-300">
@@ -855,9 +1490,14 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
           </div>
         </div>
       </div>
+        </>
+      )}
 
-      {/* QUALITY AUDIT, DISCREPANCY MANAGEMENT & AI TROUBLESHOOTING SECTION */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+      {/* ------------------------------------------------------------------- */}
+      {/* TAB 3 & OVERVIEW FOOTER: TASK AUDIT & TAGGING LEDGER */}
+      {/* ------------------------------------------------------------------- */}
+      {(viewTab === "overview" || viewTab === "audit") && (
+        <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -939,16 +1579,154 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
           </div>
         </div>
 
+        {/* Granular Categorization & Search Controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+          {/* Text Search */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="input-audit-search"
+              type="text"
+              placeholder="Search prompt, agent, tags..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Client Filter Dropdown */}
+          <div className="relative">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <select
+              id="select-filter-client"
+              value={selectedClientFilter}
+              onChange={(e) => setSelectedClientFilter(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">All Clients ({allClients.length})</option>
+              <option value="unassigned">Unassigned / Internal</option>
+              {allClients.map((client) => (
+                <option key={client} value={client}>{client}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Project Filter Dropdown */}
+          <div className="relative">
+            <Folder className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <select
+              id="select-filter-project"
+              value={selectedProjectFilter}
+              onChange={(e) => setSelectedProjectFilter(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">All Projects ({allProjects.length})</option>
+              <option value="unassigned">Unassigned / Ad-hoc</option>
+              {allProjects.map((project) => (
+                <option key={project} value={project}>{project}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tag Filter Dropdown */}
+          <div className="relative">
+            <Tag className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <select
+              id="select-filter-tag"
+              value={selectedTagFilter}
+              onChange={(e) => setSelectedTagFilter(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">All Tags ({allTags.length})</option>
+              {allTags.map((tag) => (
+                <option key={tag} value={tag}>#{tag}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Active Filters Pill Bar */}
+        {(selectedClientFilter !== "all" || selectedProjectFilter !== "all" || selectedTagFilter !== "all" || searchQuery.trim() !== "" || auditFilter !== "all") && (
+          <div className="flex items-center gap-1.5 flex-wrap text-xs pt-1 pb-1">
+            <span className="text-[11px] font-bold text-slate-400 mr-1">Active Filters:</span>
+            {auditFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px]">
+                Status: {auditFilter}
+                <button type="button" onClick={() => setAuditFilter("all")} className="hover:text-blue-900 dark:hover:text-white"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            )}
+            {selectedClientFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[11px]">
+                Client: {selectedClientFilter}
+                <button type="button" onClick={() => setSelectedClientFilter("all")} className="hover:text-indigo-900 dark:hover:text-white"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            )}
+            {selectedProjectFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-[11px]">
+                Project: {selectedProjectFilter}
+                <button type="button" onClick={() => setSelectedProjectFilter("all")} className="hover:text-cyan-900 dark:hover:text-white"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            )}
+            {selectedTagFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px]">
+                #{selectedTagFilter}
+                <button type="button" onClick={() => setSelectedTagFilter("all")} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            )}
+            {searchQuery.trim() !== "" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-[11px]">
+                Query: "{searchQuery}"
+                <button type="button" onClick={() => setSearchQuery("")} className="hover:text-amber-900 dark:hover:text-white"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setAuditFilter("all");
+                setSelectedClientFilter("all");
+                setSelectedProjectFilter("all");
+                setSelectedTagFilter("all");
+                setSearchQuery("");
+              }}
+              className="text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline ml-1 cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          </div>
+        )}
+
         {/* Task Audit Table / List */}
         {filteredAudits.length === 0 ? (
-          <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-            <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto" />
+          <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
+            <ShieldCheck className="w-8 h-8 text-slate-400 mx-auto" />
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              No Flagged Discrepancies in Current Filter
+              No Task Executions Match the Current Filter Criteria
             </div>
-            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-              All agent task executions are currently meeting compliance standards. If an output ever deviates, flag it here or in the Dispatcher to launch the AI diagnostic engine.
+            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+              Try clearing filters or changing your search terms to see more completed agent task runs.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setAuditFilter("all");
+                setSelectedClientFilter("all");
+                setSelectedProjectFilter("all");
+                setSelectedTagFilter("all");
+                setSearchQuery("");
+              }}
+              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-xs cursor-pointer"
+            >
+              Clear All Filters
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1011,11 +1789,47 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
                               : new Date(task.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
+
+                        {/* Task Categorization Badges: Client, Project & Tags */}
+                        <div className="mt-2">
+                          <TaskTagBadges
+                            task={task}
+                            onEditTags={(t) => {
+                              setTaggingModalTask(t);
+                              setIsTaggingModalOpen(true);
+                            }}
+                            onSelectClient={(c) => {
+                              setSelectedClientFilter(c);
+                              setViewTab("audit");
+                            }}
+                            onSelectProject={(p) => {
+                              setSelectedProjectFilter(p);
+                              setViewTab("audit");
+                            }}
+                            onSelectTag={(tag) => {
+                              setSelectedTagFilter(tag);
+                              setViewTab("audit");
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     {/* Action Controls */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTaggingModalTask(task);
+                          setIsTaggingModalOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="Categorize by Client, Project & Tags"
+                      >
+                        <Tag className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Edit Tags</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
@@ -1077,6 +1891,7 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* TASK TROUBLESHOOTING MODAL */}
       <TaskTroubleshootModal
@@ -1107,6 +1922,24 @@ export const ROIAnalytics: React.FC<ROIAnalyticsProps> = ({
         report={roiSummary}
         isLoading={isGeneratingSummary}
         onRegenerate={handleGenerateRoiSummary}
+      />
+
+      {/* TASK TAGGING & CATEGORIZATION MODAL */}
+      <TaskTaggingModal
+        isOpen={isTaggingModalOpen}
+        onClose={() => {
+          setIsTaggingModalOpen(false);
+          setTaggingModalTask(null);
+        }}
+        task={taggingModalTask}
+        existingProjects={allProjects}
+        existingClients={allClients}
+        existingTags={allTags}
+        onSave={(updatedTask) => {
+          if (onUpdateExecution) {
+            onUpdateExecution(updatedTask);
+          }
+        }}
       />
     </div>
   );

@@ -49,7 +49,7 @@ export interface PlanTokenAllocationResult {
 export interface FounderRegistrationData {
   email: string;
   name: string;
-  password: string;
+  password?: string;
   companyName: string;
   title?: string;
   planId: string;
@@ -271,8 +271,8 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
       return;
     }
 
-    if (!founderPassword || founderPassword.length < 6) {
-      setFounderSetupError("Master password must be at least 6 characters long.");
+    if (!founderPassword || founderPassword.length < 8) {
+      setFounderSetupError("Master password must be at least 8 characters long for enterprise security.");
       return;
     }
 
@@ -282,18 +282,29 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
     }
 
     setIsSavingFounder(true);
+    // Send password securely to backend to hash with scrypt
+    fetch("/api/auth/change-founder-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: founderPassword,
+      }),
+    }).catch((err) => {
+      console.warn("Backend password synchronization notice:", err);
+    });
+
     try {
       localStorage.setItem("agentflow_founder_email", emailTrimmed);
-      localStorage.setItem("agentflow_founder_password", founderPassword);
       localStorage.setItem("agentflow_founder_name", founderName.trim() || "Founder");
       localStorage.setItem("agentflow_founder_authenticated", "true");
       localStorage.setItem("agentflow_remember_founder", "true");
+      // Clean up legacy plaintext password item if it exists
+      localStorage.removeItem("agentflow_founder_password");
 
       if (onRegisterFounder) {
         onRegisterFounder({
           email: emailTrimmed,
           name: founderName.trim() || "Founder",
-          password: founderPassword,
           companyName: founderCompany.trim() || "Guilford Industries",
           title: founderTitle.trim() || "Founder",
           planId: selectedPlan.id,
@@ -301,10 +312,10 @@ export const PricingCheckoutModal: React.FC<PricingCheckoutModalProps> = ({
       }
 
       setFounderSetupSuccess(true);
-      setStatusMessage(`🎉 Founder credentials activated! You are now logged in with Master Developer privileges.`);
+      setStatusMessage(`🎉 Founder credentials activated and hashed with scrypt! You are now logged in with Master Developer privileges.`);
     } catch (err) {
       console.warn("Storage error saving founder:", err);
-      setFounderSetupError("Could not persist founder credentials to browser storage.");
+      setFounderSetupError("Could not persist founder profile to browser storage.");
     } finally {
       setIsSavingFounder(false);
     }

@@ -514,6 +514,9 @@ export interface TaskExecutionRecord {
   checkpointState?: TaskCheckpointState;
   circuitBreakerTripped?: boolean;
   circuitBreakerReason?: string;
+  tags?: string[];
+  project?: string;
+  client?: string;
   timestamp: string;
   isSimulated?: boolean;
 }

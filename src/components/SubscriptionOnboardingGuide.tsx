@@ -249,7 +249,7 @@ export const SubscriptionOnboardingGuide: React.FC<SubscriptionOnboardingGuidePr
 
   // Step 2: Founder Profile Form State
   const [founderName, setFounderName] = useState<string>(
-    developerProfile.developerName || userProfile.name || "Alex Mercer"
+    userProfile.name || "Alex Mercer"
   );
   const [founderEmail, setFounderEmail] = useState<string>(
     developerProfile.developerEmail || masterAccess.founderEmail || userProfile.email || "founder@enterprise.io"
@@ -258,7 +258,7 @@ export const SubscriptionOnboardingGuide: React.FC<SubscriptionOnboardingGuidePr
     userProfile.role || "Founder & Chief Automation Officer"
   );
   const [companyName, setCompanyName] = useState<string>(
-    developerProfile.agencyName || developerProfile.companyName || userProfile.organizationName || "Guilford Industries"
+    developerProfile.companyName || userProfile.organizationName || "Guilford Industries"
   );
   const [selectedAvatarId, setSelectedAvatarId] = useState<string>("crown");
   const [activateMasterDev, setActivateMasterDev] = useState<boolean>(true);

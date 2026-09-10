@@ -1,0 +1,39 @@
+[
+  {
+    "id": "LOG-mtvps1aj-c3559a1e",
+    "timestamp": "2026-09-10T16:00:47.756Z",
+    "action": "founder_login_failed",
+    "email": "toppgunn321@gmail.com",
+    "success": false,
+    "ip": "127.0.0.1",
+    "userAgent": "curl/7.88.1",
+    "reason": "Incorrect password entered"
+  },
+  {
+    "id": "LOG-mtvps5c3-dfc8dc60",
+    "timestamp": "2026-09-10T16:00:52.995Z",
+    "action": "founder_login_success",
+    "email": "toppgunn321@gmail.com",
+    "success": true,
+    "ip": "127.0.0.1",
+    "userAgent": "curl/7.88.1",
+    "reason": "New capability session token issued"
+  },
+  {
+    "id": "LOG-mtvpsbfd-c3d693dd",
+    "timestamp": "2026-09-10T16:01:00.889Z",
+    "action": "password_reset_requested",
+    "email": "toppgunn321@gmai.com",
+    "success": true,
+    "ip": "127.0.0.1",
+    "reason": "New reset token and OTP generated"
+  },
+  {
+    "id": "LOG-mtvpsbfe-94d83fce",
+    "timestamp": "2026-09-10T16:01:00.890Z",
+    "action": "password_reset_requested",
+    "email": "toppgunn321@gmai.com",
+    "success": true,
+    "reason": "Generated in development fallback mode (SMTP credentials not yet configured)"
+  }
+]

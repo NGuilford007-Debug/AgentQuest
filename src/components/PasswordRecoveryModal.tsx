@@ -63,6 +63,17 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
   const [testEmailLoading, setTestEmailLoading] = useState<boolean>(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  // Resend cooldown countdown ticker
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     if (initialEmail) {
@@ -107,11 +118,13 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
   const strength = calculateStrength(newPassword);
 
   // Step 1: Request Password Reset via real backend
-  const handleRequestReset = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRequestReset = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage(null);
+    setEmailSuggestion(null);
 
-    if (!email || !email.includes("@")) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@") || cleanEmail.length < 5) {
       setErrorMessage("Please enter a valid email address.");
       return;
     }
@@ -122,7 +135,7 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
+          email: cleanEmail,
           originUrl: window.location.origin,
         }),
       });
@@ -135,8 +148,11 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
         return;
       }
 
-      setDeliveredViaSmtp(data.deliveredViaSmtp);
+      setDeliveredViaSmtp(Boolean(data.deliveredViaSmtp));
       setServerNotice(data.notice || null);
+      if (data.suggestion) {
+        setEmailSuggestion(data.suggestion);
+      }
 
       if (data.token) {
         setResetToken(data.token);
@@ -145,6 +161,8 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
         setOtpCode(data.otp);
       }
 
+      // Start 60-second resend backoff cooldown
+      setResendCooldown(60);
       setStep(2);
     } catch (err: any) {
       setIsLoading(false);
@@ -194,8 +212,13 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!newPassword || newPassword.length < 6) {
-      setErrorMessage("Password must be at least 6 characters long.");
+    if (!newPassword || newPassword.length < 8) {
+      setErrorMessage("Password must be at least 8 characters long for enterprise security compliance.");
+      return;
+    }
+
+    if (!/[0-9]/.test(newPassword) || !/[a-zA-Z]/.test(newPassword)) {
+      setErrorMessage("Password must contain both letters and numbers.");
       return;
     }
 
@@ -225,9 +248,11 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
         return;
       }
 
-      // If this is the founder email, synchronize with local founder password store
-      if (email.toLowerCase().trim() === "toppgunn321@gmail.com") {
-        localStorage.setItem("agentflow_founder_password", newPassword);
+      // Secure cleanup: Clean up any obsolete legacy plaintext password item if it exists
+      try {
+        localStorage.removeItem("agentflow_founder_password");
+      } catch {
+        // ignore
       }
 
       if (onPasswordResetSuccess) {
@@ -382,6 +407,26 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
                 </button>
               </div>
 
+              {/* Email Typo Suggestion Banner */}
+              {emailSuggestion && (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Did you mean <strong>{emailSuggestion}</strong>?</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(emailSuggestion);
+                      setEmailSuggestion(null);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 font-bold text-[11px] text-amber-900 dark:text-amber-100 transition-colors"
+                  >
+                    Fix Email
+                  </button>
+                </div>
+              )}
+
               {errorMessage && (
                 <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -471,6 +516,14 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
                   Change Email
                 </button>
                 <button
+                  type="button"
+                  disabled={isLoading || resendCooldown > 0}
+                  onClick={() => handleRequestReset()}
+                  className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors"
+                >
+                  {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : "Resend Passcode"}
+                </button>
+                <button
                   type="submit"
                   disabled={isLoading || otpCode.length < 6}
                   className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/25 active:scale-98 transition-all"
@@ -482,7 +535,7 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
                     </>
                   ) : (
                     <>
-                      <span>Verify & Set New Password</span>
+                      <span>Verify & Continue</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -615,6 +668,11 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-600 dark:text-slate-300">
                 Account: <span className="font-bold text-blue-600 dark:text-blue-400">{email}</span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Encrypted & Protected with 256-bit scrypt salt hashing</span>
               </div>
 
               <div className="pt-2 flex items-center justify-center gap-3">

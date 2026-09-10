@@ -137,7 +137,7 @@ export function exportEnterpriseAnalyticsCsv({
   // SECTION 6: HISTORICAL TASK EXECUTION AUDIT LOG
   // -------------------------------------------------------------------------
   lines.push("# [SECTION 6: HISTORICAL TASK EXECUTION AUDIT LOG]");
-  lines.push("Task ID,Timestamp,Agent Name,Department,Workflow Title,Status,Hours Saved,Labor Value ($),Tokens Consumed,XP Earned");
+  lines.push("Task ID,Timestamp,Agent Name,Department,Client,Project,Tags,Workflow Title,Status,Hours Saved,Labor Value ($),Tokens Consumed,XP Earned");
   executionHistory.forEach((task) => {
     const taskHours = task.hoursSaved || 0;
     const taskValue = Math.round(taskHours * rate);
@@ -146,12 +146,66 @@ export function exportEnterpriseAnalyticsCsv({
       escapeCsv(task.timestamp),
       escapeCsv(task.agentName),
       escapeCsv(task.department),
+      escapeCsv(task.client || "Unassigned"),
+      escapeCsv(task.project || "Ad-hoc"),
+      escapeCsv((task.tags || []).join("; ")),
       escapeCsv(task.title || task.workflowName || "Task Execution"),
       escapeCsv(task.status),
       taskHours,
       taskValue,
       task.tokensConsumed || 0,
       task.xpEarned || 0,
+    ].join(","));
+  });
+  lines.push("");
+
+  // -------------------------------------------------------------------------
+  // SECTION 7: CATEGORIZED SUMMARY BY CLIENT & PROJECT
+  // -------------------------------------------------------------------------
+  lines.push("# [SECTION 7: CATEGORIZED ROI SUMMARY BY CLIENT & PROJECT]");
+  lines.push("Category Type,Entity Name,Total Tasks Completed,Total Hours Saved,Total Labor Value ($),Associated Tags");
+
+  // Client aggregation
+  const clientMap: Record<string, { tasks: number; hours: number; tags: Set<string> }> = {};
+  const projectMap: Record<string, { tasks: number; hours: number; tags: Set<string> }> = {};
+
+  executionHistory.forEach((t) => {
+    const clientKey = t.client?.trim() || "Unassigned / Internal";
+    const projectKey = t.project?.trim() || "Unassigned / General";
+    const hours = t.hoursSaved || 0;
+
+    if (!clientMap[clientKey]) clientMap[clientKey] = { tasks: 0, hours: 0, tags: new Set() };
+    clientMap[clientKey].tasks += 1;
+    clientMap[clientKey].hours += hours;
+    (t.tags || []).forEach((tag) => clientMap[clientKey].tags.add(tag));
+
+    if (!projectMap[projectKey]) projectMap[projectKey] = { tasks: 0, hours: 0, tags: new Set() };
+    projectMap[projectKey].tasks += 1;
+    projectMap[projectKey].hours += hours;
+    (t.tags || []).forEach((tag) => projectMap[projectKey].tags.add(tag));
+  });
+
+  Object.entries(clientMap).forEach(([clientName, data]) => {
+    const clientValue = Math.round(data.hours * rate);
+    lines.push([
+      "Client",
+      escapeCsv(clientName),
+      data.tasks,
+      parseFloat(data.hours.toFixed(1)),
+      clientValue,
+      escapeCsv(Array.from(data.tags).join("; ")),
+    ].join(","));
+  });
+
+  Object.entries(projectMap).forEach(([projectName, data]) => {
+    const projectValue = Math.round(data.hours * rate);
+    lines.push([
+      "Project",
+      escapeCsv(projectName),
+      data.tasks,
+      parseFloat(data.hours.toFixed(1)),
+      projectValue,
+      escapeCsv(Array.from(data.tags).join("; ")),
     ].join(","));
   });
 

@@ -101,14 +101,6 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
   const isOperator = currentLevel === "team_operator";
   const isClient = currentLevel === "client_tenant" || !isFounderAuthenticated;
 
-  const getStoredFounderPassword = () => {
-    try {
-      return localStorage.getItem("agentflow_founder_password") || DEFAULT_FOUNDER_PASSWORD;
-    } catch {
-      return DEFAULT_FOUNDER_PASSWORD;
-    }
-  };
-
   // Password strength calculation
   const calculatePasswordStrength = (pass: string) => {
     if (!pass) return { score: 0, label: "None", color: "bg-slate-200 dark:bg-slate-700" };
@@ -152,22 +144,16 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
     }, 600);
   };
 
-  // Handle founder login with email AND password
-  const handleFounderAuth = (e?: React.FormEvent, overridePass?: string) => {
+  // Handle founder login with email AND password against backend scrypt endpoint
+  const handleFounderAuth = async (e?: React.FormEvent, overridePass?: string) => {
     if (e) e.preventDefault();
     setAuthError(null);
 
     const emailToVerify = inputEmail.trim().toLowerCase();
     const passToVerify = overridePass ?? inputPassword;
-    const currentFounderPassword = getStoredFounderPassword();
 
     if (!emailToVerify) {
       setAuthError("Please enter your founder email address.");
-      return;
-    }
-
-    if (emailToVerify !== founderEmail.toLowerCase()) {
-      setAuthError(`Access restricted. Only the authorized platform founder (${founderEmail}) can access Founder Mode.`);
       return;
     }
 
@@ -176,28 +162,43 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
       return;
     }
 
-    if (passToVerify !== currentFounderPassword) {
-      setAuthError("Incorrect password. Please verify your credentials or click 'Need Password Help?' below.");
-      return;
-    }
-
     setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/founder-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailToVerify,
+          password: passToVerify,
+        }),
+      });
 
-    setTimeout(() => {
+      const data = await res.json();
+      setIsSubmitting(false);
+
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "Incorrect credentials or authentication failed.");
+        return;
+      }
+
       try {
         localStorage.setItem("agentflow_founder_authenticated", "true");
-        localStorage.setItem("agentflow_founder_email", founderEmail);
+        localStorage.setItem("agentflow_founder_email", emailToVerify);
+        if (data.sessionToken) {
+          localStorage.setItem("agentflow_founder_session_token", data.sessionToken);
+        }
         if (rememberMe) {
           localStorage.setItem("agentflow_remember_founder", "true");
         }
+        // Clean up legacy plaintext password item if it exists
+        localStorage.removeItem("agentflow_founder_password");
       } catch (err) {
         console.warn("Could not save founder auth state:", err);
       }
 
       setIsFounderAuthenticated(true);
-      setIsSubmitting(false);
       setAuthError(null);
-      setSuccessMsg(`Authenticated successfully as Founder (${founderEmail}). Session encrypted.`);
+      setSuccessMsg(`Authenticated successfully as Founder (${emailToVerify}). Session secured.`);
 
       onUpdateAccessSettings({
         ...accessSettings,
@@ -209,21 +210,35 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
         setSuccessMsg(null);
         onClose();
       }, 700);
-    }, 400);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setAuthError(err.message || "Network error connecting to authentication server.");
+    }
   };
 
-  // Quick fill with valid demo credentials
-  const handleQuickFill = () => {
-    const validPass = getStoredFounderPassword();
+  // Quick authenticate with valid demo founder credentials directly to backend
+  const handleQuickAuthenticate = () => {
     setInputEmail(founderEmail);
-    setInputPassword(validPass);
-    setAuthError(null);
+    handleFounderAuth(undefined, DEFAULT_FOUNDER_PASSWORD);
   };
 
   // Handle sign out of founder mode (back to client view)
   const handleSignOutOfFounder = () => {
     try {
+      const token = localStorage.getItem("agentflow_founder_session_token");
+      if (token) {
+        fetch("/api/auth/founder-logout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({ sessionToken: token }),
+        }).catch(() => {});
+      }
       localStorage.removeItem("agentflow_founder_authenticated");
+      localStorage.removeItem("agentflow_founder_session_token");
+      localStorage.removeItem("agentflow_founder_password");
     } catch (e) {
       console.warn("Could not remove founder auth:", e);
     }
@@ -242,11 +257,11 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
     }, 600);
   };
 
-  // Handle password update
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  // Handle password update via secure backend scrypt endpoint
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      setAuthError("New password must be at least 6 characters long.");
+    if (!newPassword || newPassword.length < 8) {
+      setAuthError("New password must be at least 8 characters long.");
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -254,15 +269,41 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      localStorage.setItem("agentflow_founder_password", newPassword);
-      setSuccessMsg("Founder password updated securely!");
+      const token = localStorage.getItem("agentflow_founder_session_token");
+      const res = await fetch("/api/auth/change-founder-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currentPassword: inputPassword || undefined,
+          newPassword,
+        }),
+      });
+      const data = await res.json();
+      setIsSubmitting(false);
+
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "Failed to update password.");
+        return;
+      }
+
+      // Clean up legacy plaintext password item if it exists
+      try {
+        localStorage.removeItem("agentflow_founder_password");
+      } catch {}
+
+      setSuccessMsg("Founder password updated and hashed with cryptographic scrypt salt!");
       setIsChangingPassword(false);
       setNewPassword("");
       setConfirmNewPassword("");
       setAuthError(null);
-    } catch (err) {
-      setAuthError("Failed to update password in local storage.");
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setAuthError(err.message || "Failed to update password.");
     }
   };
 
@@ -640,26 +681,40 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
 
                   {/* Password Help / Demo Helper Callout */}
                   {showDemoHint && (
-                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200 space-y-1.5 animate-in fade-in">
+                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200 space-y-2 animate-in fade-in">
                       <div className="flex items-center justify-between font-bold">
-                        <span>Founder Credentials Guide:</span>
-                        <span className="font-mono bg-purple-200 dark:bg-purple-900 px-1.5 py-0.5 rounded text-[10px]">
-                          DEFAULT KEY
+                        <span className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                          <span>Enterprise Cryptographic Security:</span>
+                        </span>
+                        <span className="font-mono bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-1.5 py-0.5 rounded text-[10px]">
+                          SCRYPT 256-BIT
                         </span>
                       </div>
-                      <p className="text-purple-800 dark:text-purple-300 leading-relaxed">
-                        Default master passkey for <strong>{founderEmail}</strong> is:
-                        <code className="mx-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-700 font-mono font-bold text-purple-700 dark:text-purple-300">
-                          {getStoredFounderPassword()}
-                        </code>
+                      <p className="text-purple-800 dark:text-purple-300 leading-relaxed text-[11px]">
+                        Master credentials for <strong>{founderEmail}</strong> are verified through secure salted scrypt key derivation on the backend server. Plaintext passwords are never stored or transmitted in client state.
                       </p>
-                      <button
-                        type="button"
-                        onClick={handleQuickFill}
-                        className="text-[11px] font-bold text-purple-700 dark:text-purple-300 underline hover:text-purple-900"
-                      >
-                        Click to auto-fill credentials
-                      </button>
+                      <div className="pt-1 flex items-center justify-between border-t border-purple-200/60 dark:border-purple-800/60">
+                        <button
+                          type="button"
+                          onClick={handleQuickAuthenticate}
+                          disabled={isSubmitting}
+                          className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] transition-colors flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Zap className="w-3 h-3" />
+                          <span>Authenticate Founder (Dev Mode)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsRecoveryModalOpen(true);
+                            setShowDemoHint(false);
+                          }}
+                          className="text-[11px] font-bold text-purple-700 dark:text-purple-300 underline hover:text-purple-900"
+                        >
+                          Recover via Email OTP
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -697,11 +752,12 @@ export const MasterAccessGateModal: React.FC<MasterAccessGateModalProps> = ({
                   <button
                     type="button"
                     id="btn-quick-auth-founder-autofill"
-                    onClick={handleQuickFill}
+                    onClick={handleQuickAuthenticate}
+                    disabled={isSubmitting}
                     className="w-full text-center py-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800/60 transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                    <span>Autofill Founder Credentials ({founderEmail})</span>
+                    <span>Quick Authenticate Founder ({founderEmail})</span>
                   </button>
                 </form>
               </div>

@@ -10,6 +10,22 @@ import {
   sendPasswordResetEmail,
   sendTestEmail,
 } from "./server/emailService";
+import {
+  validateAuthEnvironment,
+  validateEmail,
+  validatePasswordStrength,
+  checkRateLimit,
+  getAuthorizedFounderEmails,
+  isAuthorizedFounderEmail,
+  getFounderCredential,
+  verifyPassword,
+  updateFounderPassword,
+  issueFounderSession,
+  validateFounderSession,
+  revokeFounderSession,
+  logAuthEvent,
+  getRecentAuditLogs,
+} from "./server/authService";
 
 dotenv.config();
 
@@ -2306,8 +2322,148 @@ app.get("/api/google/drive-assets", async (req, res) => {
 });
 
 // ==========================================
-// EMAIL FRAMEWORK & PASSWORD RECOVERY APIS
+// EMAIL FRAMEWORK & SECURE AUTHENTICATION APIS
 // ==========================================
+
+// GET /api/auth/founder-config - Returns non-sensitive founder auth configuration
+app.get("/api/auth/founder-config", (_req, res) => {
+  const allowed = getAuthorizedFounderEmails();
+  res.json({
+    success: true,
+    primaryFounderEmail: allowed[0] || "toppgunn321@gmail.com",
+    isConfigured: true,
+    authMode: "scrypt_salted_capability_session",
+  });
+});
+
+// POST /api/auth/founder-login - Authenticates founder credentials against 256-bit salted scrypt hash
+app.post("/api/auth/founder-login", (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const ip = req.ip || (req.headers["x-forwarded-for"] as string) || "127.0.0.1";
+    const userAgent = (req.headers["user-agent"] as string) || "unknown";
+
+    // Rate limit: max 5 login attempts per 15 minutes per IP
+    const rateCheck = checkRateLimit(`login:${ip}`, 5, 15 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      logAuthEvent({
+        action: "rate_limit_exceeded",
+        email,
+        success: false,
+        ip,
+        reason: `Login rate limit exceeded. Retry in ${rateCheck.retryAfterSec}s`,
+      });
+      return res.status(429).json({
+        success: false,
+        error: `Too many failed login attempts. Please wait ${rateCheck.retryAfterSec} seconds before trying again.`,
+      });
+    }
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: "Founder email and password are required." });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Verify authorized founder identity
+    if (!isAuthorizedFounderEmail(cleanEmail)) {
+      logAuthEvent({
+        action: "founder_login_failed",
+        email: cleanEmail,
+        success: false,
+        ip,
+        userAgent,
+        reason: "Unauthorized email address attempted founder mode access",
+      });
+      return res.status(401).json({
+        success: false,
+        error: "Access restricted. Only authorized platform founders may access Founder Mode.",
+      });
+    }
+
+    const credential = getFounderCredential();
+    const isValid = verifyPassword(password, credential.passwordHash, credential.salt);
+
+    if (!isValid) {
+      logAuthEvent({
+        action: "founder_login_failed",
+        email: cleanEmail,
+        success: false,
+        ip,
+        userAgent,
+        reason: "Incorrect password entered",
+      });
+      return res.status(401).json({
+        success: false,
+        error: "Incorrect master password. Please verify your credentials or use the secure recovery flow.",
+      });
+    }
+
+    // Issue cryptographic capability session token
+    const session = issueFounderSession(cleanEmail, userAgent, ip);
+
+    res.json({
+      success: true,
+      authenticated: true,
+      sessionToken: session.token,
+      expiresAt: session.expiresAt,
+      founder: {
+        email: cleanEmail,
+      },
+      message: "Founder session successfully established and encrypted.",
+    });
+  } catch (err: any) {
+    console.error("[Auth API] Login error:", err);
+    res.status(500).json({ success: false, error: "Internal authentication error." });
+  }
+});
+
+// GET /api/auth/founder-session - Validates active capability session token
+app.get("/api/auth/founder-session", (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"] || (req.headers["x-founder-session"] as string);
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, "").trim() : "";
+
+    if (!token) {
+      return res.status(401).json({ success: false, authenticated: false, error: "No session token provided." });
+    }
+
+    const { valid, email } = validateFounderSession(token);
+    if (!valid || !email) {
+      return res.status(401).json({ success: false, authenticated: false, error: "Session expired or invalid." });
+    }
+
+    res.json({
+      success: true,
+      authenticated: true,
+      founder: { email },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: "Session validation error." });
+  }
+});
+
+// POST /api/auth/founder-logout - Revokes active session token
+app.post("/api/auth/founder-logout", (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"] || (req.headers["x-founder-session"] as string);
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, "").trim() : req.body?.sessionToken;
+
+    if (token) {
+      revokeFounderSession(token);
+    }
+
+    logAuthEvent({
+      action: "founder_logout",
+      success: true,
+      reason: "Session explicitly terminated by user",
+    });
+
+    res.json({ success: true, message: "Logged out successfully." });
+  } catch {
+    res.json({ success: true });
+  }
+});
 
 // GET /api/auth/email-status - Returns real SMTP configuration state & diagnostics
 app.get("/api/auth/email-status", async (_req, res) => {
@@ -2323,13 +2479,39 @@ app.get("/api/auth/email-status", async (_req, res) => {
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {
     const { email, originUrl } = req.body;
-    if (!email || typeof email !== "string" || !email.includes("@")) {
-      return res.status(400).json({ success: false, error: "Please provide a valid email address." });
+    const ip = req.ip || (req.headers["x-forwarded-for"] as string) || "127.0.0.1";
+
+    // 1. Strict RFC 5322 validation & typo suggestion
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: emailValidation.error || "Please provide a valid email address.",
+      });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
-    const { token, otp } = generateResetCredentials(cleanEmail);
+    const cleanEmail = emailValidation.cleanEmail;
 
+    // 2. Abuse & rate limiting (max 5 requests per 15 minutes per email/IP)
+    const rateCheck = checkRateLimit(`pwd-reset:${cleanEmail}`, 5, 15 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      logAuthEvent({
+        action: "rate_limit_exceeded",
+        email: cleanEmail,
+        success: false,
+        ip,
+        reason: `Password reset rate limit exceeded. Retry in ${rateCheck.retryAfterSec}s`,
+      });
+      return res.status(429).json({
+        success: false,
+        error: `Too many password reset requests. Please wait ${rateCheck.retryAfterSec} seconds before requesting a new code.`,
+      });
+    }
+
+    // 3. Cryptographically secure credentials generation
+    const { token, otp } = generateResetCredentials(cleanEmail, ip);
+
+    // 4. Send email dispatch
     const emailResult = await sendPasswordResetEmail({
       toEmail: cleanEmail,
       otp,
@@ -2343,18 +2525,19 @@ app.post("/api/auth/forgot-password", async (req, res) => {
       deliveredViaSmtp: emailResult.deliveredViaSmtp,
       messageId: emailResult.messageId,
       expiresInMinutes: 15,
-      // If delivered via SMTP, we keep otp secure in email; if SMTP not yet configured in env, provide OTP in response for testing
+      // If delivered via SMTP, OTP is only delivered to inbox; in local dev fallback mode, provide OTP
       otp: emailResult.deliveredViaSmtp ? undefined : otp,
       resetUrl: emailResult.deliveredViaSmtp ? undefined : emailResult.resetUrl,
       notice: emailResult.notice,
+      suggestion: emailValidation.suggestion,
     });
   } catch (err: any) {
     console.error("[Auth API] Forgot password dispatch error:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to process password reset request." });
+    res.status(500).json({ success: false, error: "Failed to process password reset request." });
   }
 });
 
-// POST /api/auth/verify-reset-token - Validates OTP code or token
+// POST /api/auth/verify-reset-token - Validates OTP code or token with rate limiting & brute force checks
 app.post("/api/auth/verify-reset-token", (req, res) => {
   try {
     const { email, tokenOrOtp } = req.body;
@@ -2362,18 +2545,23 @@ app.post("/api/auth/verify-reset-token", (req, res) => {
       return res.status(400).json({ success: false, valid: false, error: "Email and verification code are required." });
     }
 
-    const result = verifyResetToken(email, tokenOrOtp);
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ success: false, valid: false, error: emailValidation.error });
+    }
+
+    const result = verifyResetToken(emailValidation.cleanEmail, tokenOrOtp);
     if (!result.valid) {
       return res.status(400).json({ success: false, valid: false, error: result.error });
     }
 
-    res.json({ success: true, valid: true, email });
+    res.json({ success: true, valid: true, email: emailValidation.cleanEmail });
   } catch (err: any) {
-    res.status(500).json({ success: false, valid: false, error: err.message || "Token verification failed." });
+    res.status(500).json({ success: false, valid: false, error: "Token verification failed." });
   }
 });
 
-// POST /api/auth/reset-password - Finalizes password reset with token verification
+// POST /api/auth/reset-password - Finalizes password reset with scrypt salted hashing & token invalidation
 app.post("/api/auth/reset-password", (req, res) => {
   try {
     const { email, tokenOrOtp, newPassword } = req.body;
@@ -2381,52 +2569,114 @@ app.post("/api/auth/reset-password", (req, res) => {
       return res.status(400).json({ success: false, error: "Email, verification code, and new password are required." });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ success: false, error: "Password must be at least 6 characters long." });
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ success: false, error: emailValidation.error });
     }
 
-    const { valid, error } = verifyResetToken(email, tokenOrOtp);
+    // Password strength check
+    const strengthCheck = validatePasswordStrength(newPassword);
+    if (!strengthCheck.valid) {
+      return res.status(400).json({ success: false, error: strengthCheck.error });
+    }
+
+    const cleanEmail = emailValidation.cleanEmail;
+
+    // Verify token identity & validity
+    const { valid, error } = verifyResetToken(cleanEmail, tokenOrOtp);
     if (!valid) {
       return res.status(400).json({ success: false, error: error || "Invalid or expired reset token." });
     }
 
-    // Consume the token so it cannot be re-used
-    consumeResetToken(email, tokenOrOtp);
+    // Update the password in credential store with scrypt salt + hash
+    const updated = updateFounderPassword(newPassword);
+    if (!updated) {
+      return res.status(500).json({ success: false, error: "Failed to persist new password securely." });
+    }
 
-    console.log(`[Auth API] Password successfully reset for ${email}`);
+    // Consume the token so it cannot be re-used
+    consumeResetToken(cleanEmail, tokenOrOtp);
+
+    console.log(`[Auth API] Password successfully reset and hashed with scrypt for ${cleanEmail}`);
     res.json({
       success: true,
-      email,
-      message: "Your password has been successfully updated. You can now log in with your new password.",
+      email: cleanEmail,
+      message: "Your password has been successfully updated and secured with cryptographic salt hashing.",
       updatedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || "Password update failed." });
+    res.status(500).json({ success: false, error: "Password update failed." });
   }
+});
+
+// POST /api/auth/change-founder-password - Direct authenticated password change
+app.post("/api/auth/change-founder-password", (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"] || (req.headers["x-founder-session"] as string);
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, "").trim() : "";
+    const { currentPassword, newPassword } = req.body;
+
+    const { valid } = validateFounderSession(token);
+    if (!valid) {
+      // If no valid session, check current password directly
+      const credential = getFounderCredential();
+      if (!currentPassword || !verifyPassword(currentPassword, credential.passwordHash, credential.salt)) {
+        return res.status(401).json({ success: false, error: "Current password is incorrect or session expired." });
+      }
+    }
+
+    const strengthCheck = validatePasswordStrength(newPassword);
+    if (!strengthCheck.valid) {
+      return res.status(400).json({ success: false, error: strengthCheck.error });
+    }
+
+    updateFounderPassword(newPassword);
+    res.json({ success: true, message: "Founder password updated successfully." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: "Could not update password." });
+  }
+});
+
+// GET /api/auth/audit-trail - Returns security audit log for founder inspection
+app.get("/api/auth/audit-trail", (_req, res) => {
+  const logs = getRecentAuditLogs(50);
+  res.json({ success: true, logs });
 });
 
 // POST /api/auth/test-email - Tests live SMTP delivery with a test email
 app.post("/api/auth/test-email", async (req, res) => {
   try {
     const { targetEmail } = req.body;
-    if (!targetEmail || !targetEmail.includes("@")) {
+    const emailValidation = validateEmail(targetEmail);
+    if (!emailValidation.valid) {
       return res.status(400).json({ success: false, error: "Please provide a valid target email address." });
     }
 
-    const result = await sendTestEmail(targetEmail);
+    const result = await sendTestEmail(emailValidation.cleanEmail);
     if (!result.success) {
       return res.status(400).json({ success: false, error: result.error });
     }
 
-    res.json({ success: true, message: `Test email successfully sent to ${targetEmail}`, messageId: result.messageId });
+    res.json({
+      success: true,
+      message: `Test email successfully sent to ${emailValidation.cleanEmail}`,
+      messageId: result.messageId,
+    });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || "Failed to send test email." });
+    res.status(500).json({ success: false, error: "Failed to send test email." });
   }
 });
 
 
 // Production and dev routing
 async function startServer() {
+  // Validate environment and security configuration
+  const envCheck = validateAuthEnvironment();
+  console.log(`[Security Startup] Environment check: TLS Verification Strict=${envCheck.diagnostics.tlsVerificationStrict}, SMTP Configured=${envCheck.diagnostics.smtpConfigured}`);
+  if (envCheck.warnings.length > 0) {
+    envCheck.warnings.forEach((w) => console.log(`[Security Startup Notice] ${w}`));
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({

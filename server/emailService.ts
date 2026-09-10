@@ -1,5 +1,14 @@
 import nodemailer, { type Transporter } from "nodemailer";
-import crypto from "crypto";
+import {
+  type PasswordResetRecord,
+  generateResetCredentials,
+  verifyResetToken,
+  consumeResetToken,
+  logAuthEvent,
+} from "./authService";
+
+export type { PasswordResetRecord };
+export { generateResetCredentials, verifyResetToken, consumeResetToken };
 
 export interface EmailServiceStatus {
   isConfigured: boolean;
@@ -9,83 +18,6 @@ export interface EmailServiceStatus {
   fromAddress: string;
   secure: boolean;
   activeTransportType: "smtp" | "unconfigured";
-}
-
-export interface PasswordResetRecord {
-  email: string;
-  token: string;
-  otp: string;
-  expiresAt: number; // timestamp ms
-  createdAt: number;
-  used: boolean;
-}
-
-// In-memory token storage (persisted across requests during server lifecycle)
-const resetTokenStore: Map<string, PasswordResetRecord> = new Map();
-
-// Generate a secure 6-digit numeric OTP and a 32-byte random hex token
-export function generateResetCredentials(email: string): { token: string; otp: string; expiresAt: number } {
-  const token = crypto.randomBytes(32).toString("hex");
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
-
-  const record: PasswordResetRecord = {
-    email: email.toLowerCase().trim(),
-    token,
-    otp,
-    expiresAt,
-    createdAt: Date.now(),
-    used: false,
-  };
-
-  // Store indexed by email and by token
-  resetTokenStore.set(record.email, record);
-  resetTokenStore.set(token, record);
-
-  return { token, otp, expiresAt };
-}
-
-// Verify if a token or OTP is valid for an email
-export function verifyResetToken(
-  email: string,
-  tokenOrOtp: string
-): { valid: boolean; error?: string; record?: PasswordResetRecord } {
-  const cleanEmail = email.toLowerCase().trim();
-  const cleanCode = tokenOrOtp.trim();
-
-  // Try fetching by email first, or by token directly
-  const record = resetTokenStore.get(cleanEmail) || resetTokenStore.get(cleanCode);
-
-  if (!record) {
-    return { valid: false, error: "No active password reset request found for this email or token." };
-  }
-
-  if (record.email !== cleanEmail && record.token !== cleanCode) {
-    return { valid: false, error: "Reset token does not match the provided email address." };
-  }
-
-  if (record.used) {
-    return { valid: false, error: "This password reset token has already been used. Please request a new one." };
-  }
-
-  if (Date.now() > record.expiresAt) {
-    return { valid: false, error: "This password reset request has expired (15-minute limit). Please request a new one." };
-  }
-
-  const matches = record.token === cleanCode || record.otp === cleanCode;
-  if (!matches) {
-    return { valid: false, error: "Invalid verification code or reset token." };
-  }
-
-  return { valid: true, record };
-}
-
-// Mark token as consumed
-export function consumeResetToken(email: string, tokenOrOtp: string): boolean {
-  const { valid, record } = verifyResetToken(email, tokenOrOtp);
-  if (!valid || !record) return false;
-  record.used = true;
-  return true;
 }
 
 // Lazy create nodemailer transporter
@@ -110,8 +42,8 @@ function getTransporter(): { transporter: Transporter | null; isConfigured: bool
         pass,
       },
       tls: {
-        // Prevent rejection on custom corporate certificates
-        rejectUnauthorized: process.env.NODE_ENV === "production" ? false : false,
+        // Enforce strict TLS certificate verification in production
+        rejectUnauthorized: process.env.NODE_ENV === "production" ? true : (process.env.SMTP_ALLOW_INSECURE_TLS === "true" ? false : true),
       },
     });
     return { transporter, isConfigured: true };
@@ -290,6 +222,13 @@ If you did not request this, please ignore this email.
 
       console.log(`[EmailService] Password reset email successfully dispatched via SMTP to ${toEmail}: ${info.messageId}`);
 
+      logAuthEvent({
+        action: "password_reset_requested",
+        email: toEmail,
+        success: true,
+        reason: `Email dispatched via SMTP (Message ID: ${info.messageId})`,
+      });
+
       return {
         success: true,
         messageId: info.messageId,
@@ -301,6 +240,12 @@ If you did not request this, please ignore this email.
       };
     } catch (smtpError: any) {
       console.error("[EmailService] SMTP delivery failed:", smtpError.message);
+      logAuthEvent({
+        action: "password_reset_requested",
+        email: toEmail,
+        success: false,
+        reason: `SMTP delivery failed: ${smtpError.message}`,
+      });
       return {
         success: true,
         deliveredViaSmtp: false,
@@ -314,6 +259,12 @@ If you did not request this, please ignore this email.
   } else {
     // SMTP credentials not yet provided in .env
     console.log(`[EmailService] SMTP not configured. Token generated for ${toEmail}: OTP=${otp}, Token=${token}`);
+    logAuthEvent({
+      action: "password_reset_requested",
+      email: toEmail,
+      success: true,
+      reason: "Generated in development fallback mode (SMTP credentials not yet configured)",
+    });
     return {
       success: true,
       deliveredViaSmtp: false,

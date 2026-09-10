@@ -1778,6 +1778,9 @@ export const INITIAL_EXECUTION_HISTORY: TaskExecutionRecord[] = [
       "Model: Gemini 3.7 Flash",
       "Resolution report applied with prompt tuning",
     ],
+    client: "Internal SRE",
+    project: "Core Infrastructure",
+    tags: ["incident", "p0", "redis", "sre"],
     hoursSaved: 2.4,
     xpEarned: 240,
     creditsCost: 12,
@@ -1800,6 +1803,9 @@ export const INITIAL_EXECUTION_HISTORY: TaskExecutionRecord[] = [
     status: "needs_review",
     summary: "Generated tailored enterprise pitch deck and pricing proposal ($120k/yr). Flagged for human review due to custom indemnity terms.",
     generatedOutput: "### 📋 Proposal Summary\n\n- **Client**: Acme Fintech\n- **Deal Tier**: Enterprise 250 Seats ($120k ARR)\n- **Review Required**: Custom mutual SLA and indemnity terms require Legal sign-off.",
+    client: "Acme Fintech",
+    project: "Q3 Enterprise Sales",
+    tags: ["sales", "enterprise", "contract", "high-value"],
     stepsOutput: [
       {
         nodeId: "step-1",
@@ -1878,6 +1884,9 @@ export const INITIAL_EXECUTION_HISTORY: TaskExecutionRecord[] = [
       "Status: Connection timeout (504)",
       "Safety rule: Aborted to prevent ledger desync",
     ],
+    client: "Internal Finance",
+    project: "ERP Systems Integration",
+    tags: ["finance", "sap", "erp", "timeout"],
     hoursSaved: 0,
     xpEarned: 25,
     creditsCost: 4,
@@ -1896,6 +1905,9 @@ export const INITIAL_EXECUTION_HISTORY: TaskExecutionRecord[] = [
     status: "completed",
     summary: "Auto-analyzed SAML assertion payload, identified certificate fingerprint mismatch, and generated instant fix instructions for tenant admin.",
     generatedOutput: "### ✅ Support Solution Dispatched\n\n- **Issue Identified**: SHA-1 cert rotated to SHA-256 without updating Okta app metadata.\n- **Resolution**: Sent updated metadata URL and step-by-step fix guide to admin.",
+    client: "Global Logistics Corp",
+    project: "SAML SSO Migration",
+    tags: ["support", "security", "saml", "okta"],
     stepsOutput: [
       {
         nodeId: "step-1",
@@ -1948,6 +1960,9 @@ export const INITIAL_EXECUTION_HISTORY: TaskExecutionRecord[] = [
     status: "discrepancy",
     summary: "Flagged $10,340 data transfer egress variance (+180% above baseline). Output flagged for human audit.",
     generatedOutput: "### ⚠️ Discrepancy Flagged\n\n- **Item**: Data Transfer Egress ($10,340.40)\n- **Expected Variance**: <= 15%\n- **Actual Variance**: +180%\n- **Action**: Escalated to Cloud Infrastructure FinOps committee.",
+    client: "Internal FinOps",
+    project: "Cloud Cost Optimization",
+    tags: ["finance", "aws", "snowflake", "variance-audit"],
     stepsOutput: [
       {
         nodeId: "step-1",
